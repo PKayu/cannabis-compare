@@ -1,0 +1,82 @@
+{
+  "projectName": "Utah Cannabis Aggregator",
+  "version": "0.1.0",
+  "status": "MVP - Phase 1",
+  "description": "Web platform for comparing cannabis prices and reading community reviews",
+  "techStack": {
+    "frontend": {
+      "framework": "Next.js 14",
+      "language": "TypeScript",
+      "styling": "Tailwind CSS",
+      "deployment": "Vercel"
+    },
+    "backend": {
+      "framework": "FastAPI",
+      "language": "Python 3.10+",
+      "orm": "SQLAlchemy",
+      "deployment": "AWS/Heroku/DigitalOcean"
+    },
+    "database": {
+      "primary": "PostgreSQL",
+      "provider": "Supabase",
+      "orm": "SQLAlchemy"
+    }
+  },
+  "ports": {
+    "frontend": 3000,
+    "backend": 8000,
+    "database": 5432
+  },
+  "directories": {
+    "frontend": "./frontend",
+    "backend": "./backend",
+    "docs": "./docs"
+  },
+  "commands": {
+    "backend": {
+      "install": "pip install -r requirements.txt",
+      "dev": "uvicorn main:app --reload",
+      "test": "pytest"
+    },
+    "frontend": {
+      "install": "npm install",
+      "dev": "npm run dev",
+      "build": "npm run build",
+      "test": "npm test"
+    }
+  },
+  "features": {
+    "phase1": {
+      "name": "Data Ingestion",
+      "status": "planning",
+      "items": [
+        "Build scrapers for 3 major dispensaries",
+        "Implement data normalization",
+        "Create price aggregation logic"
+      ]
+    },
+    "phase2": {
+      "name": "Frontend MVP",
+      "status": "pending",
+      "items": [
+        "Display aggregated pricing",
+        "Search and filtering",
+        "Read-only product catalog"
+      ]
+    },
+    "phase3": {
+      "name": "User System",
+      "status": "pending",
+      "items": [
+        "Authentication system",
+        "Review and rating system",
+        "User profiles"
+      ]
+    }
+  },
+  "compliance": {
+    "note": "For informational purposes only - does not sell controlled substances",
+    "disclaimerPlacement": "Every page",
+    "targetAudience": "Utah Medical Cannabis Cardholders 21+"
+  }
+}

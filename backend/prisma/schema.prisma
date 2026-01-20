@@ -1,0 +1,74 @@
+// This file is for reference/documentation of the database schema
+// For Python backend, SQLAlchemy models in models.py are authoritative
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  username  String   @unique
+  reviews   Review[]
+  createdAt DateTime @default(now())
+}
+
+model Dispensary {
+  id        String    @id @default(uuid())
+  name      String
+  website   String?
+  location  String?
+  prices    Price[]
+  createdAt DateTime  @default(now())
+}
+
+model Brand {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  products  Product[]
+  createdAt DateTime  @default(now())
+}
+
+model Product {
+  id            String   @id @default(uuid())
+  name          String   // e.g. "Gorilla Glue #4"
+  productType   String   // e.g. "Flower", "Vape", "Edible"
+  thcPercentage Float?
+  cbdPercentage Float?
+  brandId       String
+  brand         Brand    @relation(fields: [brandId], references: [id])
+  reviews       Review[]
+  prices        Price[]
+  createdAt     DateTime @default(now())
+}
+
+model Price {
+  id            String     @id @default(uuid())
+  amount        Decimal
+  inStock       Boolean    @default(true)
+  lastUpdated   DateTime   @default(now()) @updatedAt
+  productId     String
+  product       Product    @relation(fields: [productId], references: [id])
+  dispensaryId  String
+  dispensary    Dispensary @relation(fields: [dispensaryId], references: [id])
+}
+
+model Review {
+  id             String   @id @default(uuid())
+  rating         Int      // Overall 1-5
+  effectsRating  Int?     // 1-5 for effects
+  tasteRating    Int?     // 1-5 for taste
+  valueRating    Int?     // 1-5 for value
+  comment        String?
+  upvotes        Int      @default(0)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id])
+  createdAt      DateTime @default(now())
+}

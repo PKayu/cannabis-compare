@@ -1,8 +1,18 @@
 """
 SQLAlchemy models for database tables
-Based on the Prisma schema from the PRD
+Based on the Prisma schema from the PRD v1.2
+
+Tables:
+- User: User accounts for authentication
+- Dispensary: Utah pharmacy details
+- Brand: Cannabis cultivators/brands
+- Product: Master product entries (strains, vapes, etc.)
+- Price: Junction table linking products to dispensaries with pricing
+- Review: User reviews with intention tags
+- ScraperFlag: Products requiring manual normalization review
+- Promotion: Recurring and one-time promotional offers
 """
-from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
@@ -33,10 +43,17 @@ class Dispensary(Base):
     name = Column(String, nullable=False, index=True)
     website = Column(String, nullable=True)
     location = Column(String, nullable=True)
+    hours = Column(String, nullable=True)  # Operating hours
+    phone = Column(String, nullable=True)
+    latitude = Column(Float, nullable=True)  # For map integration
+    longitude = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     prices = relationship("Price", back_populates="dispensary", cascade="all, delete-orphan")
+    scraper_flags = relationship("ScraperFlag", back_populates="dispensary", cascade="all, delete-orphan")
+    promotions = relationship("Promotion", back_populates="dispensary", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Dispensary {self.name}>"
@@ -58,7 +75,7 @@ class Brand(Base):
 
 
 class Product(Base):
-    """Product model for strains and cannabis products"""
+    """Product model for strains and cannabis products (Master Product entries)"""
     __tablename__ = "products"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -67,12 +84,23 @@ class Product(Base):
     thc_percentage = Column(Float, nullable=True)  # THC content
     cbd_percentage = Column(Float, nullable=True)  # CBD content
     brand_id = Column(String, ForeignKey("brands.id"), nullable=False)
+
+    # Normalization tracking (PRD section 4.1)
+    master_product_id = Column(String, ForeignKey("products.id"), nullable=True)  # Links duplicates to master
+    normalization_confidence = Column(Float, default=1.0)  # 0.0-1.0 confidence score
+    is_master = Column(Boolean, default=True)  # True if this is canonical entry
+
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     brand = relationship("Brand", back_populates="products")
     prices = relationship("Price", back_populates="product", cascade="all, delete-orphan")
     reviews = relationship("Review", back_populates="product", cascade="all, delete-orphan")
+    promotions = relationship("Promotion", back_populates="product")
+
+    # Self-referential relationship for product normalization
+    master_product = relationship("Product", remote_side=[id], foreign_keys=[master_product_id], backref="duplicate_products")
 
     def __repr__(self):
         return f"<Product {self.name}>"
@@ -83,15 +111,33 @@ class Price(Base):
     __tablename__ = "prices"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    amount = Column(Float, nullable=False)  # Price in USD
+    amount = Column(Float, nullable=False)  # Current price in USD
     in_stock = Column(Boolean, default=True)
-    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     product_id = Column(String, ForeignKey("products.id"), nullable=False)
     dispensary_id = Column(String, ForeignKey("dispensaries.id"), nullable=False)
+
+    # Price history tracking
+    previous_price = Column(Float, nullable=True)
+    price_change_date = Column(DateTime, nullable=True)
+    price_change_percentage = Column(Float, nullable=True)  # % change since last update
+
+    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Unique constraint: one price per product per dispensary
+    __table_args__ = (UniqueConstraint('product_id', 'dispensary_id', name='uix_product_dispensary'),)
 
     # Relationships
     product = relationship("Product", back_populates="prices")
     dispensary = relationship("Dispensary", back_populates="prices")
+
+    def update_price(self, new_price: float):
+        """Update price and track history"""
+        if self.amount != new_price:
+            self.previous_price = self.amount
+            self.price_change_percentage = ((new_price - self.amount) / self.amount) * 100 if self.amount else 0
+            self.price_change_date = datetime.utcnow()
+            self.amount = new_price
 
     def __repr__(self):
         return f"<Price ${self.amount} at {self.dispensary_id}>"
@@ -118,3 +164,105 @@ class Review(Base):
 
     def __repr__(self):
         return f"<Review {self.rating}★ for {self.product_id}>"
+
+
+class ScraperFlag(Base):
+    """
+    Flags for products with low confidence matches requiring manual admin review.
+
+    Confidence thresholds (PRD section 4.1):
+    - >90%: Auto-merge to existing product
+    - 60-90%: Flagged for admin review (stored here)
+    - <60%: Create new product entry
+    """
+    __tablename__ = "scraper_flags"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+
+    # Original scraped data
+    original_name = Column(String, nullable=False)  # Product name as scraped from dispensary
+    original_thc = Column(Float, nullable=True)
+    original_cbd = Column(Float, nullable=True)
+    brand_name = Column(String, nullable=False)
+    dispensary_id = Column(String, ForeignKey("dispensaries.id"), nullable=False)
+
+    # Potential match
+    matched_product_id = Column(String, ForeignKey("products.id"), nullable=True)
+    confidence_score = Column(Float, nullable=False)  # 0.0 to 1.0
+
+    # Status workflow
+    status = Column(String, default="pending", index=True)  # pending, approved, rejected, merged
+    merge_reason = Column(String, nullable=True)  # Why flagged for review
+
+    # Admin action
+    admin_notes = Column(String, nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    resolved_by = Column(String, nullable=True)  # Future: admin user_id
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    dispensary = relationship("Dispensary", back_populates="scraper_flags")
+    matched_product = relationship("Product", foreign_keys=[matched_product_id])
+
+    def __repr__(self):
+        return f"<ScraperFlag {self.original_name} ({self.confidence_score:.0%}) @ {self.status}>"
+
+
+class Promotion(Base):
+    """
+    Stores recurring and one-time promotional offers (PRD section 4.2).
+
+    Supports:
+    - One-time promotions with start/end dates
+    - Recurring deals (e.g., "Medical Mondays", "Friday Vape Sales")
+    - Category-wide or product-specific discounts
+    """
+    __tablename__ = "promotions"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+
+    # Promotion details
+    title = Column(String, nullable=False)  # e.g., "Medical Monday 15% off"
+    description = Column(Text, nullable=True)
+    discount_percentage = Column(Float, nullable=True)  # 0-100 (e.g., 15 = 15% off)
+    discount_amount = Column(Float, nullable=True)  # Fixed $ amount off
+
+    # Scope
+    dispensary_id = Column(String, ForeignKey("dispensaries.id"), nullable=False, index=True)
+    product_id = Column(String, ForeignKey("products.id"), nullable=True)  # NULL = applies to category or all
+    applies_to_category = Column(String, nullable=True)  # "Flower", "Vape", "Edible", etc.
+
+    # Recurrence (PRD: "Medical Mondays", "Friday Vape Sales")
+    is_recurring = Column(Boolean, default=False)
+    recurring_pattern = Column(String, nullable=True)  # "daily", "weekly", "monthly"
+    recurring_day = Column(String, nullable=True)  # "monday", "friday", etc.
+
+    # Validity period
+    start_date = Column(DateTime, nullable=False)
+    end_date = Column(DateTime, nullable=True)  # NULL = no end date (ongoing)
+
+    # Status
+    is_active = Column(Boolean, default=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    dispensary = relationship("Dispensary", back_populates="promotions")
+    product = relationship("Product", back_populates="promotions")
+
+    def __repr__(self):
+        return f"<Promotion '{self.title}' @ {self.dispensary_id}>"
+
+    def is_currently_active(self) -> bool:
+        """Check if promotion is currently valid"""
+        now = datetime.utcnow()
+        if not self.is_active:
+            return False
+        if self.start_date > now:
+            return False
+        if self.end_date and self.end_date < now:
+            return False
+        return True

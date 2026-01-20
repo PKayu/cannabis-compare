@@ -2,6 +2,29 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+
+### Starting Large Tasks
+
+When exiting plan mode with an accepted plan: 1.**Create Task Directory**:
+mkdir -p ~/git/project/dev/active/[task-name]/
+
+**Create Documents**:
+
+- `[task-name]-plan.md` - The accepted plan
+- `[task-name]-context.md` - Key files, decisions
+- `[task-name]-tasks.md` - Checklist of work
+
+**Update Regularly**: Mark tasks complete immediately
+
+### Continuing Tasks
+
+- Check `/dev/active/` for existing tasks
+- Read all three files before proceeding
+- Update "Last Updated" timestamps
+
+
+
+
 ## Project Overview
 
 Utah Cannabis Aggregator is a full-stack web application for Utah Medical Cannabis patients to compare prices across dispensaries and access community-driven reviews. It's a monorepo with separate frontend (Next.js) and backend (FastAPI) applications.
@@ -332,6 +355,55 @@ rm -rf .next
 npm run dev
 ```
 
+## Development Workflows
+
+The project includes 10 comprehensive workflow documents that guide development through all three phases of the MVP. These workflows are self-contained with code examples, verification steps, and success criteria.
+
+**Location**: `docs/workflows/` (read the README for overview)
+
+### Workflow Structure
+
+Each workflow follows a consistent pattern:
+1. **Context**: PRD references and requirements
+2. **Steps**: Sequential, action-oriented steps with code examples
+3. **Verification**: Commands to test completion
+4. **Success Criteria**: Checklist for acceptance
+
+### Workflow Organization
+
+**Phase 1 - Foundation (Workflows 01-04)**
+- 01: Project Initialization (COMPLETED ✅)
+- 02: Database Schema and Migrations
+- 03: Scraper Foundation
+- 04: Admin Dashboard Cleanup Queue
+
+**Phase 2 - Portal (Workflows 05-07)**
+- 05: Price Comparison Search
+- 06: Product Detail Pages
+- 07: Dispensary Pages
+
+**Phase 3 - Community (Workflows 08-10)**
+- 08: User Authentication
+- 09: Review System Dual-Track
+- 10: Stock Alerts and Notifications
+
+### Using Workflows
+
+1. Read `docs/workflows/README.md` for overview
+2. Start with the next incomplete workflow in sequence
+3. Read the PRD sections referenced in the workflow
+4. Follow all steps in order
+5. Verify completion using success criteria
+6. Move to next workflow
+
+### Key Points for Following Workflows
+
+- Code examples are production-ready and reference actual file paths
+- Commands are designed to run in the project root or subdirectories
+- Each workflow is self-contained but builds on previous workflows
+- Success criteria must be fully met before moving to next workflow
+- Workflows reference ARCHITECTURE.md for design context
+
 ## References
 
 - **Database Schema**: `backend/prisma/schema.prisma` (reference) + `backend/models.py` (authoritative)
@@ -339,3 +411,4 @@ npm run dev
 - **Setup Guide**: `docs/GETTING_STARTED.md`
 - **Project Metadata**: `.projectrc.json`
 - **API Blueprint**: `backend/README.md` has full endpoint list
+- **Development Workflows**: `docs/workflows/` - Step-by-step implementation guides

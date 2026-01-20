@@ -1,5 +1,6 @@
 // This file is for reference/documentation of the database schema
 // For Python backend, SQLAlchemy models in models.py are authoritative
+// Updated: 2026-01-19 with ScraperFlag and Promotion tables
 
 datasource db {
   provider = "postgresql"
@@ -11,20 +12,28 @@ generator client {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  username  String   @unique
-  reviews   Review[]
-  createdAt DateTime @default(now())
+  id             String   @id @default(uuid())
+  email          String   @unique
+  username       String   @unique
+  hashedPassword String?
+  reviews        Review[]
+  createdAt      DateTime @default(now())
 }
 
 model Dispensary {
-  id        String    @id @default(uuid())
-  name      String
-  website   String?
-  location  String?
-  prices    Price[]
-  createdAt DateTime  @default(now())
+  id           String        @id @default(uuid())
+  name         String
+  website      String?
+  location     String?
+  hours        String?
+  phone        String?
+  latitude     Float?
+  longitude    Float?
+  prices       Price[]
+  scraperFlags ScraperFlag[]
+  promotions   Promotion[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 }
 
 model Brand {
@@ -35,40 +44,106 @@ model Brand {
 }
 
 model Product {
-  id            String   @id @default(uuid())
-  name          String   // e.g. "Gorilla Glue #4"
-  productType   String   // e.g. "Flower", "Vape", "Edible"
-  thcPercentage Float?
-  cbdPercentage Float?
-  brandId       String
-  brand         Brand    @relation(fields: [brandId], references: [id])
-  reviews       Review[]
-  prices        Price[]
-  createdAt     DateTime @default(now())
+  id                       String        @id @default(uuid())
+  name                     String        // e.g. "Gorilla Glue #4"
+  productType              String        // e.g. "Flower", "Vape", "Edible"
+  thcPercentage            Float?
+  cbdPercentage            Float?
+  brandId                  String
+  brand                    Brand         @relation(fields: [brandId], references: [id])
+  // Normalization fields (PRD section 4.1)
+  masterProductId          String?
+  masterProduct            Product?      @relation("ProductNormalization", fields: [masterProductId], references: [id])
+  duplicateProducts        Product[]     @relation("ProductNormalization")
+  normalizationConfidence  Float         @default(1.0)
+  isMaster                 Boolean       @default(true)
+  // Relationships
+  reviews                  Review[]
+  prices                   Price[]
+  promotions               Promotion[]
+  scraperFlagMatches       ScraperFlag[] @relation("MatchedProduct")
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
 }
 
 model Price {
-  id            String     @id @default(uuid())
-  amount        Decimal
-  inStock       Boolean    @default(true)
-  lastUpdated   DateTime   @default(now()) @updatedAt
-  productId     String
-  product       Product    @relation(fields: [productId], references: [id])
-  dispensaryId  String
-  dispensary    Dispensary @relation(fields: [dispensaryId], references: [id])
+  id                    String     @id @default(uuid())
+  amount                Float
+  inStock               Boolean    @default(true)
+  productId             String
+  product               Product    @relation(fields: [productId], references: [id])
+  dispensaryId          String
+  dispensary            Dispensary @relation(fields: [dispensaryId], references: [id])
+  // Price history tracking
+  previousPrice         Float?
+  priceChangeDate       DateTime?
+  priceChangePercentage Float?
+  lastUpdated           DateTime   @default(now()) @updatedAt
+  createdAt             DateTime   @default(now())
+
+  @@unique([productId, dispensaryId])
 }
 
 model Review {
-  id             String   @id @default(uuid())
-  rating         Int      // Overall 1-5
-  effectsRating  Int?     // 1-5 for effects
-  tasteRating    Int?     // 1-5 for taste
-  valueRating    Int?     // 1-5 for value
-  comment        String?
-  upvotes        Int      @default(0)
-  userId         String
-  user           User     @relation(fields: [userId], references: [id])
-  productId      String
-  product        Product  @relation(fields: [productId], references: [id])
-  createdAt      DateTime @default(now())
+  id            String   @id @default(uuid())
+  rating        Int      // Overall 1-5
+  effectsRating Int?     // 1-5 for effects
+  tasteRating   Int?     // 1-5 for taste
+  valueRating   Int?     // 1-5 for value
+  comment       String?
+  upvotes       Int      @default(0)
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
+  createdAt     DateTime @default(now())
+}
+
+// PRD section 4.1: Confidence-based normalization flags
+model ScraperFlag {
+  id               String     @id @default(uuid())
+  originalName     String     // Product name as scraped
+  originalThc      Float?
+  originalCbd      Float?
+  brandName        String
+  dispensaryId     String
+  dispensary       Dispensary @relation(fields: [dispensaryId], references: [id])
+  matchedProductId String?
+  matchedProduct   Product?   @relation("MatchedProduct", fields: [matchedProductId], references: [id])
+  confidenceScore  Float      // 0.0-1.0, flagged if 0.6-0.9
+  status           String     @default("pending") // pending, approved, rejected, merged
+  mergeReason      String?    // Why flagged for review
+  adminNotes       String?
+  resolvedAt       DateTime?
+  resolvedBy       String?    // Admin user ID
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@index([status])
+  @@index([dispensaryId])
+}
+
+// PRD section 4.2: Daily deals and recurring promotions
+model Promotion {
+  id                 String     @id @default(uuid())
+  title              String     // e.g. "Medical Monday 15% off"
+  description        String?
+  discountPercentage Float?     // 0-100
+  discountAmount     Float?     // Fixed $ amount
+  dispensaryId       String
+  dispensary         Dispensary @relation(fields: [dispensaryId], references: [id])
+  productId          String?    // NULL = category-wide or all products
+  product            Product?   @relation(fields: [productId], references: [id])
+  appliesToCategory  String?    // "Flower", "Vape", "Edible", etc.
+  isRecurring        Boolean    @default(false)
+  recurringPattern   String?    // "daily", "weekly", "monthly"
+  recurringDay       String?    // "monday", "friday", etc.
+  startDate          DateTime
+  endDate            DateTime?  // NULL = no end date
+  isActive           Boolean    @default(true)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@index([dispensaryId])
+  @@index([isActive])
 }

@@ -27,7 +27,12 @@ cp .env.example .env
 # Edit .env with your database URL and other settings
 ```
 
-4. Run the server:
+4. Run database migrations:
+```bash
+alembic upgrade head
+```
+
+5. Run the server:
 ```bash
 uvicorn main:app --reload
 ```
@@ -45,35 +50,49 @@ backend/
 ├── database.py          # Database connection and session
 ├── models.py            # SQLAlchemy ORM models
 ├── requirements.txt     # Python dependencies
+├── alembic.ini          # Alembic configuration
+├── alembic/             # Database migrations
+│   ├── env.py
+│   └── versions/
 ├── prisma/
 │   └── schema.prisma    # Database schema reference
-├── routers/             # API route modules (to be created)
+├── routers/             # API route modules
 │   ├── auth.py
 │   ├── products.py
 │   ├── prices.py
 │   ├── reviews.py
-│   └── dispensaries.py
-├── schemas/             # Pydantic schemas (to be created)
-├── services/            # Business logic (to be created)
-│   └── scrapers/        # Web scrapers for dispensaries
-├── tests/               # Test files (to be created)
+│   ├── dispensaries.py
+│   └── admin.py         # Admin dashboard endpoints
+├── schemas/             # Pydantic schemas
+├── services/            # Business logic
+│   ├── scrapers/        # Web scrapers for dispensaries
+│   │   ├── base_scraper.py
+│   │   └── wholesome_co_scraper.py
+│   ├── normalization/   # Product matching and normalization
+│   │   ├── matcher.py
+│   │   ├── scorer.py
+│   │   └── flag_processor.py
+│   └── scheduler.py     # APScheduler for recurring jobs
+├── tests/               # Test files
 └── README.md            # This file
 ```
 
 ## Database Schema
 
-The database is modeled with the following main entities:
+The database includes the following entities:
 
 - **User**: User accounts with email/password
 - **Product**: Cannabis products (strains, vapes, etc.)
 - **Brand**: Cannabis cultivators/brands
 - **Dispensary**: Physical dispensary locations
-- **Price**: Product pricing at each dispensary
+- **Price**: Product pricing at each dispensary (with history tracking)
 - **Review**: User reviews and ratings
+- **ScraperFlag**: Products requiring manual normalization review
+- **Promotion**: Recurring and one-time promotional offers
 
 See `prisma/schema.prisma` for detailed schema definition.
 
-## API Endpoints (Planned)
+## API Endpoints
 
 ### Authentication
 - `POST /api/auth/register` - Register new user
@@ -99,17 +118,122 @@ See `prisma/schema.prisma` for detailed schema definition.
 - `GET /api/dispensaries` - List all dispensaries
 - `GET /api/dispensaries/{id}` - Get dispensary details
 
-## Data Scraping
+### Admin (ScraperFlags)
+- `GET /api/admin/flags` - List pending scraper flags
+- `POST /api/admin/flags/{id}/approve` - Approve flag merge
+- `POST /api/admin/flags/{id}/reject` - Reject flag and create new product
 
-Scrapers for dispensary data will be located in `services/scrapers/`:
-- `iheartjane_scraper.py` - iHeartJane menu scraper
-- `dutchie_scraper.py` - Dutchie menu scraper
-- Data normalization logic for merging products
+## Scraper System
+
+### Overview
+
+The scraper system aggregates product and promotion data from Utah dispensary websites. It uses:
+
+- **Confidence-based matching** to normalize products across dispensaries
+- **Automatic scheduling** via APScheduler for regular updates
+- **Admin review queue** for uncertain matches
+
+### Confidence Thresholds (PRD Section 4.1)
+
+- **>90%**: Auto-merge to existing product
+- **60-90%**: Flagged for admin review (ScraperFlag)
+- **<60%**: Create new product entry
+
+### Scraper Configuration
+
+Each scraper implements `BaseScraper` and must provide:
+- `scrape_products()` - Returns list of current inventory
+- `scrape_promotions()` - Returns list of current promotions
+
+### Running Scrapers
+
+**Manually:**
+```python
+from services.scrapers.wholesome_co_scraper import WholesomeCoScraper
+
+scraper = WholesomeCoScraper("dispensary-id")
+result = await scraper.run()
+# Or with retries:
+result = await scraper.run_with_retries(max_retries=3)
+```
+
+**Scheduled (every 2 hours):**
+```python
+from services.scheduler import ScraperScheduler
+from services.scrapers.wholesome_co_scraper import WholesomeCoScraper
+
+scheduler = ScraperScheduler()
+scheduler.add_scraper_job(WholesomeCoScraper, "dispensary-id", minutes=120)
+await scheduler.start()
+```
+
+### Adding a New Scraper
+
+1. Create a new file in `services/scrapers/`:
+```python
+from services.scrapers.base_scraper import BaseScraper, ScrapedProduct, ScrapedPromotion
+
+class NewDispensaryScraper(BaseScraper):
+    BASE_URL = "https://example.com"
+
+    async def scrape_products(self) -> List[ScrapedProduct]:
+        # Implement product scraping
+        pass
+
+    async def scrape_promotions(self) -> List[ScrapedPromotion]:
+        # Implement promotion scraping
+        pass
+```
+
+2. Register with the scheduler in `main.py`:
+```python
+from services.scheduler import get_scheduler
+scheduler = get_scheduler()
+scheduler.add_scraper_job(NewDispensaryScraper, "new-dispensary-id")
+```
+
+### Normalization Service
+
+The normalization service (`services/normalization/`) handles:
+
+- **ProductMatcher**: Fuzzy matching using RapidFuzz library
+- **ConfidenceScorer**: Decision logic for auto-merge/flag/create
+- **ScraperFlagProcessor**: Admin approval/rejection workflow
+
+## Database Migrations
+
+Using Alembic for migrations:
+
+```bash
+# Create new migration
+alembic revision --autogenerate -m "Description of changes"
+
+# Apply migrations
+alembic upgrade head
+
+# Rollback one migration
+alembic downgrade -1
+
+# View current version
+alembic current
+```
+
+See `docs/database_rollback.md` for detailed rollback procedures.
 
 ## Running Tests
 
 ```bash
+# Run all tests
 pytest
+
+# Run with verbose output
+pytest -v
+
+# Run specific test file
+pytest backend/tests/test_matcher.py -v
+
+# Run with coverage
+pytest --cov=backend
 ```
 
 ## Environment Variables
@@ -124,15 +248,7 @@ Key variables:
 ## Development Notes
 
 - Use FastAPI's automatic API documentation at `/docs` for testing endpoints
-- Database migrations will use Alembic (to be set up)
 - All user input should be validated using Pydantic schemas
 - JWT tokens for authentication
-
-## Next Steps
-
-1. Set up Alembic for database migrations
-2. Create Pydantic schemas for request/response validation
-3. Implement authentication routers
-4. Build product and pricing routers
-5. Implement web scrapers for dispensaries
-6. Add comprehensive tests
+- Scrapers run every 2 hours (configurable) per PRD requirement
+- Target >80% auto-merge rate for product normalization

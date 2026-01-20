@@ -13,8 +13,8 @@
     - [x] Run `alembic revision --autogenerate -m "Initial schema"` in `backend/` (Manually created `001_initial_schema.py`).
     - [x] Review generated migration file in `backend/alembic/versions/`.
 
-- [ ] **Apply Migration**
-    - [ ] Run `alembic upgrade head`.
+- [x] **Apply Migration**
+    - [x] Run `alembic upgrade head`.
 
-- [ ] **Verification**
-    - [ ] Connect to database and list tables to confirm creation.
+- [x] **Verification**
+    - [x] Connect to database and list tables to confirm creation.

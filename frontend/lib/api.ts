@@ -58,8 +58,10 @@ export const api = {
 
   // Dispensaries
   dispensaries: {
-    list: () => apiClient.get('/api/dispensaries'),
+    list: (params?: any) => apiClient.get('/api/dispensaries', { params }),
     get: (id: string) => apiClient.get(`/api/dispensaries/${id}`),
+    getInventory: (dispensaryId: string, params?: any) =>
+      apiClient.get(`/api/dispensaries/${dispensaryId}/inventory`, { params }),
   },
 
   // Authentication

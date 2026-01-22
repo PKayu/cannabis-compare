@@ -95,23 +95,30 @@ See `backend/prisma/schema.prisma` for the complete database schema.
   - [x] Stock status indicators
   - [x] Promotion/deal badges
 
-- [ ] **Workflow 07**: Dispensary listing and details (NEXT)
+- [x] **Workflow 07**: Dispensary listing and details ✅ COMPLETED
+  - [x] Dispensary listing page with product counts
+  - [x] Dispensary detail page with promotions
+  - [x] Inventory browser with filters and sorting
+  - [x] CurrentPromotions component with weekly calendar
+  - [x] Mobile responsive design
 
-**Current Status**: Workflows 05-06 complete. Starting Workflow 07 (Dispensary Pages).
+**Current Status**: Phase 2 COMPLETE! All frontend portal workflows (05-07) finished.
 
 **Running Services:**
 - Backend: http://127.0.0.1:8000 ✅
 - Frontend: http://localhost:3000 ✅
 - **Search Page**: http://localhost:3000/products/search
-- **Product Detail**: http://localhost:3000/products/prod-002 (example)
+- **Product Detail**: http://localhost:3000/products/prod-002
+- **Dispensaries**: http://localhost:3000/dispensaries
+- **Dispensary Detail**: http://localhost:3000/dispensaries/disp-001
 
 **Tested Endpoints:**
-- ✅ `GET /api/products/search?q=dream` - Returns Blue Dream
 - ✅ `GET /api/products/search?q=gorilla` - Returns Gorilla Glue #4
 - ✅ `GET /api/products/{id}` - Product details
 - ✅ `GET /api/products/{id}/prices` - Price comparison across dispensaries
-- ✅ `GET /api/products/{id}/pricing-history` - Historical pricing data
-- ✅ `GET /api/products/autocomplete?q=gor` - Returns suggestions
+- ✅ `GET /api/dispensaries` - List all dispensaries
+- ✅ `GET /api/dispensaries/{id}` - Dispensary details with promotions
+- ✅ `GET /api/dispensaries/{id}/inventory` - Products at dispensary
 - ✅ `GET /health` - API is healthy
 
 **Test Data Available:**

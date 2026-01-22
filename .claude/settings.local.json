@@ -16,7 +16,16 @@
       "Bash(powershell -Command \"Set-Location ''d:\\\\Projects\\\\cannabis compare\\\\backend''; & ''.\\\\venv\\\\Scripts\\\\python.exe'' ''seed_test_data.py''\")",
       "Bash(powershell -Command \"Get-ChildItem ''d:\\\\Projects\\\\cannabis compare\\\\backend'' | Select-Object Name\")",
       "Bash(powershell -Command \"Get-Command python | Select-Object Source\")",
-      "Bash(powershell -Command \"Set-Location ''d:\\\\Projects\\\\cannabis compare\\\\backend''; python seed_test_data.py\")"
+      "Bash(powershell -Command \"Set-Location ''d:\\\\Projects\\\\cannabis compare\\\\backend''; python seed_test_data.py\")",
+      "Bash(ls:*)",
+      "Bash(requirements)",
+      "Bash(setup:*)",
+      "Bash(pytest \")",
+      "Bash(ren:*)",
+      "Bash(alembic revision:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm install)",
+      "Bash(curl:*)"
     ]
   }
 }

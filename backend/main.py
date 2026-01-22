@@ -4,7 +4,7 @@ Main FastAPI application entry point for Utah Cannabis Aggregator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from routers import admin_flags
+from routers import admin_flags, search, products
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -13,7 +13,10 @@ app = FastAPI(
     version="0.1.0"
 )
 
+# Register routers
 app.include_router(admin_flags.router)
+app.include_router(search.router)
+app.include_router(products.router)
 
 
 # Configure CORS

@@ -33,7 +33,11 @@ export const api = {
   products: {
     list: (params?: any) => apiClient.get('/api/products', { params }),
     get: (id: string) => apiClient.get(`/api/products/${id}`),
-    search: (query: string) => apiClient.get('/api/products/search', { params: { q: query } }),
+    search: (params: any) => apiClient.get('/api/products/search', { params }),
+    autocomplete: (q: string) => apiClient.get('/api/products/autocomplete', { params: { q } }),
+    getPrices: (productId: string) => apiClient.get(`/api/products/${productId}/prices`),
+    getRelated: (productId: string, limit?: number) =>
+      apiClient.get(`/api/products/${productId}/related`, { params: { limit } }),
   },
 
   // Prices

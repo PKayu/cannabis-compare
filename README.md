@@ -72,11 +72,41 @@ See `backend/prisma/schema.prisma` for the complete database schema.
 
 **See**: `docs/API_TEST_PLAN.md` for testing instructions
 
-### 🎯 Phase 2: Frontend Portal (In Progress)
-- [ ] Price comparison search UI
-- [ ] Product detail pages
-- [ ] Dispensary listing and details
-- [ ] Map integration
+### 🎯 Phase 2: Frontend Portal (In Progress - January 2026)
+- [ ] **Workflow 05**: Price comparison search UI (IN PROGRESS - Backend Complete)
+  - [x] Backend search router with fuzzy matching (rapidfuzz)
+  - [x] Backend products router with price comparison endpoint
+  - [x] Routers registered in main.py (20 total routes)
+  - [x] Frontend search page component (`app/products/search/page.tsx`)
+  - [x] Frontend filter and results components (FilterPanel, ResultsTable, SearchBar, DealBadge)
+  - [x] API client integration (`lib/api.ts` updated)
+  - [x] Database indexes migration created (9 new indexes)
+  - [ ] Run database migration (pending)
+  - [ ] Test end-to-end search functionality
+  - [ ] Verify performance (<200ms response time)
+- [ ] **Workflow 06**: Product detail pages
+- [ ] **Workflow 07**: Dispensary listing and details
+
+**Current Status**: Backend and frontend code complete for Workflow 05. Ready for testing.
+
+**New Backend Endpoints (5):**
+- `GET /api/products/search` - Fuzzy product search with filters (sort by relevance, price, THC, CBD)
+- `GET /api/products/autocomplete` - Search suggestions (ILIKE prefix matching)
+- `GET /api/products/{id}` - Product details
+- `GET /api/products/{id}/prices` - Price comparison with promotions across all dispensaries
+- `GET /api/products/{id}/related` - Related products by brand/type
+
+**New Frontend Components (4):**
+- `SearchBar` - Search input with autocomplete dropdown (300ms debounce)
+- `FilterPanel` - Product type, price, THC%, CBD% filters + sort options
+- `ResultsTable` - Responsive results (mobile cards / desktop table)
+- `DealBadge` - Deal price display with savings percentage
+
+**Next Steps:**
+1. Run migration: `cd backend && python -m alembic upgrade head`
+2. Start backend: `uvicorn main:app --reload` (port 8000)
+3. Start frontend: `npm run dev` (port 3000)
+4. Test search at: `http://localhost:3000/products/search`
 
 **See**: `docs/workflows/05-07` for implementation guides
 

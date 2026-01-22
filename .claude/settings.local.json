@@ -11,7 +11,12 @@
       "Bash(taskkill:*)",
       "Bash(venvScriptspython seed_test_data.py)",
       "Bash(\"d:\\\\Projects\\\\cannabis compare\\\\backend\\\\venv\\\\Scripts\\\\python.exe\":*)",
-      "Bash(cmd /c \"cd /d \"\"d:\\\\Projects\\\\cannabis compare\\\\backend\"\" && venv\\\\Scripts\\\\python.exe seed_test_data.py\")"
+      "Bash(cmd /c \"cd /d \"\"d:\\\\Projects\\\\cannabis compare\\\\backend\"\" && venv\\\\Scripts\\\\python.exe seed_test_data.py\")",
+      "Bash(cmd /c \"cd /d \"\"d:\\\\Projects\\\\cannabis compare\\\\backend\"\" && venv\\\\Scripts\\\\python.exe seed_test_data.py 2>&1\")",
+      "Bash(powershell -Command \"Set-Location ''d:\\\\Projects\\\\cannabis compare\\\\backend''; & ''.\\\\venv\\\\Scripts\\\\python.exe'' ''seed_test_data.py''\")",
+      "Bash(powershell -Command \"Get-ChildItem ''d:\\\\Projects\\\\cannabis compare\\\\backend'' | Select-Object Name\")",
+      "Bash(powershell -Command \"Get-Command python | Select-Object Source\")",
+      "Bash(powershell -Command \"Set-Location ''d:\\\\Projects\\\\cannabis compare\\\\backend''; python seed_test_data.py\")"
     ]
   }
 }

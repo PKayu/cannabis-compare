@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import AgeGateWrapper from './age-gate-wrapper'
 
 export const metadata: Metadata = {
   title: 'Utah Cannabis Aggregator',
@@ -13,7 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <AgeGateWrapper>{children}</AgeGateWrapper>
+      </body>
     </html>
   )
 }

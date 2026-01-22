@@ -9,17 +9,63 @@ export const apiClient = axios.create({
   },
 })
 
-// Add request interceptor for auth tokens (future use)
-apiClient.interceptors.request.use((config) => {
-  // TODO: Add JWT token to headers if available
+/**
+ * Add request interceptor for auth tokens
+ * Retrieves the Supabase session token and attaches it to the Authorization header
+ */
+apiClient.interceptors.request.use(async (config) => {
+  try {
+    // Dynamically import Supabase to avoid SSR issues
+    const { createClient } = await import('@supabase/supabase-js')
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    if (supabaseUrl && supabaseAnonKey) {
+      const supabase = createClient(supabaseUrl, supabaseAnonKey)
+      const { data } = await supabase.auth.getSession()
+
+      if (data?.session?.access_token) {
+        config.headers.Authorization = `Bearer ${data.session.access_token}`
+      }
+    }
+  } catch (error) {
+    console.error('Failed to add auth token to request:', error)
+  }
+
   return config
 })
 
-// Add response interceptor for error handling
+/**
+ * Add response interceptor for error handling
+ * Handles 401 Unauthorized responses by clearing auth state and redirecting to login
+ */
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
-    // TODO: Handle authentication errors, redirects, etc.
+  async (error) => {
+    // Handle 401 Unauthorized - redirect to login
+    if (error.response?.status === 401) {
+      try {
+        // Clear auth state
+        const { createClient } = await import('@supabase/supabase-js')
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+        if (supabaseUrl && supabaseAnonKey) {
+          const supabase = createClient(supabaseUrl, supabaseAnonKey)
+          await supabase.auth.signOut()
+        }
+      } catch (signOutError) {
+        console.error('Failed to sign out:', signOutError)
+      }
+
+      // Redirect to login page
+      if (typeof window !== 'undefined') {
+        const returnUrl = encodeURIComponent(window.location.pathname)
+        window.location.href = `/auth/login?returnUrl=${returnUrl}`
+      }
+    }
+
     return Promise.reject(error)
   }
 )

@@ -10,9 +10,9 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql://localhost/cannabis_aggregator"
 
-    # Supabase (optional)
+    # Supabase Configuration
     supabase_url: Optional[str] = None
-    supabase_key: Optional[str] = None
+    supabase_service_key: Optional[str] = None
 
     # JWT
     secret_key: str = "your-secret-key-change-in-production"

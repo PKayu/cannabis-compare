@@ -155,12 +155,12 @@ Local Backend:
 
 | File | Purpose | Read Time |
 |------|---------|-----------|
-| **WORKFLOW_08_SUMMARY.md** | Overview | 5 min |
-| **WORKFLOW_08_FINAL_CHECKLIST.md** | Handoff | 10 min |
-| **PHASE_3_WORKFLOW_08_COMPLETION.md** | Details | 1 hour |
+| **docs/archive/workflow-logs/WORKFLOW_08_SUMMARY.md** | Overview | 5 min |
+| **docs/archive/workflow-logs/WORKFLOW_08_FINAL_CHECKLIST.md** | Handoff | 10 min |
+| **docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md** | Details | 1 hour |
 | **docs/WORKFLOW_08_TEST_PLAN.md** | Testing | 30 min |
 | **docs/SUPABASE_CREDENTIALS.md** | Setup | 10 min |
-| **DOCUMENTATION_STATUS.md** | Doc status | 5 min |
+| **docs/archive/README.md** | Archive info | 5 min |
 
 ---
 
@@ -237,7 +237,7 @@ Local Backend:
 ## Next Steps
 
 ### This Hour
-1. Read `WORKFLOW_08_SUMMARY.md` (5 min)
+1. Read `docs/archive/workflow-logs/WORKFLOW_08_SUMMARY.md` (5 min)
 2. Start servers (2 min)
 3. Test age gate (2 min)
 4. Test login (2 min)
@@ -257,7 +257,7 @@ Local Backend:
 
 ## Key Contacts
 
-- **Technical Lead**: Review PHASE_3_WORKFLOW_08_COMPLETION.md
+- **Technical Lead**: Review docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md
 - **QA Lead**: Follow docs/WORKFLOW_08_TEST_PLAN.md
 - **DevOps**: See deployment checklist in completion notes
 - **Next Developer**: Review architecture and API patterns
@@ -327,8 +327,8 @@ Phase 3 Complete      🎯 ~1 week away
 ## Support
 
 ### Questions?
-1. Check `WORKFLOW_08_SUMMARY.md` - Quick answers
-2. Check `PHASE_3_WORKFLOW_08_COMPLETION.md` - Details
+1. Check `docs/archive/workflow-logs/WORKFLOW_08_SUMMARY.md` - Quick answers
+2. Check `docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md` - Details
 3. Check `docs/WORKFLOW_08_TEST_PLAN.md` - Testing
 4. Check `docs/SUPABASE_CREDENTIALS.md` - Setup
 
@@ -339,7 +339,7 @@ Phase 3 Complete      🎯 ~1 week away
 - Check network tab (F12 → Network)
 
 ### Need Details?
-- Full implementation: `PHASE_3_WORKFLOW_08_COMPLETION.md`
+- Full implementation: `docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md`
 - Testing procedures: `docs/WORKFLOW_08_TEST_PLAN.md`
 - Architecture: `docs/ARCHITECTURE.md` (to be updated)
 
@@ -349,7 +349,7 @@ Phase 3 Complete      🎯 ~1 week away
 
 Before marking Workflow 08 complete:
 
-- [ ] Read WORKFLOW_08_SUMMARY.md
+- [ ] Read docs/archive/workflow-logs/WORKFLOW_08_SUMMARY.md
 - [ ] Execute docs/WORKFLOW_08_TEST_PLAN.md
 - [ ] All 14 tests pass
 - [ ] Document test results
@@ -358,7 +358,7 @@ Before marking Workflow 08 complete:
 
 ---
 
-**Ready to Start?** → Open `WORKFLOW_08_SUMMARY.md` next!
+**Ready to Start?** → Open `docs/archive/workflow-logs/WORKFLOW_08_SUMMARY.md` next!
 
 **Version**: 1.0
 **Last Updated**: January 22, 2026

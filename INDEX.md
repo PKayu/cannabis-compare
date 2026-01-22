@@ -10,13 +10,13 @@
 
 ### 🚀 Just Want to Get Started?
 1. **5-minute intro**: [QUICK_START_GUIDE.md](./QUICK_START_GUIDE.md)
-2. **30-minute overview**: [WORKFLOW_08_SUMMARY.md](./WORKFLOW_08_SUMMARY.md)
+2. **30-minute overview**: [Workflow 08 Summary](./docs/archive/workflow-logs/WORKFLOW_08_SUMMARY.md)
 3. **Test it**: [docs/WORKFLOW_08_TEST_PLAN.md](./docs/WORKFLOW_08_TEST_PLAN.md)
 
 ### 🎯 Full Picture
 1. **Project status**: [README.md](./README.md)
-2. **Phase 3 details**: [PHASE_3_WORKFLOW_08_COMPLETION.md](./PHASE_3_WORKFLOW_08_COMPLETION.md)
-3. **Sign-off checklist**: [WORKFLOW_08_FINAL_CHECKLIST.md](./WORKFLOW_08_FINAL_CHECKLIST.md)
+2. **Phase 3 details**: [docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md](./docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md)
+3. **Sign-off checklist**: [docs/archive/workflow-logs/WORKFLOW_08_FINAL_CHECKLIST.md](./docs/archive/workflow-logs/WORKFLOW_08_FINAL_CHECKLIST.md)
 
 ### 🔧 Setup & Configuration
 1. **Quick start**: [docs/GETTING_STARTED.md](./docs/GETTING_STARTED.md)
@@ -59,10 +59,9 @@ Phase 3: Community (User System)
 |----------|---------|----------|-----------|
 | [README.md](./README.md) | Project overview | Everyone | 5 min |
 | [QUICK_START_GUIDE.md](./QUICK_START_GUIDE.md) | Get running fast | Developers | 5 min |
-| [WORKFLOW_08_SUMMARY.md](./WORKFLOW_08_SUMMARY.md) | Workflow overview | Everyone | 10 min |
-| [PHASE_3_WORKFLOW_08_COMPLETION.md](./PHASE_3_WORKFLOW_08_COMPLETION.md) | Complete details | Developers | 1 hour |
-| [WORKFLOW_08_FINAL_CHECKLIST.md](./WORKFLOW_08_FINAL_CHECKLIST.md) | Quality check | QA/Tech Lead | 20 min |
-| [DOCUMENTATION_STATUS.md](./DOCUMENTATION_STATUS.md) | Doc status | Documentation team | 10 min |
+| [docs/archive/workflow-logs/WORKFLOW_08_SUMMARY.md](./docs/archive/workflow-logs/WORKFLOW_08_SUMMARY.md) | Workflow overview | Everyone | 10 min |
+| [docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md](./docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md) | Complete details | Developers | 1 hour |
+| [docs/archive/workflow-logs/WORKFLOW_08_FINAL_CHECKLIST.md](./docs/archive/workflow-logs/WORKFLOW_08_FINAL_CHECKLIST.md) | Quality check | QA/Tech Lead | 20 min |
 
 ### 🧪 Testing Documentation
 
@@ -109,31 +108,31 @@ Phase 3: Community (User System)
 
 ### 👨‍💻 Developer (Frontend/Backend)
 1. Start: [QUICK_START_GUIDE.md](./QUICK_START_GUIDE.md)
-2. Understand: [PHASE_3_WORKFLOW_08_COMPLETION.md](./PHASE_3_WORKFLOW_08_COMPLETION.md)
-3. Code review: [WORKFLOW_08_FINAL_CHECKLIST.md](./WORKFLOW_08_FINAL_CHECKLIST.md)
+2. Understand: [docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md](./docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md)
+3. Code review: [docs/archive/workflow-logs/WORKFLOW_08_FINAL_CHECKLIST.md](./docs/archive/workflow-logs/WORKFLOW_08_FINAL_CHECKLIST.md)
 4. Architecture: [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
 
 ### 🧪 QA / Tester
-1. Overview: [WORKFLOW_08_SUMMARY.md](./WORKFLOW_08_SUMMARY.md)
+1. Overview: [docs/archive/workflow-logs/WORKFLOW_08_SUMMARY.md](./docs/archive/workflow-logs/WORKFLOW_08_SUMMARY.md)
 2. Test plan: [docs/WORKFLOW_08_TEST_PLAN.md](./docs/WORKFLOW_08_TEST_PLAN.md)
-3. Checklist: [WORKFLOW_08_FINAL_CHECKLIST.md](./WORKFLOW_08_FINAL_CHECKLIST.md)
+3. Checklist: [docs/archive/workflow-logs/WORKFLOW_08_FINAL_CHECKLIST.md](./docs/archive/workflow-logs/WORKFLOW_08_FINAL_CHECKLIST.md)
 4. Document: Fill in test results
 
 ### 🚀 DevOps / Deployment
 1. Setup: [docs/SUPABASE_CREDENTIALS.md](./docs/SUPABASE_CREDENTIALS.md)
-2. Details: [PHASE_3_WORKFLOW_08_COMPLETION.md](./PHASE_3_WORKFLOW_08_COMPLETION.md) → Deployment section
-3. Checklist: [WORKFLOW_08_FINAL_CHECKLIST.md](./WORKFLOW_08_FINAL_CHECKLIST.md) → Deployment section
+2. Details: [docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md](./docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md) → Deployment section
+3. Checklist: [docs/archive/workflow-logs/WORKFLOW_08_FINAL_CHECKLIST.md](./docs/archive/workflow-logs/WORKFLOW_08_FINAL_CHECKLIST.md) → Deployment section
 
 ### 👔 Product Manager
 1. Overview: [README.md](./README.md)
-2. Phase status: [WORKFLOW_08_SUMMARY.md](./WORKFLOW_08_SUMMARY.md)
+2. Phase status: [docs/archive/workflow-logs/WORKFLOW_08_SUMMARY.md](./docs/archive/workflow-logs/WORKFLOW_08_SUMMARY.md)
 3. Timeline: [docs/PRD.md](./docs/PRD.md)
-4. Details: [PHASE_3_WORKFLOW_08_COMPLETION.md](./PHASE_3_WORKFLOW_08_COMPLETION.md)
+4. Details: [docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md](./docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md)
 
 ### 🎯 Tech Lead
-1. Overview: [WORKFLOW_08_SUMMARY.md](./WORKFLOW_08_SUMMARY.md)
-2. Implementation: [PHASE_3_WORKFLOW_08_COMPLETION.md](./PHASE_3_WORKFLOW_08_COMPLETION.md)
-3. Quality: [WORKFLOW_08_FINAL_CHECKLIST.md](./WORKFLOW_08_FINAL_CHECKLIST.md)
+1. Overview: [docs/archive/workflow-logs/WORKFLOW_08_SUMMARY.md](./docs/archive/workflow-logs/WORKFLOW_08_SUMMARY.md)
+2. Implementation: [docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md](./docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md)
+3. Quality: [docs/archive/workflow-logs/WORKFLOW_08_FINAL_CHECKLIST.md](./docs/archive/workflow-logs/WORKFLOW_08_FINAL_CHECKLIST.md)
 4. Architecture: [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
 
 ---
@@ -141,24 +140,24 @@ Phase 3: Community (User System)
 ## Search by Topic
 
 ### 🔐 Authentication
-- Overview: [WORKFLOW_08_SUMMARY.md](./WORKFLOW_08_SUMMARY.md)
-- Implementation: [PHASE_3_WORKFLOW_08_COMPLETION.md](./PHASE_3_WORKFLOW_08_COMPLETION.md)
+- Overview: [docs/archive/workflow-logs/WORKFLOW_08_SUMMARY.md](./docs/archive/workflow-logs/WORKFLOW_08_SUMMARY.md)
+- Implementation: [docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md](./docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md)
 - Setup: [docs/SUPABASE_CREDENTIALS.md](./docs/SUPABASE_CREDENTIALS.md)
 - Spec: [docs/workflows/08_user_authentication.md](./docs/workflows/08_user_authentication.md)
 
 ### 🧪 Testing
 - Test plan: [docs/WORKFLOW_08_TEST_PLAN.md](./docs/WORKFLOW_08_TEST_PLAN.md)
 - API tests: [docs/API_TEST_PLAN.md](./docs/API_TEST_PLAN.md)
-- Quality: [WORKFLOW_08_FINAL_CHECKLIST.md](./WORKFLOW_08_FINAL_CHECKLIST.md)
+- Quality: [docs/archive/workflow-logs/WORKFLOW_08_FINAL_CHECKLIST.md](./docs/archive/workflow-logs/WORKFLOW_08_FINAL_CHECKLIST.md)
 
 ### 🚀 Deployment
-- Checklist: [PHASE_3_WORKFLOW_08_COMPLETION.md](./PHASE_3_WORKFLOW_08_COMPLETION.md) → Deployment section
+- Checklist: [docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md](./docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md) → Deployment section
 - Setup: [docs/SUPABASE_CREDENTIALS.md](./docs/SUPABASE_CREDENTIALS.md)
 - Configuration: See `.env.example` files
 
 ### 📊 Project Status
 - Current: [README.md](./README.md)
-- Phase details: [PHASE_3_WORKFLOW_08_COMPLETION.md](./PHASE_3_WORKFLOW_08_COMPLETION.md)
+- Phase details: [docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md](./docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md)
 - Timeline: [docs/workflows/README.md](./docs/workflows/README.md)
 
 ### 🏗️ Architecture
@@ -174,11 +173,7 @@ Phase 3: Community (User System)
 cannabis-compare/
 ├── README.md                                  ← Project overview
 ├── QUICK_START_GUIDE.md                       ← 5-min intro
-├── WORKFLOW_08_SUMMARY.md                     ← Workflow overview
-├── WORKFLOW_08_FINAL_CHECKLIST.md            ← Sign-off checklist
-├── PHASE_3_WORKFLOW_08_COMPLETION.md         ← Full details
-├── DOCUMENTATION_STATUS.md                    ← Doc status
-├── INDEX.md                                   ← This file
+├── INDEX.md                                   ← Navigation hub
 ├── CLAUDE.md                                  ← Claude Code guidelines
 │
 ├── docs/
@@ -189,6 +184,27 @@ cannabis-compare/
 │   ├── API_TEST_PLAN.md                       ← API tests
 │   ├── WORKFLOW_08_TEST_PLAN.md              ← Auth tests
 │   ├── WORKFLOW_08_TEST_RESULTS.md           ← Test results (to fill)
+│   │
+│   ├── phase-completion/                     ← Phase summaries
+│   │   ├── PHASE_2_COMPLETION_NOTES.md
+│   │   └── PHASE_3_WORKFLOW_08_COMPLETION.md
+│   │
+│   ├── archive/                              ← Historical documentation
+│   │   ├── workflow-logs/
+│   │   │   ├── WORKFLOW_05_PROGRESS.md
+│   │   │   ├── WORKFLOW_05_ISSUES.md
+│   │   │   ├── WORKFLOW_05_FIXED.md
+│   │   │   ├── WORKFLOW_06_PROGRESS.md
+│   │   │   ├── WORKFLOW_07_PROGRESS.md
+│   │   │   ├── WORKFLOW_08_SUMMARY.md
+│   │   │   └── WORKFLOW_08_FINAL_CHECKLIST.md
+│   │   └── historical/
+│   │       ├── WORKSPACE_SETUP.md
+│   │       ├── SETUP_CHECKLIST.md
+│   │       ├── PROJECT_OVERVIEW.md
+│   │       ├── WORKFLOWS_SUMMARY.md
+│   │       └── DOCUMENTATION_STATUS.md
+│   │
 │   └── workflows/
 │       ├── README.md                          ← Workflow overview
 │       ├── 01_project_initialization_COMPLETED.md
@@ -271,12 +287,12 @@ Timeline: 6-9 days total for Phase 3
 ### 📞 Support
 - Questions: See [QUICK_START_GUIDE.md](./QUICK_START_GUIDE.md)
 - Issues: Check debugging guide in [docs/WORKFLOW_08_TEST_PLAN.md](./docs/WORKFLOW_08_TEST_PLAN.md)
-- Details: Read [PHASE_3_WORKFLOW_08_COMPLETION.md](./PHASE_3_WORKFLOW_08_COMPLETION.md)
+- Details: Read [docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md](./docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md)
 
 ### ✅ Next Steps
 1. Read: [QUICK_START_GUIDE.md](./QUICK_START_GUIDE.md)
 2. Test: [docs/WORKFLOW_08_TEST_PLAN.md](./docs/WORKFLOW_08_TEST_PLAN.md)
-3. Approve: [WORKFLOW_08_FINAL_CHECKLIST.md](./WORKFLOW_08_FINAL_CHECKLIST.md)
+3. Approve: [docs/archive/workflow-logs/WORKFLOW_08_FINAL_CHECKLIST.md](./docs/archive/workflow-logs/WORKFLOW_08_FINAL_CHECKLIST.md)
 4. Deploy: See deployment section in completion notes
 
 ---
@@ -288,10 +304,11 @@ Timeline: 6-9 days total for Phase 3
 | README.md | Jan 22, 2026 | 1.3 | ✅ Updated |
 | docs/workflows/README.md | Jan 22, 2026 | 1.3 | ✅ Updated |
 | docs/WORKFLOW_08_TEST_PLAN.md | Jan 22, 2026 | 1.0 | ✅ New |
-| PHASE_3_WORKFLOW_08_COMPLETION.md | Jan 22, 2026 | 1.0 | ✅ New |
-| WORKFLOW_08_SUMMARY.md | Jan 22, 2026 | 1.0 | ✅ New |
-| WORKFLOW_08_FINAL_CHECKLIST.md | Jan 22, 2026 | 1.0 | ✅ New |
-| DOCUMENTATION_STATUS.md | Jan 22, 2026 | 1.0 | ✅ New |
+| docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md | Jan 22, 2026 | 1.0 | ✅ New |
+| docs/archive/workflow-logs/WORKFLOW_08_SUMMARY.md | Jan 22, 2026 | 1.0 | ✅ New |
+| docs/archive/workflow-logs/WORKFLOW_08_FINAL_CHECKLIST.md | Jan 22, 2026 | 1.0 | ✅ New |
+| docs/archive/README.md | Jan 22, 2026 | 1.0 | ✅ New |
+| docs/phase-completion/README.md | Jan 22, 2026 | 1.0 | ✅ New |
 | QUICK_START_GUIDE.md | Jan 22, 2026 | 1.0 | ✅ New |
 | INDEX.md | Jan 22, 2026 | 1.0 | ✅ New |
 
@@ -301,7 +318,7 @@ Timeline: 6-9 days total for Phase 3
 
 **For Quick Answers**: [QUICK_START_GUIDE.md](./QUICK_START_GUIDE.md)
 
-**For Detailed Info**: [PHASE_3_WORKFLOW_08_COMPLETION.md](./PHASE_3_WORKFLOW_08_COMPLETION.md)
+**For Detailed Info**: [docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md](./docs/phase-completion/PHASE_3_WORKFLOW_08_COMPLETION.md)
 
 **For Testing**: [docs/WORKFLOW_08_TEST_PLAN.md](./docs/WORKFLOW_08_TEST_PLAN.md)
 

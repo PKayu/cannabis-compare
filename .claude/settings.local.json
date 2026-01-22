@@ -38,7 +38,10 @@
       "Bash(cd:*)",
       "Bash(\"d:\\\\Projects\\\\cannabis compare\\\\backend\\\\venv\\\\Scripts\\\\python.exe\" -m uvicorn:*)",
       "Bash(python3:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(find:*)",
+      "Bash(git mv:*)",
+      "Bash(git add:*)"
     ]
   }
 }

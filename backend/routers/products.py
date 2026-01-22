@@ -1,10 +1,10 @@
 """Product detail and price comparison endpoints"""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_
 from database import get_db
 from models import Product, Price, Dispensary, Promotion
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
 router = APIRouter(prefix="/api/products", tags=["products"])
@@ -47,10 +47,6 @@ async def get_product(
         "product_type": product.product_type,
         "thc_percentage": product.thc_percentage,
         "cbd_percentage": product.cbd_percentage,
-        "description": product.description,
-        "weight": product.weight,
-        "terpene_profile": product.terpene_profile,
-        "batch_number": product.batch_number,
         "is_master": product.is_master,
         "normalization_confidence": product.normalization_confidence,
         "created_at": product.created_at.isoformat() if product.created_at else None,
@@ -239,3 +235,66 @@ async def get_related_products(
         })
 
     return results
+
+
+@router.get("/{product_id}/pricing-history")
+async def get_pricing_history(
+    product_id: str,
+    days: int = Query(30, ge=1, le=365),
+    db: Session = Depends(get_db)
+) -> List[Dict[str, Any]]:
+    """
+    Get historical pricing for a product over the specified number of days.
+
+    Args:
+        product_id: UUID of the product
+        days: Number of days of history (1-365, default 30)
+        db: Database session
+
+    Returns:
+        List of daily price statistics (min, max, avg) sorted by date
+    """
+
+    # Verify product exists
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    start_date = datetime.utcnow() - timedelta(days=days)
+
+    # Get price records within the date range
+    # Note: In production, you'd want a separate price_history table
+    # For now, we'll use the current prices table with last_updated
+    prices = (
+        db.query(Price)
+        .filter(
+            and_(
+                Price.product_id == product_id,
+                Price.last_updated >= start_date
+            )
+        )
+        .all()
+    )
+
+    if not prices:
+        return []
+
+    # Group prices by date
+    history_by_date: Dict[str, List[float]] = {}
+    for price in prices:
+        if price.last_updated:
+            date_str = price.last_updated.strftime("%Y-%m-%d")
+            if date_str not in history_by_date:
+                history_by_date[date_str] = []
+            history_by_date[date_str].append(float(price.amount))
+
+    # Calculate daily statistics
+    return [
+        {
+            "date": date,
+            "min": min(amounts),
+            "max": max(amounts),
+            "avg": round(sum(amounts) / len(amounts), 2)
+        }
+        for date, amounts in sorted(history_by_date.items())
+    ]

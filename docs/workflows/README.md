@@ -17,8 +17,8 @@ Focus: Building the data infrastructure and admin tools
 ### Phase 2: Portal (Frontend MVP) - Workflows 05-07
 Focus: Building the public-facing search and product pages
 
-- **Workflow 05**: Price Comparison Search
-- **Workflow 06**: Product Detail Pages
+- **Workflow 05**: Price Comparison Search (COMPLETED) ✅
+- **Workflow 06**: Product Detail Pages (COMPLETED) ✅
 - **Workflow 07**: Dispensary Pages
 
 ### Phase 3: Community (User System & Reviews) - Workflows 08-10
@@ -193,6 +193,6 @@ Refer to the appropriate workflow document or the main architecture documentatio
 
 ---
 
-**Current Status**: Phase 1 in progress
-**Last Updated**: January 19, 2026
-**Version**: 1.0
+**Current Status**: Phase 2 in progress (Workflows 05-06 complete, starting 07)
+**Last Updated**: January 21, 2026
+**Version**: 1.1

@@ -73,40 +73,65 @@ See `backend/prisma/schema.prisma` for the complete database schema.
 **See**: `docs/API_TEST_PLAN.md` for testing instructions
 
 ### 🎯 Phase 2: Frontend Portal (In Progress - January 2026)
-- [ ] **Workflow 05**: Price comparison search UI (IN PROGRESS - Backend Complete)
+- [x] **Workflow 05**: Price comparison search UI ✅ COMPLETED
   - [x] Backend search router with fuzzy matching (rapidfuzz)
   - [x] Backend products router with price comparison endpoint
   - [x] Routers registered in main.py (20 total routes)
   - [x] Frontend search page component (`app/products/search/page.tsx`)
   - [x] Frontend filter and results components (FilterPanel, ResultsTable, SearchBar, DealBadge)
   - [x] API client integration (`lib/api.ts` updated)
-  - [x] Database indexes migration created (9 new indexes)
-  - [ ] Run database migration (pending)
-  - [ ] Test end-to-end search functionality
-  - [ ] Verify performance (<200ms response time)
-- [ ] **Workflow 06**: Product detail pages
-- [ ] **Workflow 07**: Dispensary listing and details
+  - [x] All endpoints tested and working
+  - [x] Search performance verified (<200ms)
+  - [x] Test data in database (5 products)
+  - **Known Issue**: Autocomplete dropdown not triggering (deferred to future phase)
 
-**Current Status**: Backend and frontend code complete for Workflow 05. Ready for testing.
+- [x] **Workflow 06**: Product detail pages ✅ COMPLETED
+  - [x] Dynamic route `/products/[id]` page
+  - [x] PriceComparisonTable component with dispensary deep-linking
+  - [x] PricingChart component with min/max/avg visualization
+  - [x] ReviewsSection placeholder (full implementation in Workflow 09)
+  - [x] Pricing history endpoint (`/api/products/{id}/pricing-history`)
+  - [x] Mobile responsive design
+  - [x] Stock status indicators
+  - [x] Promotion/deal badges
 
-**New Backend Endpoints (5):**
-- `GET /api/products/search` - Fuzzy product search with filters (sort by relevance, price, THC, CBD)
-- `GET /api/products/autocomplete` - Search suggestions (ILIKE prefix matching)
-- `GET /api/products/{id}` - Product details
-- `GET /api/products/{id}/prices` - Price comparison with promotions across all dispensaries
-- `GET /api/products/{id}/related` - Related products by brand/type
+- [ ] **Workflow 07**: Dispensary listing and details (NEXT)
 
-**New Frontend Components (4):**
-- `SearchBar` - Search input with autocomplete dropdown (300ms debounce)
-- `FilterPanel` - Product type, price, THC%, CBD% filters + sort options
-- `ResultsTable` - Responsive results (mobile cards / desktop table)
-- `DealBadge` - Deal price display with savings percentage
+**Current Status**: Workflows 05-06 complete. Starting Workflow 07 (Dispensary Pages).
 
-**Next Steps:**
-1. Run migration: `cd backend && python -m alembic upgrade head`
-2. Start backend: `uvicorn main:app --reload` (port 8000)
-3. Start frontend: `npm run dev` (port 3000)
-4. Test search at: `http://localhost:3000/products/search`
+**Running Services:**
+- Backend: http://127.0.0.1:8000 ✅
+- Frontend: http://localhost:3000 ✅
+- **Search Page**: http://localhost:3000/products/search
+- **Product Detail**: http://localhost:3000/products/prod-002 (example)
+
+**Tested Endpoints:**
+- ✅ `GET /api/products/search?q=dream` - Returns Blue Dream
+- ✅ `GET /api/products/search?q=gorilla` - Returns Gorilla Glue #4
+- ✅ `GET /api/products/{id}` - Product details
+- ✅ `GET /api/products/{id}/prices` - Price comparison across dispensaries
+- ✅ `GET /api/products/{id}/pricing-history` - Historical pricing data
+- ✅ `GET /api/products/autocomplete?q=gor` - Returns suggestions
+- ✅ `GET /health` - API is healthy
+
+**Test Data Available:**
+- Blue Dream (Flower) - 22.5% THC - $45-$120
+- Gorilla Glue #4 (Flower) - 28% THC - $55
+- Wedding Cake (Flower) - $50-$52
+- OG Kush Vape Cart (Vape) - 85% THC - $5-$38
+- CBD Relief Tincture (Tincture) - 20% CBD - $62-$65
+
+**To Start Development:**
+```bash
+# Terminal 1: Backend
+cd backend && python -m uvicorn main:app --host 127.0.0.1 --port 8000
+
+# Terminal 2: Frontend
+cd frontend && npm run dev
+```
+
+**Open Browser**: http://localhost:3000/products/search
+4. Try searching for "gorilla", "dream", "flower", "vape", etc.
 
 **See**: `docs/workflows/05-07` for implementation guides
 

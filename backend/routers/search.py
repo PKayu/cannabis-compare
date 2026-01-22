@@ -65,8 +65,8 @@ async def search_products(
         # Weighted relevance: 80% product name, 20% brand name
         relevance_score = (name_score * 0.8) + (brand_score * 0.2)
 
-        # Only include products with >50% similarity
-        if relevance_score > 0.5:
+        # Only include products with >=30% similarity (lowered for better partial matches)
+        if relevance_score >= 0.3:
             scored_products.append((product, relevance_score))
 
     # Sort by relevance initially
@@ -136,8 +136,6 @@ async def search_products(
             "thc": product.thc_percentage,
             "cbd": product.cbd_percentage,
             "type": product.product_type,
-            "description": product.description,
-            "weight": product.weight,
             "min_price": float(min_price_val),
             "max_price": float(max_price_val),
             "dispensary_count": len(set(p.dispensary_id for p in prices)),

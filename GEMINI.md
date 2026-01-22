@@ -300,9 +300,19 @@ frontend/
 
 ### Testing Strategy
 
-- Backend tests use pytest with `pytest-asyncio` for async functions
-- Frontend tests will use Jest + React Testing Library (not yet set up)
-- Run tests before committing: `pytest` or `npm test`
+- Backend tests use pytest with `pytest-asyncio` for async functions. See `backend/tests/`.
+- A comprehensive API test plan with 50+ test cases is available in `docs/API_TEST_PLAN.md`.
+- Frontend tests will use Jest + React Testing Library (not yet set up).
+- Run tests before committing: `pytest` or `npm test`.
+
+A test data seeding script is available at `backend/seed_test_data.py`. To reset the database for a clean test run:
+```bash
+cd backend
+# Clear existing data
+python seed_test_data.py --clear
+# Seed new data
+python seed_test_data.py
+```
 
 ### Deployment Notes
 
@@ -347,6 +357,29 @@ rm -rf .next
 npm run dev
 ```
 
+## Database Migrations (Alembic)
+
+Database migrations are managed with Alembic. Common commands are run from the `backend/` directory.
+
+```bash
+# Check current migration version
+alembic current
+
+# Show migration history
+alembic history
+
+# Apply all pending migrations
+alembic upgrade head
+
+# Rollback one migration
+alembic downgrade -1
+
+# Rollback to a specific version
+alembic downgrade <revision_id>
+```
+For more detailed scenarios like backups and full rollbacks, see `docs/database_rollback.md`.
+
+
 ## Development Workflows
 
 The project includes 10 comprehensive workflow documents that guide development through all three phases of the MVP. These workflows are self-contained with code examples, verification steps, and success criteria.
@@ -365,9 +398,9 @@ Each workflow follows a consistent pattern:
 
 **Phase 1 - Foundation (Workflows 01-04)**
 - 01: Project Initialization (COMPLETED ✅)
-- 02: Database Schema and Migrations
-- 03: Scraper Foundation
-- 04: Admin Dashboard Cleanup Queue
+- 02: Database Schema and Migrations (COMPLETED ✅)
+- 03: Scraper Foundation (COMPLETED ✅)
+- 04: Admin Dashboard Cleanup Queue (COMPLETED ✅)
 
 **Phase 2 - Portal (Workflows 05-07)**
 - 05: Price Comparison Search

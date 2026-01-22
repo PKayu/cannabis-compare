@@ -25,7 +25,18 @@
       "Bash(alembic revision:*)",
       "Bash(npm run dev:*)",
       "Bash(npm install)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(pkill:*)",
+      "Bash(netstat:*)",
+      "Bash(powershell -Command \"Get-Process -Id 25604,11920,44392 -ErrorAction SilentlyContinue | Stop-Process -Force\")",
+      "Bash(findstr:*)",
+      "Bash(powershell -Command \"Stop-Process -Id 78392 -Force; Stop-Process -Id 22392 -Force\")",
+      "Bash(..backendvenvScriptspython.exe -m uvicorn main:app --host 127.0.0.1 --port 8000)",
+      "Bash(timeout:*)",
+      "Bash(powershell -Command \"Get-Content ''C:\\\\Users\\\\Dan\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--Projects-cannabis-compare\\\\tasks\\\\b9031d8.output'' -Tail 10\")",
+      "Bash(powershell -Command:*)",
+      "Bash(cd:*)",
+      "Bash(\"d:\\\\Projects\\\\cannabis compare\\\\backend\\\\venv\\\\Scripts\\\\python.exe\" -m uvicorn:*)"
     ]
   }
 }

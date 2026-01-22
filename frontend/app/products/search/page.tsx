@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { api } from '@/lib/api'
+import { api, apiClient } from '@/lib/api'
 import SearchBar from '@/components/SearchBar'
 import FilterPanel from '@/components/FilterPanel'
 import ResultsTable from '@/components/ResultsTable'
@@ -53,7 +53,7 @@ export default function SearchPage() {
       if (filters.maxCbd !== undefined) params.max_cbd = filters.maxCbd
       if (filters.sortBy) params.sort_by = filters.sortBy
 
-      const res = await api.get('/api/products/search', { params })
+      const res = await api.products.search(params)
       setResults(res.data)
     } catch (error) {
       console.error('Search failed:', error)

@@ -38,6 +38,8 @@ export const api = {
     getPrices: (productId: string) => apiClient.get(`/api/products/${productId}/prices`),
     getRelated: (productId: string, limit?: number) =>
       apiClient.get(`/api/products/${productId}/related`, { params: { limit } }),
+    getPricingHistory: (productId: string, days: number = 30) =>
+      apiClient.get(`/api/products/${productId}/pricing-history`, { params: { days } }),
   },
 
   // Prices

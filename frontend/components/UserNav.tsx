@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { supabase } from '@/lib/supabase'
 
 interface UserNavProps {
   className?: string
@@ -20,7 +20,6 @@ export default function UserNav({ className = '' }: UserNavProps) {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [isOpen, setIsOpen] = useState(false)
-  const supabase = createClientComponentClient()
   const router = useRouter()
 
   useEffect(() => {
@@ -41,7 +40,7 @@ export default function UserNav({ className = '' }: UserNavProps) {
     return () => {
       subscription?.unsubscribe()
     }
-  }, [supabase])
+  }, [])
 
   const checkAuth = async () => {
     try {

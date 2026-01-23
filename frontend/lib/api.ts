@@ -118,6 +118,19 @@ export const api = {
       apiClient.post('/api/auth/login', { email, password }),
     logout: () => apiClient.post('/api/auth/logout'),
   },
+
+  // Users
+  users: {
+    me: () => apiClient.get('/api/users/me'),
+    myReviews: () => apiClient.get('/api/users/me/reviews'),
+    update: (data: any) => apiClient.put('/api/users/me', data),
+  },
+
+  // Generic methods for direct API calls
+  get: (url: string, config?: any) => apiClient.get(url, config),
+  post: (url: string, data?: any, config?: any) => apiClient.post(url, data, config),
+  put: (url: string, data?: any, config?: any) => apiClient.put(url, data, config),
+  delete: (url: string, config?: any) => apiClient.delete(url, config),
 }
 
 export default apiClient

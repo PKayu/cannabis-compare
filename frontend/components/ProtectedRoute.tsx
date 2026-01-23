@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { supabase } from '@/lib/supabase'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -24,7 +24,6 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const [isAuthed, setIsAuthed] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const supabase = createClientComponentClient()
   const router = useRouter()
   const pathname = usePathname()
 
@@ -69,7 +68,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return () => {
       subscription?.unsubscribe()
     }
-  }, [supabase, router, pathname])
+  }, [router, pathname])
 
   if (isLoading) {
     return (

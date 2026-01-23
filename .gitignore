@@ -40,6 +40,10 @@ out/
 *.log
 logs/
 
+# Error messages and screenshots (development only)
+docs/error messages/
+docs/Screenshot*
+
 # Database
 *.db
 *.sqlite

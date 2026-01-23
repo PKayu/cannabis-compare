@@ -14,7 +14,7 @@ interface AgeGateWrapperProps {
  * on first visit until the user verifies they are 21+
  */
 export default function AgeGateWrapper({ children }: AgeGateWrapperProps) {
-  const [isVerified, setIsVerified] = useState(true)
+  const [isVerified, setIsVerified] = useState(false)
   const [isClient, setIsClient] = useState(false)
 
   useEffect(() => {

@@ -41,7 +41,12 @@
       "Bash(npm install:*)",
       "Bash(find:*)",
       "Bash(git mv:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\ndocs: reorganize documentation to reduce clutter and improve discoverability\n\nConsolidate and organize documentation files:\n\n1. **Reduce root directory clutter**: 22 markdown files → 5 essential files\n   - Moved phase completion notes to docs/phase-completion/\n   - Moved workflow progress files to docs/archive/workflow-logs/\n   - Archived superseded documentation to docs/archive/historical/\n\n2. **Created new folder structure**:\n   - docs/phase-completion/ - Phase summary documentation\n   - docs/archive/workflow-logs/ - Implementation progress tracking\n   - docs/archive/historical/ - Superseded but preserved documentation\n\n3. **Deleted empty legacy files** \\(0 bytes\\):\n   - database-schema-migrations-*.md files\n\n4. **Updated navigation**:\n   - INDEX.md updated with all new paths\n   - QUICK_START_GUIDE.md references updated\n   - Created README files explaining archive structure\n\n5. **File movements** \\(14 files, all with git mv to preserve history\\):\n   - Phase completion files: 2 moved\n   - Workflow progress files: 7 moved\n   - Historical documentation: 5 moved\n\n**Benefits**:\n- Root directory now has only essential documentation\n- Clear separation between current docs and historical records\n- Easier for new developers to find information\n- History preserved but organized\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(dir:*)",
+      "Bash(. venv/Scripts/activate)",
+      "Bash(uvicorn:*)",
+      "Bash(venv/Scripts/python.exe:*)"
     ]
   }
 }

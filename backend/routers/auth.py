@@ -69,13 +69,17 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 
-# Dependency to get current user from JWT token
+# Dependency to get current user from JWT token or Supabase token
 async def get_current_user(
     authorization: str = Header(None),
     db: Session = Depends(get_db)
 ) -> User:
     """
-    Extract and verify JWT token from Authorization header
+    Extract and verify JWT token (or Supabase token) from Authorization header
+
+    Supports both:
+    1. Backend JWT tokens (from /api/auth/login)
+    2. Supabase OAuth/Magic Link tokens (from frontend)
 
     Args:
         authorization: Authorization header value
@@ -102,22 +106,39 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Try backend JWT first
     token_data = verify_token(token)
-    if not token_data:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    if token_data:
+        user = db.query(User).filter(User.id == token_data.user_id).first()
+        if user:
+            return user
 
-    user = db.query(User).filter(User.id == token_data.user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-        )
+    # Try Supabase token
+    supabase_user = SupabaseClient.verify_session(token)
+    if supabase_user:
+        # Look up user in local DB
+        user = db.query(User).filter(User.id == supabase_user["id"]).first()
 
-    return user
+        # Auto-create user if doesn't exist (first-time OAuth/Magic Link login)
+        if not user:
+            user = User(
+                id=supabase_user["id"],
+                email=supabase_user["email"],
+                username=supabase_user["email"].split("@")[0],  # Default username from email
+                hashed_password="",  # OAuth users don't have passwords
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+        return user
+
+    # Both token types failed
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 # Endpoints
@@ -273,7 +294,7 @@ async def verify_token_endpoint(
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_profile(
     current_user: User = Depends(get_current_user),
-) -> User:
+) -> dict:
     """
     Get current authenticated user's profile
 
@@ -283,7 +304,12 @@ async def get_current_user_profile(
     Returns:
         User profile information
     """
-    return current_user
+    return {
+        "id": str(current_user.id),
+        "email": current_user.email,
+        "username": current_user.username,
+        "created_at": current_user.created_at.isoformat(),
+    }
 
 
 @router.post("/refresh")

@@ -52,3 +52,10 @@ docs/Screenshot*
 # OS
 Thumbs.db
 docs/Screenshot 2026-01-22 090126.png
+
+# Testing
+/coverage/
+/test-results/
+/playwright-report/
+/playwright/.cache/
+htmlcov/

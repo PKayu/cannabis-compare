@@ -1,0 +1,146 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [ master, main, develop ]
+  pull_request:
+    branches: [ master, main, develop ]
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  e2e-tests:
+    name: Playwright E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Install frontend dependencies
+      working-directory: ./frontend
+      run: npm ci
+
+    - name: Install Playwright browsers
+      run: npx playwright install --with-deps
+
+    - name: Set up Python (for backend)
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+        cache-dependency-path: backend/requirements.txt
+
+    - name: Install backend dependencies
+      working-directory: ./backend
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Start backend server
+      working-directory: ./backend
+      run: |
+        uvicorn main:app --host 0.0.0.0 --port 8000 &
+        echo $! > backend.pid
+      env:
+        DATABASE_URL: sqlite:///./test.db
+        SECRET_KEY: test-secret-key-for-e2e
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://test.supabase.co' }}
+        SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY || 'test-key' }}
+
+    - name: Wait for backend to be ready
+      run: |
+        timeout 30 bash -c 'until curl -f http://localhost:8000/health; do sleep 1; done'
+
+    - name: Start frontend server
+      working-directory: ./frontend
+      run: |
+        npm run build
+        npm run start &
+        echo $! > frontend.pid
+      env:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+        NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://test.supabase.co' }}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'test-anon-key' }}
+
+    - name: Wait for frontend to be ready
+      run: |
+        timeout 60 bash -c 'until curl -f http://localhost:3000; do sleep 1; done'
+
+    - name: Run Playwright tests
+      run: npx playwright test
+      env:
+        PLAYWRIGHT_BASE_URL: http://localhost:3000
+
+    - name: Upload Playwright Report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-report
+        path: playwright-report/
+        retention-days: 30
+
+    - name: Upload test videos
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-videos
+        path: test-results/
+        retention-days: 7
+
+    - name: Generate test summary
+      if: always()
+      run: |
+        echo "## E2E Test Results 🎭" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ -f playwright-report/results.json ]; then
+          # Parse results (simplified - you can enhance this)
+          echo "Test report generated. View artifacts for full details." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "No test results found." >> $GITHUB_STEP_SUMMARY
+        fi
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Test Artifacts:**" >> $GITHUB_STEP_SUMMARY
+        echo "- HTML Report: Available in artifacts" >> $GITHUB_STEP_SUMMARY
+        echo "- Screenshots: Included in report" >> $GITHUB_STEP_SUMMARY
+        echo "- Videos: Available if tests failed" >> $GITHUB_STEP_SUMMARY
+
+    - name: Comment PR with test results
+      if: github.event_name == 'pull_request' && always()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          let message = '## 🎭 E2E Test Results\n\n';
+
+          if (context.payload.workflow_run?.conclusion === 'success') {
+            message += '✅ All E2E tests passed!\n\n';
+          } else {
+            message += '❌ Some E2E tests failed.\n\n';
+            message += '📹 **Videos and screenshots are available in the workflow artifacts.**\n\n';
+          }
+
+          message += `[View full test report](${context.payload.repository.html_url}/actions/runs/${context.runId})`;
+
+          github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body: message
+          });
+
+    - name: Stop servers
+      if: always()
+      run: |
+        if [ -f frontend/frontend.pid ]; then kill $(cat frontend/frontend.pid) || true; fi
+        if [ -f backend/backend.pid ]; then kill $(cat backend/backend.pid) || true; fi

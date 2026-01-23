@@ -1,0 +1,102 @@
+name: Test Report & Notifications
+
+# Runs after other test workflows complete
+on:
+  workflow_run:
+    workflows: ["CI Tests", "E2E Tests"]
+    types: [completed]
+
+jobs:
+  test-report:
+    name: Generate Test Report
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion != 'cancelled' }}
+
+    steps:
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        run-id: ${{ github.event.workflow_run.id }}
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Generate summary report
+      run: |
+        echo "# 📊 Test Summary Report" > test-summary.md
+        echo "" >> test-summary.md
+        echo "**Workflow**: ${{ github.event.workflow_run.name }}" >> test-summary.md
+        echo "**Status**: ${{ github.event.workflow_run.conclusion }}" >> test-summary.md
+        echo "**Triggered by**: ${{ github.event.workflow_run.triggering_actor.login }}" >> test-summary.md
+        echo "**Branch**: ${{ github.event.workflow_run.head_branch }}" >> test-summary.md
+        echo "" >> test-summary.md
+
+        if [ "${{ github.event.workflow_run.conclusion }}" == "success" ]; then
+          echo "✅ **All tests passed!**" >> test-summary.md
+        else
+          echo "❌ **Tests failed. Please review the errors.**" >> test-summary.md
+        fi
+
+        echo "" >> test-summary.md
+        echo "---" >> test-summary.md
+        echo "[View full workflow run](${{ github.event.workflow_run.html_url }})" >> test-summary.md
+
+    - name: Post to GitHub Discussions (optional)
+      if: github.event.workflow_run.conclusion == 'failure'
+      run: |
+        echo "Test failed - you could post to Discussions or create an issue here"
+        # Example with gh CLI:
+        # gh issue create --title "Test Failure: ${{ github.event.workflow_run.name }}" \
+        #   --body "$(cat test-summary.md)"
+
+    - name: Send notification (Slack, Discord, Email, etc.)
+      if: github.event.workflow_run.conclusion == 'failure'
+      run: |
+        echo "🚨 Test Failure Notification"
+        echo "Workflow: ${{ github.event.workflow_run.name }}"
+        echo "Branch: ${{ github.event.workflow_run.head_branch }}"
+        echo "Status: ${{ github.event.workflow_run.conclusion }}"
+        echo ""
+        echo "You can integrate Slack, Discord, or email notifications here"
+        echo "Examples:"
+        echo "- Slack: uses: 8398a7/action-slack@v3"
+        echo "- Discord: uses: sarisia/actions-status-discord@v1"
+        echo "- Email: uses: dawidd6/action-send-mail@v3"
+
+  # Example: Slack notification (uncomment and configure)
+  # slack-notification:
+  #   runs-on: ubuntu-latest
+  #   if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+  #   steps:
+  #     - name: Send Slack notification
+  #       uses: 8398a7/action-slack@v3
+  #       with:
+  #         status: ${{ github.event.workflow_run.conclusion }}
+  #         text: |
+  #           Test Failed: ${{ github.event.workflow_run.name }}
+  #           Branch: ${{ github.event.workflow_run.head_branch }}
+  #           View: ${{ github.event.workflow_run.html_url }}
+  #         webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+
+  # Example: Email notification (uncomment and configure)
+  # email-notification:
+  #   runs-on: ubuntu-latest
+  #   if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+  #   steps:
+  #     - name: Send email
+  #       uses: dawidd6/action-send-mail@v3
+  #       with:
+  #         server_address: smtp.gmail.com
+  #         server_port: 465
+  #         username: ${{ secrets.EMAIL_USERNAME }}
+  #         password: ${{ secrets.EMAIL_PASSWORD }}
+  #         subject: "❌ Test Failure: ${{ github.event.workflow_run.name }}"
+  #         to: your-email@example.com
+  #         from: GitHub Actions
+  #         body: |
+  #           Test workflow failed!
+
+  #           Workflow: ${{ github.event.workflow_run.name }}
+  #           Branch: ${{ github.event.workflow_run.head_branch }}
+  #           Triggered by: ${{ github.event.workflow_run.triggering_actor.login }}
+
+  #           View the full workflow run:
+  #           ${{ github.event.workflow_run.html_url }}

@@ -46,7 +46,11 @@
       "Bash(dir:*)",
       "Bash(. venv/Scripts/activate)",
       "Bash(uvicorn:*)",
-      "Bash(venv/Scripts/python.exe:*)"
+      "Bash(venv/Scripts/python.exe:*)",
+      "Bash(bash:*)",
+      "Bash(chmod:*)",
+      "Bash(npm run test:e2e:*)",
+      "Bash(grep:*)"
     ]
   }
 }

@@ -52,5 +52,12 @@
       "Bash(npm run test:e2e:*)",
       "Bash(grep:*)"
     ]
+  },
+  "mcpServers": {
+    "ScrapeGraphAI MCP: AI-Powered Web Scraping Server": {
+      "command": "scrapegraphai-mcp",
+      "args": [],
+      "env": {}
+    }
   }
 }

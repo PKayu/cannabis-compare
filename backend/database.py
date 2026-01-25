@@ -6,11 +6,17 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.ext.declarative import declarative_base
 from config import settings
 
-# Create database engine
+# Create database engine with conditional SSL config
+# PostgreSQL (Supabase) requires SSL, but SQLite doesn't support it
+is_postgres = settings.database_url.startswith("postgresql://")
+connect_args = {"sslmode": "require"} if is_postgres else {}
+
 engine = create_engine(
     settings.database_url,
     echo=settings.debug,
-    future=True
+    future=True,
+    pool_pre_ping=True,  # Auto-reconnect if connection drops
+    connect_args=connect_args
 )
 
 # Create session factory

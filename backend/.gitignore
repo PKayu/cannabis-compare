@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+venv/
+
+# SQLite databases
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Test artifacts
+.pytest_cache/
+*.log
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

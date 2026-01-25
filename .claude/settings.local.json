@@ -50,7 +50,9 @@
       "Bash(bash:*)",
       "Bash(chmod:*)",
       "Bash(npm run test:e2e:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\ndocs: reorganize documentation and consolidate scripts\n\nReorganize project documentation for better discoverability and user experience:\n\nDOCUMENTATION:\n- Move 14 root-level markdown files to docs/ and subdirectories\n- Create docs/guides/ folder for topic-specific guides \\(scraping, API discovery, troubleshooting\\)\n- Consolidate 4 testing quickstart guides into single docs/TESTING.md \\(unit, E2E, CI/CD\\)\n- Move INDEX.md to docs/ as navigation hub\n- Archive workflow-specific docs and testing summaries to docs/archive/\n\nSCRIPTS:\n- Create scripts/ folder with all development batch files\n- Merge install-backend-deps.bat + install-all-backend-deps.bat → install-deps.bat\n- Rename fix-backend.bat → fix-python313.bat \\(clearer purpose\\)\n- Add start-frontend.bat and run-tests.bat for convenience\n- Create scripts/README.md documenting all scripts\n\nCLEANUP:\n- Delete redundant batch files \\(fix-and-start-backend.bat\\)\n- Delete merged quickstart files \\(no longer needed\\)\n- Update README.md with new quick start commands\n\nNAVIGATION:\n- Create comprehensive docs/INDEX.md with updated links\n- Simplify getting started experience\n- Clear file structure with proper organization\n\nResult: Root directory reduced from 20 files to 3, batch files moved to dedicated folder, testing docs unified into single source of truth.\n\nCo-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>\nEOF\n\\)\")", 
+      "mcp__serena"
     ]
   },
   "mcpServers": {

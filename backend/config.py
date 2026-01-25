@@ -1,6 +1,7 @@
 """
 Configuration management for FastAPI backend
 """
+import os
 from pydantic_settings import BaseSettings
 from typing import Optional
 
@@ -8,7 +9,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
 
     # Database
-    database_url: str = "postgresql://localhost/cannabis_aggregator"
+    database_url: str
 
     # Supabase Configuration
     supabase_url: Optional[str] = None
@@ -32,7 +33,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     class Config:
-        env_file = ".env"
+        env_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
         case_sensitive = False
 
 # Create settings instance

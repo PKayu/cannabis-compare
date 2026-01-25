@@ -22,6 +22,10 @@ mkdir -p ~/git/project/dev/active/[task-name]/
 - Read all three files before proceeding
 - Update "Last Updated" timestamps
 
+### Code Exploration & Context
+
+- **Leverage Serena**: When browsing or trying to understand code, explicitly use MCP Serena tools to search and gather context.
+- **Search Strategy**: Prioritize searching over guessing file paths. If Serena errors occur, retry with different parameters.
 
 
 

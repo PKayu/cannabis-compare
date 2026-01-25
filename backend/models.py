@@ -154,9 +154,19 @@ class Review(Base):
     value_rating = Column(Integer, nullable=True)  # 1-5 for value
     comment = Column(Text, nullable=True)
     upvotes = Column(Integer, default=0)
+
+    # Dual-track intention system (Workflow 09)
+    intention_type = Column(String, nullable=True)  # "medical" or "mood"
+    intention_tag = Column(String, nullable=True)  # e.g., "pain", "socializing"
+
+    # Batch tracking (optional)
+    batch_number = Column(String, nullable=True)
+    cultivation_date = Column(DateTime, nullable=True)
+
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
     product_id = Column(String, ForeignKey("products.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     user = relationship("User", back_populates="reviews")

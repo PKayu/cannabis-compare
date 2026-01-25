@@ -1,21 +1,50 @@
-# Testing Strategy & Guide
+# Testing Guide
 
-**Utah Cannabis Aggregator - Automated Testing**
+**Utah Cannabis Aggregator - Complete Testing Documentation**
 
-This document covers the testing infrastructure, strategies, and guidelines for the Utah Cannabis Aggregator project.
+This is the single source of truth for all testing: unit tests, integration tests, E2E tests, and CI/CD.
+
+---
+
+## Quick Start
+
+### Run All Tests
+
+```bash
+# Use the test script (recommended)
+scripts\run-tests.bat
+
+# Or manually:
+cd backend && pytest && cd ../frontend && npm test
+```
+
+### Run E2E Tests
+
+```bash
+cd frontend
+
+# Interactive UI mode (BEST for beginners)
+npm run test:e2e:ui
+
+# Run all tests headless
+npm run test:e2e
+
+# View results
+npm run test:e2e:report
+```
 
 ---
 
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Testing Philosophy](#testing-philosophy)
-3. [Backend Testing (Python/pytest)](#backend-testing)
-4. [Frontend Testing (TypeScript/Jest)](#frontend-testing)
-5. [Continuous Integration](#continuous-integration)
-6. [Running Tests Locally](#running-tests-locally)
+2. [Backend Testing (pytest)](#backend-testing)
+3. [Frontend Testing (Jest)](#frontend-testing)
+4. [E2E Testing (Playwright)](#e2e-testing)
+5. [Test Reports](#test-reports)
+6. [Continuous Integration](#continuous-integration)
 7. [Writing New Tests](#writing-new-tests)
-8. [Test Coverage](#test-coverage)
+8. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -27,49 +56,25 @@ The project uses a comprehensive testing strategy covering:
 - **Frontend**: Jest + React Testing Library for components and client-side logic
 - **CI/CD**: GitHub Actions for automated testing on every commit
 
-### Current Test Coverage
+### Test Coverage Summary
 
-**Backend**:
-- ✅ 41 tests covering authentication and user endpoints
-- ✅ JWT token generation and verification
-- ✅ Protected route middleware
-- ✅ Database operations with in-memory SQLite
+| Test Type | Framework | # Tests | What's Tested |
+|-----------|-----------|---------|---------------|
+| Backend | pytest | 74+ | Auth, users, APIs, JWT tokens |
+| Frontend | Jest | 20+ | Components, API client, forms |
+| E2E | Playwright | 21+ | Full user journeys |
 
-**Frontend**:
-- ✅ API client interceptors (auth tokens, error handling)
-- ✅ Component rendering and user interactions
-- ✅ Form validation and age verification logic
+### Testing Philosophy
 
----
+**What We Test:**
+- Critical user flows: authentication, profile access, data submission
+- Security: token validation, protected routes, authorization
+- Business logic: age verification, data normalization, search
 
-## Testing Philosophy
-
-### What We Test
-
-1. **Critical User Flows**: Authentication, profile access, data submission
-2. **Security**: Token validation, protected routes, authorization
-3. **Business Logic**: Age verification, data normalization, search algorithms
-4. **API Contracts**: Request/response structures, error handling
-
-### What We Don't Test
-
-1. **Third-party libraries**: We trust axios, React, FastAPI, etc.
-2. **Framework internals**: Next.js routing, SQLAlchemy internals
-3. **Styling**: CSS/Tailwind classes (visual regression testing can be added later)
-4. **External services**: Supabase API (we mock these)
-
-### Test Pyramid
-
-```
-       /\
-      /  \     E2E (Future - Playwright)
-     /____\
-    /      \   Integration Tests (API endpoints, component interactions)
-   /________\
-  /__________\ Unit Tests (Functions, utilities, business logic)
-```
-
-We focus on integration and unit tests for fast, reliable feedback.
+**What We Don't Test:**
+- Third-party libraries (axios, React, FastAPI)
+- Framework internals (Next.js routing, SQLAlchemy)
+- Styling (CSS/Tailwind classes)
 
 ---
 
@@ -324,6 +329,136 @@ jest.mock('@supabase/auth-helpers-nextjs', () => ({
 
 ---
 
+## E2E Testing
+
+E2E (End-to-End) testing simulates real users clicking through your website, testing complete user journeys.
+
+### Setup (One Time)
+
+```bash
+cd frontend
+npx playwright install  # Downloads ~500MB of browsers
+```
+
+### Quick Commands
+
+```bash
+cd frontend
+
+# Interactive UI mode (BEST for beginners)
+npm run test:e2e:ui
+
+# Run all tests headless
+npm run test:e2e
+
+# Watch browser while tests run
+npm run test:e2e:headed
+
+# Debug mode (pause at each step)
+npm run test:e2e:debug
+
+# View HTML report
+npm run test:e2e:report
+
+# Run specific test file
+npx playwright test e2e/01-age-gate.spec.ts
+
+# Run in specific browser
+npx playwright test --project=chromium
+```
+
+### Test Suite Overview
+
+| Test File | What It Tests | # Tests |
+|-----------|---------------|---------|
+| `01-age-gate.spec.ts` | Age verification flow | 4 |
+| `02-authentication.spec.ts` | Login, sign-out, protected routes | 6 |
+| `03-product-search.spec.ts` | Product search and filtering | 5 |
+| `04-navigation.spec.ts` | Navigation, responsive design | 6 |
+
+**Total**: 21+ E2E tests covering critical user journeys
+
+### E2E Test Structure
+
+```
+frontend/
+├── e2e/
+│   ├── 01-age-gate.spec.ts       # Age verification tests
+│   ├── 02-authentication.spec.ts # Login/auth tests
+│   ├── 03-product-search.spec.ts # Product tests
+│   ├── 04-navigation.spec.ts     # Navigation tests
+│   └── helpers.ts                # Reusable test helpers
+└── playwright.config.ts          # Playwright configuration
+```
+
+### Writing E2E Tests
+
+```typescript
+import { test, expect } from '@playwright/test'
+
+test('should show age gate on first visit', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: /I am 21/i }).click()
+  await expect(page.getByText('Welcome')).toBeVisible()
+})
+```
+
+### Helper Functions
+
+```typescript
+import { bypassAgeGate, mockAuthentication } from './helpers'
+
+test('my test', async ({ page }) => {
+  await bypassAgeGate(page)
+  await mockAuthentication(page)
+  // Now test as authenticated user
+})
+```
+
+---
+
+## Test Reports
+
+### HTML Reports (E2E)
+
+```bash
+npm run test:e2e
+npm run test:e2e:report
+```
+
+**Report includes:**
+- ✅/❌ Test pass/fail status
+- 📹 Videos of failures
+- 📸 Screenshots at failure points
+- ⏱️ Test timing
+
+### Coverage Reports
+
+**Backend:**
+```bash
+cd backend
+pytest --cov=. --cov-report=html
+start htmlcov/index.html
+```
+
+**Frontend:**
+```bash
+cd frontend
+npm run test:coverage
+start coverage/lcov-report/index.html
+```
+
+### Coverage Goals
+
+| Area | Current | Goal |
+|------|---------|------|
+| Auth endpoints | ✅ 100% | 100% |
+| User endpoints | ✅ 100% | 100% |
+| API client | ✅ 85% | 90% |
+| Components | ⚠️ 40% | 70% |
+
+---
+
 ## Continuous Integration
 
 ### GitHub Actions Workflow
@@ -559,36 +694,53 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 **Issue**: CI times out
 **Solution**: Tests should complete in <5 minutes. Optimize slow tests or increase timeout.
 
+### E2E Tests Failing
+
+**Issue**: "All tests skipped"
+Servers not running. Start backend and frontend first:
+```bash
+scripts\start-backend.bat  # Terminal 1
+scripts\start-frontend.bat  # Terminal 2
+npm run test:e2e  # Terminal 3
+```
+
+**Issue**: "Timeout waiting for page"
+Check `playwright.config.ts` has correct `baseURL: 'http://localhost:3000'`
+
+**Issue**: "Element not found"
+Run in headed mode to see what's on page:
+```bash
+npm run test:e2e:headed
+```
+
+**Issue**: "Tests pass locally but fail in CI"
+Add `await page.waitForLoadState('networkidle')` for timing issues
+
 ---
 
-## Next Steps
+## Setting Up Failure Notifications
 
-### Recommended Additions
+### Email Notifications
 
-1. **E2E Testing**: Add Playwright for full user journey tests
-2. **Performance Testing**: Add load tests for API endpoints
-3. **Visual Regression**: Add screenshot comparison for UI
-4. **Mutation Testing**: Verify test quality with mutation coverage
+1. Get Gmail App Password (Google Account → Security → App Passwords)
+2. Add GitHub Secrets: `EMAIL_USERNAME` and `EMAIL_PASSWORD`
+3. Uncomment email section in `.github/workflows/test-report.yml`
 
-### Test Expansion Priorities
+### Slack/Discord
 
-1. **Products Router**: Search, filtering, product details
-2. **Reviews System**: CRUD operations, validation, moderation
-3. **Scrapers**: Data ingestion, normalization, deduplication
-4. **Admin Functions**: User management, data cleanup
+See `test-report.yml` for webhook setup instructions.
 
 ---
 
 ## Resources
 
 - [pytest documentation](https://docs.pytest.org/)
+- [Jest documentation](https://jestjs.io/docs/getting-started)
+- [Playwright documentation](https://playwright.dev/)
 - [Testing Library docs](https://testing-library.com/react)
 - [FastAPI testing guide](https://fastapi.tiangolo.com/tutorial/testing/)
-- [Next.js testing guide](https://nextjs.org/docs/app/building-your-application/testing)
-- [Jest documentation](https://jestjs.io/docs/getting-started)
 
 ---
 
 **Last Updated**: January 2026
-**Maintained By**: Development Team
-**Questions?**: Open an issue or check project documentation
+**Status**: ✅ Production Ready

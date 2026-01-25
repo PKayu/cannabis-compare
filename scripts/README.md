@@ -1,177 +1,173 @@
-# Documentation Cleanup Script
+# Development Scripts
 
-A comprehensive bash script that automatically audits and reports on documentation health, organization, and consistency.
+Utility scripts for common development tasks on Windows.
 
-## Usage
+## Quick Reference
+
+| Script | Purpose |
+|--------|---------|
+| `start-dev.bat` | Start both backend and frontend servers |
+| `start-backend.bat` | Start backend server only |
+| `start-frontend.bat` | Start frontend server only |
+| `install-deps.bat` | Install all dependencies (Python + Node) |
+| `fix-python313.bat` | Fix Python 3.13 compatibility issues |
+| `run-tests.bat` | Run all tests (pytest + jest) |
+| `cleanup-docs.sh` | Audit documentation health (bash script) |
+
+## Prerequisites
+
+- Python 3.10+ installed and in PATH
+- Node.js 18+ installed
+- Git Bash or Windows Terminal (for .sh scripts)
+
+---
+
+## Scripts Reference
+
+### start-dev.bat
+
+Starts both backend and frontend servers in separate terminal windows.
+
+```cmd
+scripts\start-dev.bat
+```
+
+- Creates venv if missing
+- Installs dependencies if needed
+- Opens API docs in browser
+- **Backend**: http://localhost:8000
+- **Frontend**: http://localhost:3000
+
+### start-backend.bat
+
+Starts only the backend FastAPI server.
+
+```cmd
+scripts\start-backend.bat
+```
+
+- Activates virtual environment
+- Runs uvicorn with hot reload
+- **Server**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+
+### start-frontend.bat
+
+Starts only the frontend Next.js server.
+
+```cmd
+scripts\start-frontend.bat
+```
+
+- Runs `npm run dev`
+- **Server**: http://localhost:3000
+
+### install-deps.bat
+
+Complete dependency installation for both backend and frontend.
+
+```cmd
+scripts\install-deps.bat
+```
+
+What it installs:
+1. Creates Python virtual environment
+2. Installs all Python packages (FastAPI, SQLAlchemy, etc.)
+3. Installs Node.js packages via npm
+
+Run this after cloning the repository.
+
+### fix-python313.bat
+
+Fixes SQLAlchemy compatibility issues when using Python 3.13.
+
+```cmd
+scripts\fix-python313.bat
+```
+
+- Upgrades SQLAlchemy to 2.0.36+
+- Verifies backend imports
+- Starts server if successful
+
+Use this if you see errors like:
+```
+ModuleNotFoundError: No module named 'sqlalchemy.util._compat_py3k'
+```
+
+### run-tests.bat
+
+Runs all test suites.
+
+```cmd
+scripts\run-tests.bat
+```
+
+- Runs backend pytest tests
+- Runs frontend jest tests
+- Shows summary of results
+
+### cleanup-docs.sh
+
+Bash script that audits documentation health and organization.
 
 ```bash
 bash scripts/cleanup-docs.sh
 ```
 
-Or make it executable first:
+Checks:
+- Naming conventions
+- File organization
+- TODO/FIXME markers
+- Workflow status
+- Critical file existence
 
-```bash
-chmod +x scripts/cleanup-docs.sh
-./scripts/cleanup-docs.sh
-```
-
-## What It Checks
-
-### 1. Naming Conventions
-- Root level docs should follow `UPPERCASE_SNAKE_CASE.md` or `lowercase.md` pattern
-- Workflow files should follow `NN_description_STATUS.md` pattern (e.g., `08_user_authentication_COMPLETED.md`)
-- Flags files that don't match expected conventions
-
-### 2. File Organization
-- Verifies critical directories exist: `docs/`, `docs/workflows/`, `docs/archive/`
-- Reports structural issues
-
-### 3. Redundancy Check
-- Detects TODO/FIXME/XXX markers indicating incomplete documentation
-- Finds placeholder text like `[PLACEHOLDER]` or `[TBD]`
-- Reports counts of incomplete sections
-
-### 4. Workflow Progress
-- Analyzes status of all workflows (COMPLETED, IN_PROGRESS, PENDING)
-- Calculates overall completion percentage
-- Shows detailed breakdown
-
-### 5. Documentation Health
-- Counts total documentation files
-- Reports breakdown by location (root, workflows, archived)
-- Provides quick overview of documentation volume
-
-### 6. Critical Files Check
-- Verifies existence of essential documentation:
-  - `docs/ARCHITECTURE.md`
-  - `docs/GETTING_STARTED.md`
-  - `docs/prd.md`
-  - `docs/workflows/README.md`
-  - `CLAUDE.md`
-
-### 7. Summary Report
-- Consolidated view of all findings
-- Exit code indicates status:
-  - `0` = No issues found
-  - `1` = Issues detected (exit code only, script continues)
-- Actionable recommendations
-
-## Output
-
-The script uses colored output for clarity:
-
-- 🔵 **Blue** (`▶`) = Section headers
-- 🟢 **Green** (`✓`) = Passed checks
-- 🟡 **Yellow** (`⚠`) = Warnings (review recommended)
-- 🔴 **Red** (`✗`) = Issues requiring action
-
-## Example Output
-
-```
-╔════════════════════════════════════════╗
-║   Documentation Cleanup Script 📚      ║
-╚════════════════════════════════════════╝
-
-▶ 1. Checking Naming Conventions
-⚠ Workflow naming: 08_user_authentication.md (expected NN_description_STATUS.md)
-
-▶ 2. Checking File Organization
-✓ File organization is correct
-
-▶ 3. Checking for Redundancy
-⚠ Found 13 TODO/FIXME markers in documentation
-
-▶ 4. Analyzing Workflow Progress
-  Completed: 8/10
-  In Progress: 1/10
-  Pending: 1/10
-  Overall Progress: 90%
-✓ Workflow progress analyzed
-
-▶ 5. Documentation Health Report
-  Total Documentation Files: 36
-  Root Level: 9
-  Workflows: 11
-  Archived: 13
-✓ Documentation health report generated
-
-▶ 6. Checking for Critical Files
-✓ Found: docs/ARCHITECTURE.md
-✓ Found: docs/GETTING_STARTED.md
-✓ Found: docs/prd.md
-✓ Found: docs/workflows/README.md
-✓ Found: CLAUDE.md
-
-▶ 7. Summary
-
-⚠ 4 warnings found (review recommended)
-
-Recommendations:
-  1. Review warnings above and address naming/organization issues
-  2. Archive outdated documentation to docs/archive/
-  3. Review very old files and update if needed
-  4. Resolve any TODO/FIXME markers
-
-To commit changes:
-  git add docs/
-  git commit -m 'docs: cleanup and reorganization'
-```
-
-## Common Actions Based on Output
-
-### If workflows have wrong naming:
-Rename files to match pattern `NN_description_STATUS.md`:
-
-```bash
-# Example:
-mv docs/workflows/08_user_authentication.md docs/workflows/08_user_authentication_IN_PROGRESS.md
-```
-
-### If TODO/FIXME markers found:
-Review and resolve incomplete sections:
-
-```bash
-grep -r "TODO\|FIXME" docs --include="*.md"
-```
-
-### If critical files are missing:
-Create them or check paths in CLAUDE.md for documentation structure.
-
-## Scheduling
-
-You can run this script:
-- **Manually** before committing documentation changes
-- **In CI/CD** as part of pre-commit hooks to enforce consistency
-- **Periodically** (e.g., weekly) to maintain documentation health
-
-## Future Enhancements
-
-Possible additions to this script:
-
-- Check for broken internal links and references
-- Validate markdown syntax
-- Measure documentation age and flag very old files
-- Generate HTML report
-- Integration with GitHub workflow checks
-- Auto-fix common issues (renaming files, updating links)
+---
 
 ## Troubleshooting
 
-### Script hangs or runs slowly
-The script uses file globbing and grep across many files. On very large projects, this may take several seconds. This is normal.
+### "venv not found" error
 
-### Exit code 1 but warnings only
-Exit code 1 indicates warnings or issues found, but the script completes successfully. Review the output and recommendations.
-
-### Not executable
-Make the script executable:
-
-```bash
-chmod +x scripts/cleanup-docs.sh
+Run the install script first:
+```cmd
+scripts\install-deps.bat
 ```
+
+### Port already in use
+
+Kill existing processes:
+```cmd
+# Find process using port 8000
+netstat -ano | findstr :8000
+# Kill process (replace PID)
+taskkill /PID <PID> /F
+```
+
+### Python version issues
+
+Ensure Python 3.10+ is installed:
+```cmd
+python --version
+```
+
+If using Python 3.13, run:
+```cmd
+scripts\fix-python313.bat
+```
+
+### npm errors
+
+Clear npm cache and reinstall:
+```cmd
+cd frontend
+npm cache clean --force
+rmdir /s /q node_modules
+npm install
+```
+
+---
 
 ## Related Documentation
 
-- See `CLAUDE.md` in the project root for overall documentation guidelines
-- See `docs/` for all project documentation
-- See `docs/workflows/` for implementation workflows
+- [Getting Started](../docs/GETTING_STARTED.md) - Full setup guide
+- [Testing Guide](../docs/TESTING.md) - Testing documentation
+- [Architecture](../docs/ARCHITECTURE.md) - System design

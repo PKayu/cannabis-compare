@@ -8,7 +8,11 @@ A web-based platform for Utah Medical Cannabis patients to compare prices across
 .
 ├── frontend/          # Next.js React application
 ├── backend/           # Python FastAPI backend
+├── scripts/           # Development scripts (start, install, test)
 ├── docs/              # Project documentation
+│   ├── INDEX.md       # Documentation navigation hub
+│   ├── guides/        # Topic-specific guides
+│   └── workflows/     # Implementation workflows
 └── README.md          # This file
 ```
 
@@ -27,18 +31,30 @@ A web-based platform for Utah Medical Cannabis patients to compare prices across
 - Python 3.10+ (for backend development)
 - PostgreSQL or Supabase account
 
-### Frontend Setup
+### Quick Start (Recommended)
+
+```bash
+# Install all dependencies
+scripts\install-deps.bat
+
+# Start both servers
+scripts\start-dev.bat
+```
+
+### Manual Setup
+
+**Frontend:**
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-### Backend Setup
+**Backend:**
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+venv\Scripts\activate  # macOS/Linux: source venv/bin/activate
 pip install -r requirements.txt
 uvicorn main:app --reload
 ```

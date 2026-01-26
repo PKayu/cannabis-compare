@@ -11,8 +11,14 @@ export default function Navigation() {
   const [watchlistCount, setWatchlistCount] = useState(0)
 
   useEffect(() => {
+    // Skip auth check on auth pages to prevent redirect loops
+    // Also skip on home page since we don't show nav there anyway
+    if (pathname === '/' || pathname.startsWith('/auth')) {
+      setIsLoggedIn(false)
+      return
+    }
     checkAuth()
-  }, [])
+  }, [pathname])
 
   const checkAuth = async () => {
     try {
@@ -20,6 +26,7 @@ export default function Navigation() {
       setIsLoggedIn(true)
       loadWatchlistCount()
     } catch (error) {
+      // Silently handle - user not logged in
       setIsLoggedIn(false)
     }
   }

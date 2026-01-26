@@ -38,12 +38,14 @@ apiClient.interceptors.request.use(async (config) => {
 
 /**
  * Add response interceptor for error handling
- * Handles 401 Unauthorized responses by clearing auth state and redirecting to login
+ * Handles 401 Unauthorized responses by clearing auth state
+ * NOTE: Does NOT redirect - let components handle auth errors gracefully
  */
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    // Handle 401 Unauthorized - redirect to login
+    // Handle 401 Unauthorized - clear auth state but don't redirect
+    // Redirecting here causes infinite loops when Navigation checks auth
     if (error.response?.status === 401) {
       try {
         // Clear auth state
@@ -59,11 +61,8 @@ apiClient.interceptors.response.use(
         console.error('Failed to sign out:', signOutError)
       }
 
-      // Redirect to login page
-      if (typeof window !== 'undefined') {
-        const returnUrl = encodeURIComponent(window.location.pathname)
-        window.location.href = `/auth/login?returnUrl=${returnUrl}`
-      }
+      // NO REDIRECT - let the calling component decide what to do
+      // Components like ProtectedRoute or WatchlistButton will handle redirects
     }
 
     return Promise.reject(error)

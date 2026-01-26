@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
 export default function LoginPage() {
@@ -11,9 +11,17 @@ export default function LoginPage() {
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  // Get returnUrl from query params or default to homepage
+  const returnUrl = searchParams.get('returnUrl') || '/'
 
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Prevent double submission
+    if (loading) return
+
     setLoading(true)
     setMessage('')
 
@@ -21,7 +29,7 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: `${window.location.origin}/auth/callback?returnUrl=${encodeURIComponent(returnUrl)}`,
         },
       })
 
@@ -38,7 +46,13 @@ export default function LoginPage() {
     }
   }
 
-  const handleGoogleOAuth = async () => {
+  const handleGoogleOAuth = async (e?: React.MouseEvent<HTMLButtonElement>) => {
+    e?.preventDefault() // Prevent any form submission
+
+    // Blur email input to remove focus
+    const emailInput = document.querySelector('input[type="email"]') as HTMLInputElement
+    emailInput?.blur()
+
     setLoading(true)
     setMessage('')
 
@@ -46,7 +60,7 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: `${window.location.origin}/auth/callback?returnUrl=${encodeURIComponent(returnUrl)}`,
         },
       })
 

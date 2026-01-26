@@ -43,14 +43,7 @@ export default function ProfilePage() {
       setLoading(true)
       setError(null)
 
-      // Check if user is authenticated
-      const { data, error: sessionError } = await supabase.auth.getSession()
-      if (sessionError || !data.session) {
-        router.push('/auth/login')
-        return
-      }
-
-      // Get user profile from backend
+      // Get user profile from backend (let API interceptor handle auth)
       const userRes = await api.get('/api/users/me')
       setUser(userRes.data)
 
@@ -60,10 +53,8 @@ export default function ProfilePage() {
     } catch (err: any) {
       const message = err.response?.data?.detail || err.message || 'Failed to load profile'
       setError(message)
-      // If unauthorized, redirect to login
-      if (err.response?.status === 401) {
-        setTimeout(() => router.push('/auth/login'), 2000)
-      }
+      // API interceptor will handle 401 redirect automatically
+      console.error('Failed to load profile:', err)
     } finally {
       setLoading(false)
     }

@@ -1,22 +1,30 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 export default function CallbackPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const handleAuthCallback = async () => {
+    let mounted = true
+    let attempts = 0
+    const maxAttempts = 5
+
+    const checkSession = async () => {
       try {
         // Get the code from URL hash (Supabase auth redirect)
         const hash = window.location.hash
-        if (!hash) {
-          setError('No authentication data received. Please try signing in again.')
-          setLoading(false)
+        if (!hash && attempts === 0) {
+          // No auth data in URL on first attempt
+          if (mounted) {
+            setError('No authentication data received. Please try signing in again.')
+            setLoading(false)
+          }
           return
         }
 
@@ -27,26 +35,38 @@ export default function CallbackPage() {
           error: sessionError,
         } = await supabase.auth.getSession()
 
-        if (sessionError) {
+        if (sessionError && mounted) {
           throw sessionError
         }
 
-        if (session) {
-          // Session established successfully, redirect to profile
-          router.push('/profile')
-        } else {
-          // No session means the user rejected the auth or link expired
+        if (session && mounted) {
+          // Session established successfully
+          // Get returnUrl from query params or default to homepage
+          const returnUrl = searchParams.get('returnUrl') || '/'
+          router.push(returnUrl)
+        } else if (attempts < maxAttempts && mounted) {
+          // No session yet, retry with exponential backoff
+          attempts++
+          setTimeout(() => checkSession(), 300 * attempts)
+        } else if (mounted) {
+          // All retries exhausted
           setError('Authentication failed. Please try signing in again.')
+          setLoading(false)
         }
       } catch (err: any) {
-        setError(err.message || 'An error occurred during authentication')
-      } finally {
-        setLoading(false)
+        if (mounted) {
+          setError(err.message || 'An error occurred during authentication')
+          setLoading(false)
+        }
       }
     }
 
-    handleAuthCallback()
-  }, [router])
+    checkSession()
+
+    return () => {
+      mounted = false
+    }
+  }, [router, searchParams])
 
   if (loading) {
     return (

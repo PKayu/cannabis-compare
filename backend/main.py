@@ -62,13 +62,7 @@ async def root():
         "openapi": "/openapi.json"
     }
 
-# TODO: Add routers for:
-# - Users (auth, profiles)
-# - Products (catalog, search)
-# - Prices (aggregation, comparison)
-# - Reviews (ratings, comments)
-# - Dispensaries (index, locations)
-# - Scrapers (data ingestion)
+
 
 if __name__ == "__main__":
     import uvicorn

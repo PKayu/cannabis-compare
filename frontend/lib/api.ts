@@ -126,6 +126,21 @@ export const api = {
     update: (data: any) => apiClient.put('/api/users/me', data),
   },
 
+  // Watchlist
+  watchlist: {
+    add: (data: { product_id: string; alert_on_stock?: boolean; alert_on_price_drop?: boolean; price_drop_threshold?: number }) =>
+      apiClient.post('/api/watchlist/add', data),
+    remove: (productId: string) => apiClient.delete(`/api/watchlist/remove/${productId}`),
+    list: () => apiClient.get('/api/watchlist/'),
+    check: (productId: string) => apiClient.get(`/api/watchlist/check/${productId}`),
+  },
+
+  // Notifications
+  notifications: {
+    getPreferences: () => apiClient.get('/api/notifications/preferences'),
+    updatePreferences: (data: any) => apiClient.put('/api/notifications/preferences', data),
+  },
+
   // Generic methods for direct API calls
   get: (url: string, config?: any) => apiClient.get(url, config),
   post: (url: string, data?: any, config?: any) => apiClient.post(url, data, config),

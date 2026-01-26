@@ -7,6 +7,7 @@ import { api } from '@/lib/api'
 import PriceComparisonTable from '@/components/PriceComparisonTable'
 import PricingChart from '@/components/PricingChart'
 import ReviewsSection from '@/components/ReviewsSection'
+import WatchlistButton from '@/components/WatchlistButton'
 
 interface Product {
   id: string
@@ -144,6 +145,11 @@ export default function ProductDetailPage() {
               <span className="inline-block mt-3 px-3 py-1 bg-cannabis-100 text-cannabis-800 rounded-full text-sm">
                 {product.product_type}
               </span>
+
+              {/* Watchlist Button */}
+              <div className="mt-4">
+                <WatchlistButton productId={productId} />
+              </div>
             </div>
 
             {bestPrice && (

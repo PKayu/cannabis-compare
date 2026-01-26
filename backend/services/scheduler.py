@@ -357,3 +357,101 @@ def get_scheduler() -> ScraperScheduler:
     if _scheduler is None:
         _scheduler = ScraperScheduler()
     return _scheduler
+
+
+# Alert detection job
+def run_alert_checks():
+    """Check for stock/price alerts and send emails"""
+    from database import SessionLocal
+    from models import User, NotificationPreference, Product, Dispensary, Price
+    from services.alerts.stock_detector import StockDetector
+    from services.alerts.price_detector import PriceDetector
+    from services.notifications.email_service import EmailNotificationService
+
+    print(f"[{datetime.now()}] Running alert checks...")
+    db = SessionLocal()
+
+    try:
+        # Detect new alerts
+        stock_alerts = StockDetector.check_stock_changes(db)
+        price_alerts = PriceDetector.check_price_drops(db)
+
+        print(f"  Found {len(stock_alerts)} stock alerts, {len(price_alerts)} price drop alerts")
+
+        # Send emails based on user preferences
+        for alert in stock_alerts + price_alerts:
+            user = db.query(User).filter(User.id == alert.user_id).first()
+            if not user:
+                continue
+
+            prefs = db.query(NotificationPreference).filter(
+                NotificationPreference.user_id == user.id
+            ).first()
+
+            # Check if user wants emails for this alert type
+            if prefs:
+                if alert.alert_type == "stock_available" and not prefs.email_stock_alerts:
+                    continue
+                if alert.alert_type == "price_drop" and not prefs.email_price_drops:
+                    continue
+
+            # Only send immediate emails (daily/weekly handled separately)
+            if not prefs or prefs.email_frequency == "immediately":
+                product = db.query(Product).filter(Product.id == alert.product_id).first()
+                dispensary = db.query(Dispensary).filter(Dispensary.id == alert.dispensary_id).first()
+                price = db.query(Price).filter(
+                    Price.product_id == alert.product_id,
+                    Price.dispensary_id == alert.dispensary_id
+                ).first()
+
+                if product and dispensary and price:
+                    # Send email
+                    if alert.alert_type == "stock_available":
+                        success = EmailNotificationService.send_stock_alert(
+                            user, product, price, dispensary
+                        )
+                    elif alert.alert_type == "price_drop":
+                        success = EmailNotificationService.send_price_drop_alert(
+                            user, product, price, dispensary, alert.percent_change or 0
+                        )
+                    else:
+                        success = False
+
+                    if success:
+                        alert.email_sent = True
+                        db.commit()
+                        print(f"  Sent {alert.alert_type} alert to {user.email}")
+                    else:
+                        print(f"  Failed to send {alert.alert_type} alert to {user.email}")
+
+        print(f"[{datetime.now()}] Alert checks complete")
+
+    except Exception as e:
+        print(f"Error running alert checks: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+def start_alert_scheduler():
+    """Start the alert detection scheduler"""
+    from apscheduler.schedulers.background import BackgroundScheduler
+    from config import settings
+
+    scheduler = BackgroundScheduler()
+
+    # Add alert check job (runs every 1-2 hours based on config)
+    interval_hours = settings.alert_check_interval_hours
+    scheduler.add_job(
+        run_alert_checks,
+        'interval',
+        hours=interval_hours,
+        id='alert_detection_job',
+        name='Alert Detection Job',
+        replace_existing=True
+    )
+
+    scheduler.start()
+    print(f"Alert scheduler started - checking every {interval_hours} hour(s)")
+
+    return scheduler

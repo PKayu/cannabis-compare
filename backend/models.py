@@ -276,3 +276,83 @@ class Promotion(Base):
         if self.end_date and self.end_date < now:
             return False
         return True
+
+
+class Watchlist(Base):
+    """User's watched products for price and stock alerts"""
+    __tablename__ = "watchlists"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    product_id = Column(String, ForeignKey("products.id"), nullable=False, index=True)
+
+    # Alert preferences
+    alert_on_stock = Column(Boolean, default=True)  # Notify when back in stock
+    alert_on_price_drop = Column(Boolean, default=True)  # Notify on price decrease
+    price_drop_threshold = Column(Float, nullable=True, default=10.0)  # % threshold (e.g., 10 = 10% drop)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Unique constraint: one watchlist entry per user per product
+    __table_args__ = (UniqueConstraint('user_id', 'product_id', name='uix_user_product'),)
+
+    # Relationships
+    user = relationship("User")
+    product = relationship("Product")
+
+    def __repr__(self):
+        return f"<Watchlist user={self.user_id} product={self.product_id}>"
+
+
+class PriceAlert(Base):
+    """Log of price alerts sent to users"""
+    __tablename__ = "price_alerts"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    product_id = Column(String, ForeignKey("products.id"), nullable=False, index=True)
+    dispensary_id = Column(String, ForeignKey("dispensaries.id"), nullable=False, index=True)
+
+    alert_type = Column(String, nullable=False, index=True)  # "stock_available" or "price_drop"
+    previous_price = Column(Float, nullable=True)
+    new_price = Column(Float, nullable=True)
+    percent_change = Column(Float, nullable=True)
+
+    sent_at = Column(DateTime, default=datetime.utcnow, index=True)
+    email_sent = Column(Boolean, default=False)
+
+    # Relationships
+    user = relationship("User")
+    product = relationship("Product")
+    dispensary = relationship("Dispensary")
+
+    def __repr__(self):
+        return f"<PriceAlert {self.alert_type} for user={self.user_id} product={self.product_id}>"
+
+
+class NotificationPreference(Base):
+    """User notification settings"""
+    __tablename__ = "notification_preferences"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, unique=True, index=True)
+
+    # Email preferences
+    email_stock_alerts = Column(Boolean, default=True)
+    email_price_drops = Column(Boolean, default=True)
+    email_frequency = Column(String, default="immediately")  # "immediately", "daily", or "weekly"
+
+    # In-app preferences (placeholder for future)
+    app_notifications = Column(Boolean, default=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User")
+
+    def __repr__(self):
+        return f"<NotificationPreference user={self.user_id} frequency={self.email_frequency}>"

@@ -135,22 +135,45 @@ See `backend/prisma/schema.prisma` for the complete database schema.
   - [x] 12 new files created, 3 files modified
   - [x] Zero TypeScript/Python type errors
 
-- [ ] **Workflow 09**: Review System Dual-Track (Pending)
-  - Review submission form
-  - Dual-track intention tags
-  - 5-star ratings system
+- [x] **Workflow 09**: Review System Dual-Track ✅ COMPLETED (January 2026)
+  - [x] Dual-track intention tags (Medical: pain/insomnia/anxiety/nausea/spasms | Mood: socializing/creativity/focus/deep_relaxation/post_workout)
+  - [x] Intention tag enums in backend/model_enums/enums.py
+  - [x] Review model with intention_type and intention_tag fields
+  - [x] 1-5 star ratings (Effects, Taste, Value)
+  - [x] Review submission endpoint with validation
+  - [x] Review filtering by intention (type and tag)
+  - [x] Review sorting (recent, helpful, rating_high)
+  - [x] ReviewForm component with dual-track UI
+  - [x] ReviewsSection component with filtering
+  - [x] Batch tracking (batch_number, cultivation_date)
+  - [x] Review upvoting functionality
+  - [x] Update/delete endpoints with ownership checks
+  - [x] Integration into product detail pages
+  - [x] Zero TypeScript errors
 
-- [ ] **Workflow 10**: Stock Alerts and Notifications (Pending)
-  - Watchlist functionality
-  - Price drop alerts
+- [x] **Workflow 10**: Stock Alerts and Notifications ✅ COMPLETED (January 2026)
+  - [x] Watchlist database models (Watchlist, PriceAlert, NotificationPreference)
+  - [x] Stock availability detection (24-hour deduplication)
+  - [x] Price drop detection with configurable thresholds
+  - [x] SendGrid email integration with HTML templates
+  - [x] User notification preferences (immediate/daily/weekly)
+  - [x] WatchlistButton component with threshold configuration
+  - [x] Watchlist page at /watchlist with management UI
+  - [x] Notification preferences page at /profile/notifications
+  - [x] Product pages include WatchlistButton
+  - [x] Top-level navigation with watchlist link and badge
+  - [x] Alert scheduler (runs every 1-2 hours)
+  - [x] 4 watchlist API endpoints, 2 notification endpoints
 
-**Current Status**: Phase 2 COMPLETE! Phase 3 IN PROGRESS - Workflow 08 COMPLETE ✅
+**Current Status**: Phase 3 COMPLETE ✅ - All 10 Workflows COMPLETE! 🎉
 
 **Running Services:**
 - Backend: http://127.0.0.1:8000 ✅
 - Frontend: http://localhost:3000 ✅
 - **Authentication**: http://localhost:3000/auth/login
 - **Profile Page**: http://localhost:3000/profile
+- **Watchlist**: http://localhost:3000/watchlist
+- **Notification Settings**: http://localhost:3000/profile/notifications
 - **Search Page**: http://localhost:3000/products/search
 - **Product Detail**: http://localhost:3000/products/prod-002
 - **Dispensaries**: http://localhost:3000/dispensaries
@@ -165,6 +188,17 @@ See `backend/prisma/schema.prisma` for the complete database schema.
 - ✅ `GET /api/dispensaries` - List all dispensaries
 - ✅ `GET /api/dispensaries/{id}` - Dispensary details with promotions
 - ✅ `GET /api/dispensaries/{id}/inventory` - Products at dispensary
+- ✅ `POST /api/reviews/` - Submit product review (protected)
+- ✅ `GET /api/reviews/product/{id}` - Get reviews with filtering/sorting
+- ✅ `PUT /api/reviews/{id}` - Update own review (protected)
+- ✅ `DELETE /api/reviews/{id}` - Delete own review (protected)
+- ✅ `POST /api/reviews/{id}/upvote` - Upvote review (protected)
+- ✅ `POST /api/watchlist/add` - Add product to watchlist (protected)
+- ✅ `DELETE /api/watchlist/remove/{id}` - Remove from watchlist (protected)
+- ✅ `GET /api/watchlist/` - Get user's watchlist (protected)
+- ✅ `GET /api/watchlist/check/{id}` - Check if product is watched (protected)
+- ✅ `GET /api/notifications/preferences` - Get notification settings (protected)
+- ✅ `PUT /api/notifications/preferences` - Update notification settings (protected)
 - ✅ `GET /health` - API is healthy
 
 **Test Data Available:**

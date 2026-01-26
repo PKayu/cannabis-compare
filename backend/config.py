@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
 
+    # Email Notifications (SendGrid)
+    sendgrid_api_key: Optional[str] = None
+    notification_email_sender: str = "alerts@utahbud.com"
+    alert_check_interval_hours: int = 1
+
     class Config:
         env_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
         case_sensitive = False

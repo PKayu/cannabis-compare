@@ -1,3 +1,5 @@
+import Link from 'next/link'
+
 export default function Home() {
   return (
     <main className="min-h-screen bg-gradient-to-br from-cannabis-50 to-cannabis-100">
@@ -52,9 +54,11 @@ export default function Home() {
 
         {/* CTA Buttons */}
         <div className="flex gap-4 justify-center flex-wrap">
-          <button className="bg-cannabis-600 hover:bg-cannabis-700 text-white font-bold py-3 px-8 rounded-lg transition">
-            Browse Products
-          </button>
+          <Link href="/products/search">
+            <button className="bg-cannabis-600 hover:bg-cannabis-700 text-white font-bold py-3 px-8 rounded-lg transition">
+              Browse Products
+            </button>
+          </Link>
           <button className="bg-white text-cannabis-600 border-2 border-cannabis-600 hover:bg-cannabis-50 font-bold py-3 px-8 rounded-lg transition">
             Learn More
           </button>

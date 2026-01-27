@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { api } from '@/lib/api'
+import { useAuth } from '@/lib/AuthContext'
 
 interface ReviewFormProps {
   productId: string
@@ -26,6 +27,7 @@ const moodIntentions = [
 ]
 
 export default function ReviewForm({ productId, onSubmit, onCancel }: ReviewFormProps) {
+  const { user, loading: authLoading } = useAuth()
   const [formData, setFormData] = useState({
     effects_rating: 3,
     taste_rating: 3,
@@ -41,6 +43,22 @@ export default function ReviewForm({ productId, onSubmit, onCancel }: ReviewForm
   const [error, setError] = useState<string | null>(null)
 
   const intentionOptions = formData.intention_type === 'medical' ? medicalIntentions : moodIntentions
+
+  // Show sign-in prompt if not authenticated
+  if (!authLoading && !user) {
+    return (
+      <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+        <h3 className="text-xl font-bold mb-4 text-cannabis-800">Share Your Review</h3>
+        <p className="text-gray-600 mb-4">Please sign in to leave a review.</p>
+        <a
+          href={`/auth/login?returnUrl=${encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '')}`}
+          className="inline-block px-4 py-2 bg-cannabis-600 text-white rounded hover:bg-cannabis-700 transition-colors font-semibold"
+        >
+          Sign In
+        </a>
+      </div>
+    )
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -75,6 +93,14 @@ export default function ReviewForm({ productId, onSubmit, onCancel }: ReviewForm
       if (onSubmit) onSubmit()
     } catch (err: any) {
       console.error('Failed to submit review:', err)
+
+      // Handle unauthorized error - redirect to login
+      if (err.response?.status === 401) {
+        const returnUrl = encodeURIComponent(window.location.pathname)
+        window.location.href = `/auth/login?returnUrl=${returnUrl}`
+        return
+      }
+
       setError(err.response?.data?.detail || 'Failed to submit review. Please try again.')
     } finally {
       setLoading(false)

@@ -33,12 +33,15 @@ The application will be available at `http://localhost:3000`
 ```
 frontend/
 ├── app/                 # Next.js App Router
-│   ├── layout.tsx       # Root layout component
+│   ├── layout.tsx       # Root layout component (wrapped in Providers)
+│   ├── providers.tsx    # Client-side providers (AuthProvider)
 │   ├── page.tsx         # Home page
 │   └── globals.css      # Global styles
 ├── components/          # Reusable React components
 ├── lib/                 # Utility functions and API client
-│   └── api.ts           # Axios API client
+│   ├── api.ts           # Axios API client
+│   ├── AuthContext.tsx  # Global auth context with useAuth() hook
+│   └── supabase.ts      # Supabase client configuration
 ├── public/              # Static assets
 ├── tailwind.config.ts   # Tailwind CSS configuration
 ├── tsconfig.json        # TypeScript configuration
@@ -131,6 +134,48 @@ const products = await api.products.search('Gorilla Glue')
 // Compare prices
 const prices = await api.prices.compare(productId)
 ```
+
+## Authentication
+
+Authentication is managed via a global React Context using Supabase Auth.
+
+### AuthContext (`lib/AuthContext.tsx`)
+
+The `AuthProvider` wraps the entire application and provides:
+- `user` - Current Supabase User object (or null)
+- `session` - Current Supabase Session (or null)
+- `loading` - Boolean indicating if auth state is being fetched
+- `signOut()` - Function to sign out the user
+
+### Using Authentication in Components
+
+```typescript
+import { useAuth } from '@/lib/AuthContext'
+
+export function MyComponent() {
+  const { user, session, loading, signOut } = useAuth()
+
+  if (loading) return <div>Loading...</div>
+
+  if (!user) {
+    return <div>Please sign in to continue</div>
+  }
+
+  return (
+    <div>
+      <p>Welcome, {user.email}</p>
+      <button onClick={signOut}>Sign Out</button>
+    </div>
+  )
+}
+```
+
+### Important Notes
+
+- **Always use `useAuth()`** instead of making direct Supabase auth calls in components
+- The AuthContext automatically syncs auth state across all components
+- Auth state persists correctly across page reloads and tab switches
+- The context listens to `onAuthStateChange` events for real-time updates
 
 ## Performance Considerations
 

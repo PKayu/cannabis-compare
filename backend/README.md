@@ -92,6 +92,21 @@ The database includes the following entities:
 
 See `prisma/schema.prisma` for detailed schema definition.
 
+### Product Type Standards
+
+Product types must use **lowercase** values for consistency across scrapers, seed data, and frontend filters:
+
+| Valid Type | Description |
+|------------|-------------|
+| `flower` | Cannabis flower/bud |
+| `vaporizer` | Vape cartridges and pens |
+| `tincture` | Cannabis tinctures |
+| `edible` | Edible products |
+| `topical` | Topical applications |
+| `concentrate` | Concentrates and extracts |
+
+**Important:** Do not use capitalized values (e.g., "Flower") or abbreviations (e.g., "Vape"). The scrapers produce lowercase values, and the frontend filters expect lowercase values.
+
 ## API Endpoints
 
 ### Authentication
@@ -252,3 +267,24 @@ Key variables:
 - JWT tokens for authentication
 - Scrapers run every 2 hours (configurable) per PRD requirement
 - Target >80% auto-merge rate for product normalization
+
+### Authentication in Endpoints
+
+When creating protected endpoints, use the `get_current_user` dependency which returns the full `User` object:
+
+```python
+from fastapi import Depends
+from models import User
+from dependencies import get_current_user
+
+@router.get("/protected")
+async def protected_endpoint(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Access user ID with current_user.id
+    # Access other user fields directly from the User object
+    return {"user_id": str(current_user.id)}
+```
+
+**Important:** The dependency returns a `User` object, not a string user ID. Always use `current_user.id` to get the user's UUID.

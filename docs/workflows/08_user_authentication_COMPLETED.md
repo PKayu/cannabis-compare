@@ -434,15 +434,47 @@ Test scenarios:
 
 ## Success Criteria
 
-- [ ] Supabase Auth configured with magic links
-- [ ] Age gate component displays correctly
-- [ ] Age verification working (21+ check)
-- [ ] Magic link login functional
-- [ ] OAuth (Google) login working
-- [ ] User profile page loads after login
-- [ ] Review history displays correctly
-- [ ] Session tokens in API requests
-- [ ] Protected routes redirect to login
-- [ ] Sign out clears session
-- [ ] Authentication persists across page reloads
-- [ ] No TypeScript errors
+- [x] Supabase Auth configured with magic links
+- [x] Age gate component displays correctly
+- [x] Age verification working (21+ check)
+- [x] Magic link login functional
+- [x] OAuth (Google) login working
+- [x] User profile page loads after login
+- [x] Review history displays correctly
+- [x] Session tokens in API requests
+- [x] Protected routes redirect to login
+- [x] Sign out clears session
+- [x] Authentication persists across page reloads
+- [x] No TypeScript errors
+
+## Post-Implementation Fix (2026-01-26)
+
+### Authentication State Persistence Bug Fix
+
+A critical bug was discovered where authentication state was not persisting properly across components and page reloads. The fix involved:
+
+**Problem:** Components were making independent Supabase auth calls, leading to inconsistent state.
+
+**Solution:** Implemented a centralized `AuthContext` using React Context API:
+
+1. **Created `frontend/lib/AuthContext.tsx`**
+   - Global auth context with `useAuth()` hook
+   - Uses Supabase's `onAuthStateChange` listener for real-time auth state updates
+   - Provides: `user`, `session`, `loading`, `signOut`
+
+2. **Created `frontend/app/providers.tsx`**
+   - Wraps children with `AuthProvider`
+   - Separates client-side providers from server layout
+
+3. **Updated `frontend/app/layout.tsx`**
+   - Wrapped app content with `<Providers>` component
+
+4. **Updated Components to Use `useAuth()`**
+   - `Navigation.tsx` - Uses `useAuth()` instead of independent auth checking
+   - `WatchlistButton.tsx` - Uses `useAuth()`, removed visibility change listener
+   - `ReviewForm.tsx` - Uses `useAuth()` and shows sign-in prompt when not authenticated
+
+**Backend Fix:**
+- In `backend/routers/watchlist.py`, changed `user_id: str = Depends(get_current_user)` to `current_user: User = Depends(get_current_user)` and updated queries to use `current_user.id`
+
+**Key Lesson:** Always use a centralized auth context rather than independent Supabase calls to ensure consistent auth state across all components.

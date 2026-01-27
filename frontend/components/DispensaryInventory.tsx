@@ -20,7 +20,17 @@ interface DispensaryInventoryProps {
   dispensaryId: string
 }
 
-const PRODUCT_TYPES = ['All', 'Flower', 'Vape', 'Edible', 'Concentrate', 'Tincture', 'Topical']
+// Product types with value (matches DB) and label (display text)
+// DB stores lowercase: 'flower', 'vaporizer', 'edible', etc.
+const PRODUCT_TYPES = [
+  { value: 'All', label: 'All' },
+  { value: 'flower', label: 'Flower' },
+  { value: 'vaporizer', label: 'Vape' },
+  { value: 'edible', label: 'Edible' },
+  { value: 'concentrate', label: 'Concentrate' },
+  { value: 'tincture', label: 'Tincture' },
+  { value: 'topical', label: 'Topical' },
+]
 const SORT_OPTIONS = [
   { value: 'name', label: 'Name' },
   { value: 'price_low', label: 'Price: Low to High' },
@@ -67,15 +77,15 @@ export default function DispensaryInventory({ dispensaryId }: DispensaryInventor
         <div className="flex flex-wrap gap-2">
           {PRODUCT_TYPES.map((type) => (
             <button
-              key={type}
-              onClick={() => setProductType(type)}
+              key={type.value}
+              onClick={() => setProductType(type.value)}
               className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                productType === type
+                productType === type.value
                   ? 'bg-cannabis-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              {type}
+              {type.label}
             </button>
           ))}
         </div>

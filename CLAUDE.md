@@ -199,7 +199,8 @@ async def get_product(product_id: str, db: Session = Depends(get_db)):
 - **Files**: `.tsx` for components, `.ts` for utilities
 - **Styling**: Use Tailwind utility classes, no custom CSS unless necessary
 - **API Calls**: Use `lib/api.ts` wrapper, not raw axios
-- **State Management**: Props/hooks for now (Context API ready in `lib/` if needed)
+- **State Management**: Props/hooks for local state; use `useAuth()` hook from `lib/AuthContext.tsx` for authentication state
+- **Authentication**: Always use the `useAuth()` hook instead of independent Supabase calls to ensure consistent auth state across components
 
 Example component pattern:
 ```tsx
@@ -260,12 +261,15 @@ backend/
 
 frontend/
   app/
-    layout.tsx      → Root layout with metadata
+    layout.tsx      → Root layout with metadata, wrapped in Providers
     page.tsx        → Home page
+    providers.tsx   → Client-side providers wrapper (AuthProvider)
     globals.css     → Tailwind directives and global styles
   lib/
     api.ts          → Axios client with all endpoints + interceptors
-  components/       → Reusable React components (to be created)
+    AuthContext.tsx → Global authentication context with useAuth() hook
+    supabase.ts     → Supabase client configuration
+  components/       → Reusable React components
   public/           → Static assets
   tailwind.config.ts → Custom cannabis color palette (cannabis-50 to cannabis-900)
 ```
@@ -298,6 +302,22 @@ frontend/
 4. Use `api` from `lib/api.ts` for backend calls
 5. Apply Tailwind classes for styling
 6. Import and use in pages or other components
+7. For auth-aware components, use `useAuth()` hook from `lib/AuthContext.tsx`
+
+### Using Authentication in Components
+
+```tsx
+import { useAuth } from '@/lib/AuthContext'
+
+export function MyComponent() {
+  const { user, session, loading, signOut } = useAuth()
+
+  if (loading) return <div>Loading...</div>
+  if (!user) return <div>Please sign in</div>
+
+  return <div>Welcome, {user.email}</div>
+}
+```
 
 ## Important Notes
 

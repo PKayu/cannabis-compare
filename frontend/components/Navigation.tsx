@@ -4,32 +4,22 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { api } from '@/lib/api'
+import { useAuth } from '@/lib/AuthContext'
 
 export default function Navigation() {
   const pathname = usePathname()
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const { user } = useAuth()
   const [watchlistCount, setWatchlistCount] = useState(0)
 
-  useEffect(() => {
-    // Skip auth check on auth pages to prevent redirect loops
-    // Also skip on home page since we don't show nav there anyway
-    if (pathname === '/' || pathname.startsWith('/auth')) {
-      setIsLoggedIn(false)
-      return
-    }
-    checkAuth()
-  }, [pathname])
+  const isLoggedIn = !!user
 
-  const checkAuth = async () => {
-    try {
-      await api.users.me()
-      setIsLoggedIn(true)
+  useEffect(() => {
+    if (isLoggedIn) {
       loadWatchlistCount()
-    } catch (error) {
-      // Silently handle - user not logged in
-      setIsLoggedIn(false)
+    } else {
+      setWatchlistCount(0)
     }
-  }
+  }, [isLoggedIn])
 
   const loadWatchlistCount = async () => {
     try {

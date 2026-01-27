@@ -116,8 +116,13 @@ Frontend will be available at: `http://localhost:3000`
 cannabis-compare/
 ├── frontend/              # Next.js application
 │   ├── app/              # Pages and layouts
+│   │   ├── layout.tsx    # Root layout (wrapped in Providers)
+│   │   └── providers.tsx # Client providers (AuthProvider)
 │   ├── components/       # Reusable components
-│   ├── lib/              # Utilities (api.ts)
+│   ├── lib/              # Utilities
+│   │   ├── api.ts        # Axios API client
+│   │   ├── AuthContext.tsx # Global auth context
+│   │   └── supabase.ts   # Supabase client
 │   └── package.json
 │
 ├── backend/              # FastAPI application

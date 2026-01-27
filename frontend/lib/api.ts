@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { supabase } from './supabase'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -12,22 +13,16 @@ export const apiClient = axios.create({
 /**
  * Add request interceptor for auth tokens
  * Retrieves the Supabase session token and attaches it to the Authorization header
+ * IMPORTANT: Uses the shared supabase client to access the same session
  */
 apiClient.interceptors.request.use(async (config) => {
   try {
-    // Dynamically import Supabase to avoid SSR issues
-    const { createClient } = await import('@supabase/supabase-js')
+    // Use the shared Supabase client to get the session
+    // This ensures we access the same session that was established during login
+    const { data } = await supabase.auth.getSession()
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-    if (supabaseUrl && supabaseAnonKey) {
-      const supabase = createClient(supabaseUrl, supabaseAnonKey)
-      const { data } = await supabase.auth.getSession()
-
-      if (data?.session?.access_token) {
-        config.headers.Authorization = `Bearer ${data.session.access_token}`
-      }
+    if (data?.session?.access_token) {
+      config.headers.Authorization = `Bearer ${data.session.access_token}`
     }
   } catch (error) {
     console.error('Failed to add auth token to request:', error)
@@ -48,15 +43,8 @@ apiClient.interceptors.response.use(
     // Redirecting here causes infinite loops when Navigation checks auth
     if (error.response?.status === 401) {
       try {
-        // Clear auth state
-        const { createClient } = await import('@supabase/supabase-js')
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-        if (supabaseUrl && supabaseAnonKey) {
-          const supabase = createClient(supabaseUrl, supabaseAnonKey)
-          await supabase.auth.signOut()
-        }
+        // Clear auth state using shared Supabase client
+        await supabase.auth.signOut()
       } catch (signOutError) {
         console.error('Failed to sign out:', signOutError)
       }

@@ -26,7 +26,8 @@ Utah Cannabis Aggregator is a full-stack web application designed to help Utah M
 - **Styling**: Tailwind CSS
 - **HTTP Client**: Axios
 - **Deployment**: Vercel
-- **Authentication**: Supabase Auth (planned)
+- **Authentication**: Supabase Auth with global AuthContext provider
+- **State Management**: React Context for auth state (`lib/AuthContext.tsx`)
 
 ### Backend
 - **Framework**: FastAPI (Python)
@@ -119,10 +120,12 @@ Frontend Display Results
 **Product**
 - id (UUID, Primary Key)
 - name (String) - Strain name
-- product_type (String) - Flower, Vape, Edible, etc.
+- product_type (String) - lowercase values: flower, vaporizer, tincture, edible, topical, concentrate
 - thc_percentage (Float) - Optional
 - cbd_percentage (Float) - Optional
 - brand_id (UUID, Foreign Key)
+
+**Product Type Standards**: All product types must use lowercase values to ensure consistency between scrapers, seed data, and frontend filters. Valid types: `flower`, `vaporizer`, `tincture`, `edible`, `topical`, `concentrate`.
 
 **Brand**
 - id (UUID, Primary Key)
@@ -214,13 +217,27 @@ Frontend Display Results
 
 ## Authentication & Authorization
 
-### JWT-Based Authentication
-1. User registers/logs in
-2. Backend generates JWT token
-3. Frontend stores token in secure storage
-4. Token included in Authorization header: `Bearer <token>`
-5. Backend validates token on protected routes
-6. Token includes: user_id, expiration, permissions
+### Supabase Auth Integration
+The application uses Supabase Auth for user authentication with a centralized React Context provider.
+
+**Frontend Authentication Flow:**
+1. `AuthProvider` wraps the entire app in `layout.tsx` via `providers.tsx`
+2. On mount, `AuthContext` fetches initial session and subscribes to auth state changes
+3. Components use the `useAuth()` hook to access: `user`, `session`, `loading`, `signOut`
+4. Auth state is automatically synchronized across all components via React Context
+5. JWT tokens from Supabase are automatically included in API requests via Axios interceptors
+
+**Key Files:**
+- `frontend/lib/AuthContext.tsx` - Global auth context with `useAuth()` hook
+- `frontend/app/providers.tsx` - Client-side providers wrapper
+- `frontend/lib/supabase.ts` - Supabase client configuration
+
+**Important:** Always use the `useAuth()` hook instead of making independent Supabase calls. This ensures auth state consistency and prevents issues with state not persisting across page reloads or tab switches.
+
+### Backend Auth Verification
+- Protected endpoints use `Depends(get_current_user)` to verify JWT tokens
+- The dependency returns the full `User` object, not just the user ID
+- Queries should use `current_user.id` to access the authenticated user's ID
 
 ### Role-Based Access Control (Planned)
 - User: Can post reviews, view products

@@ -193,9 +193,10 @@ async def get_dispensary_inventory(
 
     prices = query.all()
 
-    # Filter by product type if specified
+    # Filter by product type if specified (case-insensitive)
     if product_type:
-        prices = [p for p in prices if p.product and p.product.product_type == product_type]
+        normalized_type = product_type.lower()
+        prices = [p for p in prices if p.product and p.product.product_type.lower() == normalized_type]
 
     # Build result list
     results = []

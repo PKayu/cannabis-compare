@@ -77,7 +77,7 @@ def seed_data():
             Product(
                 id="prod-001",
                 name="Blue Dream",
-                product_type="Flower",
+                product_type="flower",
                 thc_percentage=22.5,
                 cbd_percentage=0.1,
                 brand_id="brand-001",
@@ -87,7 +87,7 @@ def seed_data():
             Product(
                 id="prod-002",
                 name="Gorilla Glue #4",
-                product_type="Flower",
+                product_type="flower",
                 thc_percentage=28.0,
                 cbd_percentage=0.2,
                 brand_id="brand-002",
@@ -97,7 +97,7 @@ def seed_data():
             Product(
                 id="prod-003",
                 name="Wedding Cake",
-                product_type="Flower",
+                product_type="flower",
                 thc_percentage=25.0,
                 cbd_percentage=0.3,
                 brand_id="brand-001",
@@ -107,7 +107,7 @@ def seed_data():
             Product(
                 id="prod-004",
                 name="OG Kush Vape Cart",
-                product_type="Vape",
+                product_type="vaporizer",
                 thc_percentage=85.0,
                 cbd_percentage=0.5,
                 brand_id="brand-003",
@@ -117,7 +117,7 @@ def seed_data():
             Product(
                 id="prod-005",
                 name="CBD Relief Tincture",
-                product_type="Tincture",
+                product_type="tincture",
                 thc_percentage=5.0,
                 cbd_percentage=20.0,
                 brand_id="brand-004",
@@ -128,7 +128,7 @@ def seed_data():
             Product(
                 id="prod-006",
                 name="Blue Dream (Alternate)",
-                product_type="Flower",
+                product_type="flower",
                 thc_percentage=21.0,
                 cbd_percentage=0.1,
                 brand_id="brand-001",
@@ -307,7 +307,7 @@ def seed_data():
                 description="Show your medical card for 15% off all flower products",
                 discount_percentage=15.0,
                 dispensary_id="disp-001",
-                applies_to_category="Flower",
+                applies_to_category="flower",
                 is_recurring=True,
                 recurring_pattern="weekly",
                 recurring_day="monday",
@@ -331,7 +331,7 @@ def seed_data():
                 description="20% off all vape cartridges every Friday",
                 discount_percentage=20.0,
                 dispensary_id="disp-003",
-                applies_to_category="Vape",
+                applies_to_category="vaporizer",
                 is_recurring=True,
                 recurring_pattern="weekly",
                 recurring_day="friday",

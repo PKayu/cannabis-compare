@@ -75,9 +75,10 @@ async def search_products(
     # Apply filters and gather price data
     filtered = []
     for product, score in scored_products:
-        # Filter by product type
-        if product_type and product.product_type != product_type:
-            continue
+        # Filter by product type (case-insensitive)
+        if product_type:
+            if product.product_type.lower() != product_type.lower():
+                continue
 
         # Filter by THC percentage
         if min_thc is not None and (product.thc_percentage is None or product.thc_percentage < min_thc):
@@ -105,9 +106,12 @@ async def search_products(
                 if (min_price is None or p.amount >= min_price) and
                    (max_price is None or p.amount <= max_price)
             ]
-            if not valid_prices:
-                continue
+            # Don't skip product entirely, just use filtered prices
             prices = valid_prices
+
+        # Skip products with no valid prices after all filtering
+        if not prices:
+            continue
 
         filtered.append((product, score, prices))
 

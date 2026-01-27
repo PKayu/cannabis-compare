@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { api } from '@/lib/api'
+import { useAuth } from '@/lib/AuthContext'
 
 interface WatchlistButtonProps {
   productId: string
@@ -9,15 +10,20 @@ interface WatchlistButtonProps {
 }
 
 export default function WatchlistButton({ productId, initialWatched = false }: WatchlistButtonProps) {
+  const { user } = useAuth()
   const [watched, setWatched] = useState(initialWatched)
   const [loading, setLoading] = useState(false)
   const [showConfig, setShowConfig] = useState(false)
   const [threshold, setThreshold] = useState(10)
 
-  // Check watchlist status on mount
+  // Check watchlist status when user or productId changes
   useEffect(() => {
-    checkWatchlistStatus()
-  }, [productId])
+    if (user) {
+      checkWatchlistStatus()
+    } else {
+      setWatched(false)
+    }
+  }, [productId, user])
 
   const checkWatchlistStatus = async () => {
     try {

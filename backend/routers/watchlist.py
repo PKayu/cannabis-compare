@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
 from database import get_db
-from models import Watchlist, Product, Price
+from models import Watchlist, Product, Price, User
 from routers.auth import get_current_user
 
 router = APIRouter(prefix="/api/watchlist", tags=["watchlist"])
@@ -31,7 +31,7 @@ class WatchlistResponse(BaseModel):
 @router.post("/add")
 async def add_to_watchlist(
     data: WatchlistAdd,
-    user_id: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Add product to user's watchlist with alert preferences"""
@@ -43,7 +43,7 @@ async def add_to_watchlist(
 
     # Check if already in watchlist
     existing = db.query(Watchlist).filter(
-        Watchlist.user_id == user_id,
+        Watchlist.user_id == current_user.id,
         Watchlist.product_id == data.product_id
     ).first()
 
@@ -52,7 +52,7 @@ async def add_to_watchlist(
 
     # Create watchlist item
     watchlist_item = Watchlist(
-        user_id=user_id,
+        user_id=current_user.id,
         product_id=data.product_id,
         alert_on_stock=data.alert_on_stock,
         alert_on_price_drop=data.alert_on_price_drop,
@@ -73,13 +73,13 @@ async def add_to_watchlist(
 @router.delete("/remove/{product_id}")
 async def remove_from_watchlist(
     product_id: str,
-    user_id: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Remove product from user's watchlist"""
 
     item = db.query(Watchlist).filter(
-        Watchlist.user_id == user_id,
+        Watchlist.user_id == current_user.id,
         Watchlist.product_id == product_id
     ).first()
 
@@ -94,12 +94,12 @@ async def remove_from_watchlist(
 
 @router.get("/", response_model=list[WatchlistResponse])
 async def get_watchlist(
-    user_id: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get user's full watchlist with product details"""
 
-    items = db.query(Watchlist).filter(Watchlist.user_id == user_id).all()
+    items = db.query(Watchlist).filter(Watchlist.user_id == current_user.id).all()
 
     return [
         WatchlistResponse(
@@ -119,13 +119,13 @@ async def get_watchlist(
 @router.get("/check/{product_id}")
 async def check_watchlist(
     product_id: str,
-    user_id: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Check if a specific product is in user's watchlist"""
 
     item = db.query(Watchlist).filter(
-        Watchlist.user_id == user_id,
+        Watchlist.user_id == current_user.id,
         Watchlist.product_id == product_id
     ).first()
 

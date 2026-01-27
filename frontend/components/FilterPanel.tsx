@@ -58,13 +58,13 @@ export default function FilterPanel({ filters, onChange }: FilterPanelProps) {
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cannabis-500"
         >
           <option value="">All Types</option>
-          <option value="Flower">Flower</option>
-          <option value="Concentrate">Concentrate</option>
-          <option value="Edible">Edible</option>
-          <option value="Vape">Vape</option>
-          <option value="Topical">Topical</option>
-          <option value="Tincture">Tincture</option>
-          <option value="Pre-Roll">Pre-Roll</option>
+          <option value="flower">Flower</option>
+          <option value="concentrate">Concentrate</option>
+          <option value="edible">Edible</option>
+          <option value="vaporizer">Vape</option>
+          <option value="topical">Topical</option>
+          <option value="tincture">Tincture</option>
+          <option value="pre-roll">Pre-Roll</option>
         </select>
       </div>
 

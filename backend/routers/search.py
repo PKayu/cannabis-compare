@@ -119,7 +119,7 @@ async def search_products(
     if sort_by == "price_low":
         filtered.sort(key=lambda x: min(p.amount for p in x[2]))
     elif sort_by == "price_high":
-        filtered.sort(key=lambda x: max(p.amount for p in x[2]), reverse=True)
+        filtered.sort(key=lambda x: min(p.amount for p in x[2]), reverse=True)
     elif sort_by == "thc":
         filtered.sort(key=lambda x: x[0].thc_percentage or 0, reverse=True)
     elif sort_by == "cbd":

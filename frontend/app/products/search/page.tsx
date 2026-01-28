@@ -32,7 +32,7 @@ export default function SearchPage() {
     sortBy: 'relevance'
   })
 
-  const handleSearch = async (searchQuery: string) => {
+  const handleSearch = async (searchQuery: string, overrideFilters?: SearchFilters) => {
     if (!searchQuery || searchQuery.length < 2) {
       return
     }
@@ -43,15 +43,18 @@ export default function SearchPage() {
     try {
       const params: any = { q: searchQuery }
 
+      // Use override filters if provided (for immediate filter changes), otherwise use state
+      const filtersToUse = overrideFilters ?? filters
+
       // Add filters if they have values
-      if (filters.productType) params.product_type = filters.productType
-      if (filters.minPrice !== undefined) params.min_price = filters.minPrice
-      if (filters.maxPrice !== undefined) params.max_price = filters.maxPrice
-      if (filters.minThc !== undefined) params.min_thc = filters.minThc
-      if (filters.maxThc !== undefined) params.max_thc = filters.maxThc
-      if (filters.minCbd !== undefined) params.min_cbd = filters.minCbd
-      if (filters.maxCbd !== undefined) params.max_cbd = filters.maxCbd
-      if (filters.sortBy) params.sort_by = filters.sortBy
+      if (filtersToUse.productType) params.product_type = filtersToUse.productType
+      if (filtersToUse.minPrice !== undefined) params.min_price = filtersToUse.minPrice
+      if (filtersToUse.maxPrice !== undefined) params.max_price = filtersToUse.maxPrice
+      if (filtersToUse.minThc !== undefined) params.min_thc = filtersToUse.minThc
+      if (filtersToUse.maxThc !== undefined) params.max_thc = filtersToUse.maxThc
+      if (filtersToUse.minCbd !== undefined) params.min_cbd = filtersToUse.minCbd
+      if (filtersToUse.maxCbd !== undefined) params.max_cbd = filtersToUse.maxCbd
+      if (filtersToUse.sortBy) params.sort_by = filtersToUse.sortBy
 
       const res = await api.products.search(params)
       setResults(res.data)
@@ -67,8 +70,8 @@ export default function SearchPage() {
   const handleFilterChange = (newFilters: SearchFilters) => {
     setFilters(newFilters)
     if (query) {
-      // Trigger search with new filters
-      handleSearch(query)
+      // Pass newFilters directly to handleSearch to avoid stale state
+      handleSearch(query, newFilters)
     }
   }
 

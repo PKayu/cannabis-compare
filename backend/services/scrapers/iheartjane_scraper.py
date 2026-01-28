@@ -8,10 +8,19 @@ import logging
 import re
 from typing import List, Optional
 from .base_scraper import BaseScraper, ScrapedProduct
+from .registry import register_scraper
 
 logger = logging.getLogger(__name__)
 
 
+@register_scraper(
+    id="iheartjane",
+    name="iHeartJane API (Generic)",
+    dispensary_name="iHeartJane Store",
+    dispensary_location="Utah",
+    schedule_minutes=120,
+    description="Generic iHeartJane API scraper - requires store_id configuration"
+)
 class IHeartJaneScraper(BaseScraper):
     """
     Scrapes iHeartJane-powered dispensaries via their public API
@@ -27,18 +36,24 @@ class IHeartJaneScraper(BaseScraper):
         "Content-Type": "application/json"
     }
 
-    def __init__(self, store_id: str, dispensary_name: str = "iHeartJane Store"):
+    def __init__(
+        self,
+        dispensary_id: str = "iheartjane",
+        store_id: Optional[str] = None,
+        dispensary_name: str = "iHeartJane Store"
+    ):
         """
         Initialize scraper for specific iHeartJane store
 
         Args:
+            dispensary_id: Unique ID for this scraper instance
             store_id: The iHeartJane store identifier (found via API inspection)
             dispensary_name: Human-readable name for logging (e.g., "WholesomeCo")
         """
-        super().__init__()
+        super().__init__(dispensary_id=dispensary_id)
         self.store_id = store_id
         self.dispensary_name = dispensary_name
-        logger.info(f"Initialized iHeartJane scraper for {dispensary_name} (ID: {store_id})")
+        logger.info(f"Initialized iHeartJane scraper for {dispensary_name} (store_id: {store_id})")
 
     async def scrape_products(self) -> List[ScrapedProduct]:
         """
@@ -149,12 +164,12 @@ class IHeartJaneScraper(BaseScraper):
         return ScrapedProduct(
             name=name,
             brand=brand,
-            product_type=product_type,
+            category=product_type,
             thc_percentage=thc,
             cbd_percentage=cbd,
             price=float(price),
             in_stock=in_stock,
-            unit_size=self._extract_unit_size(name),
+            weight=self._extract_unit_size(name),
             raw_data=item  # Preserve original for debugging
         )
 

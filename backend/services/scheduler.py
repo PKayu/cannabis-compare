@@ -6,6 +6,7 @@ Manages scheduled execution of dispensary scrapers with:
 - Automatic retry on failure
 - Job management (add, remove, pause, resume)
 - Logging and monitoring
+- Auto-registration of all scrapers from ScraperRegistry
 """
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -18,6 +19,7 @@ import logging
 import asyncio
 
 from services.scrapers.base_scraper import BaseScraper
+from services.scrapers.registry import ScraperRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -357,6 +359,41 @@ def get_scheduler() -> ScraperScheduler:
     if _scheduler is None:
         _scheduler = ScraperScheduler()
     return _scheduler
+
+
+def register_all_scrapers(scheduler: ScraperScheduler) -> None:
+    """
+    Automatically register all enabled scrapers from the ScraperRegistry.
+
+    This function iterates through all registered scrapers and adds them
+    to the scheduler with their configured intervals. Called once at startup.
+
+    Args:
+        scheduler: The ScraperScheduler instance to register jobs with
+    """
+    registered_count = 0
+    skipped_count = 0
+
+    for config in ScraperRegistry.get_enabled():
+        try:
+            scheduler.add_scraper_job(
+                scraper_class=config.scraper_class,
+                dispensary_id=config.id,
+                minutes=config.schedule_minutes,
+                run_immediately=False
+            )
+            registered_count += 1
+            logger.info(
+                f"Scheduled {config.name} to run every {config.schedule_minutes} minutes"
+            )
+        except Exception as e:
+            logger.error(f"Failed to schedule {config.name}: {e}")
+            skipped_count += 1
+
+    logger.info(
+        f"Scheduled {registered_count} scrapers"
+        + (f" ({skipped_count} skipped)" if skipped_count > 0 else "")
+    )
 
 
 # Alert detection job

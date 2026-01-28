@@ -10,6 +10,7 @@ Works for:
 import logging
 from typing import List, Optional, TYPE_CHECKING
 from .base_scraper import BaseScraper, ScrapedProduct
+from .registry import register_scraper
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +203,7 @@ class PlaywrightScraper(BaseScraper):
                 product = ScrapedProduct(
                     name=item.get("name", ""),
                     brand=item.get("brand"),
-                    product_type=self._map_category(item.get("category", "")),
+                    category=self._map_category(item.get("category", "")),
                     thc_percentage=self._parse_float(item.get("thc")),
                     price=self._parse_float(item.get("price")) or 0,
                     in_stock=item.get("inStock", True),
@@ -263,6 +264,15 @@ class PlaywrightScraper(BaseScraper):
 
 
 # Site-specific scrapers inherit from PlaywrightScraper
+
+@register_scraper(
+    id="wholesomeco-playwright",
+    name="WholesomeCo (Playwright)",
+    dispensary_name="WholesomeCo",
+    dispensary_location="Bountiful, UT",
+    schedule_minutes=120,
+    description="Playwright-based scraper for WholesomeCo JavaScript-rendered pages"
+)
 class WholesomeCoScraper(PlaywrightScraper):
     """
     Specialized scraper for WholesomeCo (wholesome.co)
@@ -270,11 +280,11 @@ class WholesomeCoScraper(PlaywrightScraper):
     WholesomeCo uses JavaScript-rendered dynamic menu
     """
 
-    def __init__(self):
+    def __init__(self, dispensary_id: str = "wholesomeco-playwright"):
         super().__init__(
             menu_url="https://www.wholesome.co/shop",
             dispensary_name="WholesomeCo",
-            dispensary_id="wholesomeco"
+            dispensary_id=dispensary_id
         )
 
     async def _wait_for_products(self, page: "Page"):
@@ -354,6 +364,14 @@ class WholesomeCoScraper(PlaywrightScraper):
         return products
 
 
+@register_scraper(
+    id="beehive-playwright",
+    name="Beehive Farmacy (Playwright)",
+    dispensary_name="Beehive Farmacy",
+    dispensary_location="Salt Lake City, UT",
+    schedule_minutes=120,
+    description="Playwright-based scraper for Beehive Farmacy GraphQL menu"
+)
 class BeehiveScraper(PlaywrightScraper):
     """
     Specialized scraper for Beehive Farmacy
@@ -362,11 +380,11 @@ class BeehiveScraper(PlaywrightScraper):
     Playwright handles the browser context and CSRF protection)
     """
 
-    def __init__(self):
+    def __init__(self, dispensary_id: str = "beehive-playwright"):
         super().__init__(
             menu_url="https://www.beehivefarmacy.com",  # Adjust if needed
             dispensary_name="Beehive Farmacy",
-            dispensary_id="beehive"
+            dispensary_id=dispensary_id
         )
 
     async def _wait_for_products(self, page: "Page"):

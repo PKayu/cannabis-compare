@@ -7,15 +7,33 @@ import aiohttp
 from bs4 import BeautifulSoup
 
 from services.scrapers.base_scraper import BaseScraper, ScrapedProduct, ScrapedPromotion
+from services.scrapers.registry import register_scraper
 
 logger = logging.getLogger(__name__)
 
+@register_scraper(
+    id="wholesomeco",
+    name="WholesomeCo",
+    dispensary_name="WholesomeCo",
+    dispensary_location="Bountiful, UT",
+    schedule_minutes=120,
+    description="Direct scraping from WholesomeCo website via embedded JSON"
+)
 class WholesomeCoScraper(BaseScraper):
     """
     Scrapes WholesomeCo website by parsing embedded RudderStack analytics JSON.
     """
     # Main shop URL - this usually loads the initial list of products
     SHOP_URL = "https://www.wholesome.co/shop"
+
+    def __init__(self, dispensary_id: str = "wholesomeco"):
+        """
+        Initialize WholesomeCo scraper.
+
+        Args:
+            dispensary_id: Unique ID for this dispensary (default: "wholesomeco")
+        """
+        super().__init__(dispensary_id=dispensary_id)
 
     async def scrape_products(self) -> List[ScrapedProduct]:
         """Fetch and parse products from the HTML"""

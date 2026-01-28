@@ -1,16 +1,76 @@
 """
 Main FastAPI application entry point for Utah Cannabis Aggregator
+
+This module:
+1. Initializes the FastAPI application
+2. Registers all API routers
+3. Imports scrapers to trigger self-registration via decorators
+4. Configures CORS middleware
 """
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from routers import admin_flags, search, products, dispensaries, auth, users, scrapers, reviews, watchlist, notifications
+from routers import (
+    admin_flags, search, products, dispensaries, auth, users,
+    scrapers, reviews, watchlist, notifications
+)
+
+# Import all scrapers to trigger self-registration via @register_scraper decorator
+# These imports must happen at module level for the registry to be populated
+# The imported classes are not used directly - the decorator registers them
+from services.scrapers.wholesome_co_scraper import WholesomeCoScraper  # noqa: F401
+from services.scrapers.iheartjane_scraper import IHeartJaneScraper  # noqa: F401
+from services.scrapers.playwright_scraper import (  # noqa: F401
+    PlaywrightScraper,
+    WholesomeCoScraper as WholesomeCoPlaywrightScraper,
+    BeehiveScraper
+)
+
+from services.scrapers.registry import ScraperRegistry
+
+import logging
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """
+    Manage application lifespan events.
+
+    On startup:
+    1. Log all registered scrapers
+    2. Optionally start the scheduler with auto-registered scrapers
+    """
+    # Log registered scrapers at startup
+    scrapers = ScraperRegistry.get_all()
+    logger.info(f"Registered {len(scrapers)} scrapers:")
+    for scraper_id, config in scrapers.items():
+        status = "enabled" if config.enabled else "disabled"
+        logger.info(f"  - {config.name} ({scraper_id}): {status}")
+
+    # Optionally start the scraper scheduler
+    # Uncomment the following lines to enable automatic scheduling:
+    # from services.scheduler import get_scheduler, register_all_scrapers
+    # scheduler = get_scheduler()
+    # register_all_scrapers(scheduler)
+    # await scheduler.start()
+    # logger.info("Scraper scheduler started")
+
+    yield
+
+    # Cleanup on shutdown
+    # from services.scheduler import get_scheduler
+    # scheduler = get_scheduler()
+    # await scheduler.stop()
+    # logger.info("Scraper scheduler stopped")
 
 # Initialize FastAPI app
 app = FastAPI(
     title="Utah Cannabis Aggregator API",
     description="REST API for cannabis price aggregation and reviews",
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan
 )
 
 # Register routers

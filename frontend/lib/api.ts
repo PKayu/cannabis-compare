@@ -128,6 +128,32 @@ export const api = {
     updatePreferences: (data: any) => apiClient.put('/api/notifications/preferences', data),
   },
 
+  // Admin
+  admin: {
+    dashboard: () => apiClient.get('/api/admin/dashboard'),
+    flags: {
+      pending: (params?: any) => apiClient.get('/api/admin/flags/pending', { params }),
+      stats: () => apiClient.get('/api/admin/flags/stats'),
+      approve: (flagId: string, notes?: string) =>
+        apiClient.post(`/api/admin/flags/approve/${flagId}`, { notes }),
+      reject: (flagId: string, notes?: string) =>
+        apiClient.post(`/api/admin/flags/reject/${flagId}`, { notes }),
+    },
+    scrapers: {
+      health: () => apiClient.get('/api/admin/scrapers/health'),
+      runs: (params?: any) => apiClient.get('/api/admin/scrapers/runs', { params }),
+      trigger: (scraperId: string) => apiClient.post(`/api/admin/scrapers/run/${scraperId}`),
+      pause: (scraperId: string) => apiClient.post(`/api/admin/scrapers/scheduler/pause/${scraperId}`),
+      resume: (scraperId: string) => apiClient.post(`/api/admin/scrapers/scheduler/resume/${scraperId}`),
+      schedulerStatus: () => apiClient.get('/api/admin/scrapers/scheduler/status'),
+    },
+    quality: {
+      metrics: () => apiClient.get('/api/admin/scrapers/quality/metrics'),
+      freshness: () => apiClient.get('/api/admin/scrapers/dispensaries/freshness'),
+      outliers: (limit = 50) => apiClient.get('/api/admin/outliers', { params: { limit } }),
+    },
+  },
+
   // Generic methods for direct API calls
   get: (url: string, config?: any) => apiClient.get(url, config),
   post: (url: string, data?: any, config?: any) => apiClient.post(url, data, config),

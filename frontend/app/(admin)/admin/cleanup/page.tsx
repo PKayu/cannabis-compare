@@ -97,12 +97,11 @@ export default function CleanupQueuePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-2 text-gray-900">Cleanup Queue</h1>
-        <p className="text-gray-600 mb-6">
-          Review and resolve product naming discrepancies from scraped data.
-        </p>
+    <div>
+      <h2 className="text-2xl font-bold mb-2 text-gray-900">Cleanup Queue</h2>
+      <p className="text-gray-600 mb-6">
+        Review and resolve product naming discrepancies from scraped data.
+      </p>
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
@@ -150,7 +149,6 @@ export default function CleanupQueuePage() {
             ))}
           </div>
         )}
-      </div>
     </div>
   )
 }

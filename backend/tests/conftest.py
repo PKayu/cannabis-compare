@@ -50,12 +50,64 @@ def db_session():
         Base.metadata.drop_all(bind=engine)
 
 
+@pytest.fixture(scope="session")
+def test_app():
+    """
+    Create a test FastAPI app without lifespan for testing
+
+    This avoids the scheduler startup issues that occur with the main app's lifespan
+    """
+    from fastapi import FastAPI
+    from routers import (
+        admin_flags, admin_scrapers, search, products, dispensaries, auth, users,
+        scrapers, reviews, watchlist, notifications
+    )
+    from fastapi.middleware.cors import CORSMiddleware
+
+    # Create test app without lifespan
+    test_app_instance = FastAPI(
+        title="Utah Cannabis Aggregator API (Test)",
+        description="REST API for testing",
+        version="0.1.0",
+    )
+
+    # Register routers
+    test_app_instance.include_router(admin_flags.router)
+    test_app_instance.include_router(admin_scrapers.router)
+    test_app_instance.include_router(auth.router)
+    test_app_instance.include_router(users.router)
+    test_app_instance.include_router(reviews.router)
+    test_app_instance.include_router(search.router)
+    test_app_instance.include_router(products.router)
+    test_app_instance.include_router(dispensaries.router)
+    test_app_instance.include_router(scrapers.router)
+    test_app_instance.include_router(watchlist.router)
+    test_app_instance.include_router(notifications.router)
+
+    # Configure CORS
+    test_app_instance.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Health check endpoint
+    @test_app_instance.get("/health")
+    async def health_check():
+        return {"status": "healthy", "version": "0.1.0"}
+
+    return test_app_instance
+
+
 @pytest.fixture(scope="function")
-def client(db_session):
+def client(test_app, db_session):
     """
     Create a test client with test database dependency override
 
     Args:
+        test_app: Test FastAPI app without lifespan
         db_session: Test database session
 
     Yields:
@@ -68,14 +120,14 @@ def client(db_session):
             pass
 
     # Override database dependency
-    app.dependency_overrides[get_db] = override_get_db
+    test_app.dependency_overrides[get_db] = override_get_db
 
     # Create test client
-    with TestClient(app) as test_client:
+    with TestClient(test_app) as test_client:
         yield test_client
 
     # Clean up
-    app.dependency_overrides.clear()
+    test_app.dependency_overrides.clear()
 
 
 @pytest.fixture

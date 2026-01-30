@@ -12,6 +12,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.jobstores.memory import MemoryJobStore
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.executors.asyncio import AsyncIOExecutor
 from typing import Type, Dict, Optional, List
 from datetime import datetime
@@ -24,6 +25,49 @@ from services.scrapers.registry import ScraperRegistry
 logger = logging.getLogger(__name__)
 
 
+# Standalone function for scheduled jobs (must be at module level for serialization)
+async def run_scheduled_scraper(scraper_class: Type[BaseScraper], dispensary_id: str) -> dict:
+    """
+    Execute a scraper via ScraperRunner with full DB logging.
+
+    This is a standalone function (not a method) to avoid serialization issues
+    with APScheduler's SQLAlchemy job store.
+
+    Args:
+        scraper_class: The scraper class to instantiate and run
+        dispensary_id: The dispensary ID to pass to the scraper
+
+    Returns:
+        Scraper run result dict
+    """
+    from database import SessionLocal
+    from services.scraper_runner import ScraperRunner
+
+    scraper = scraper_class(dispensary_id)
+    logger.info(f"Scheduler running {scraper.name}")
+    db = SessionLocal()
+    try:
+        runner = ScraperRunner(db, triggered_by="scheduler")
+        result = await runner.run_by_id(scraper.dispensary_id)
+
+        if result["status"] != "success":
+            logger.error(
+                f"{scraper.name} finished with status: {result['status']} "
+                f"- {result.get('error', result.get('message', ''))}"
+            )
+
+        return result
+    except Exception as e:
+        logger.exception(f"Unexpected error running {scraper.name}: {e}")
+        return {
+            "dispensary_id": scraper.dispensary_id,
+            "status": "error",
+            "error": str(e)
+        }
+    finally:
+        db.close()
+
+
 class ScraperScheduler:
     """
     Manages scheduled scraper execution.
@@ -34,11 +78,21 @@ class ScraperScheduler:
         await scheduler.start()
     """
 
-    def __init__(self):
-        """Initialize the scheduler with default configuration"""
-        jobstores = {
-            'default': MemoryJobStore()
-        }
+    def __init__(self, database_url: Optional[str] = None):
+        """Initialize the scheduler with persistent or in-memory job storage.
+
+        Args:
+            database_url: If provided, uses SQLAlchemy persistent job store.
+                          Otherwise falls back to in-memory storage.
+        """
+        if database_url:
+            jobstores = {
+                'default': SQLAlchemyJobStore(url=database_url)
+            }
+        else:
+            jobstores = {
+                'default': MemoryJobStore()
+            }
         executors = {
             'default': AsyncIOExecutor()
         }
@@ -106,31 +160,27 @@ class ScraperScheduler:
         if job_id in self._scrapers:
             self.remove_scraper_job(dispensary_id)
 
-        # Create scraper instance
-        scraper = scraper_class(dispensary_id)
-
-        # Add job to scheduler
+        # Add job to scheduler using standalone function (serializable)
         job = self.scheduler.add_job(
-            func=self._run_scraper,
+            func=run_scheduled_scraper,
             trigger=IntervalTrigger(minutes=minutes),
             id=job_id,
-            name=f"{scraper.name} for {dispensary_id}",
-            args=[scraper],
+            name=f"{scraper_class.__name__} for {dispensary_id}",
+            args=[scraper_class, dispensary_id],
             replace_existing=True
         )
 
-        # Track scraper info
+        # Track scraper info (don't store scraper instance to avoid serialization issues)
         self._scrapers[job_id] = {
             "dispensary_id": dispensary_id,
-            "scraper_class": scraper_class.__name__,
+            "scraper_class": scraper_class,
             "interval_minutes": minutes,
             "job": job,
-            "scraper": scraper,
             "added_at": datetime.utcnow()
         }
 
         logger.info(
-            f"Scheduled {scraper.name} for {dispensary_id} "
+            f"Scheduled {scraper_class.__name__} for {dispensary_id} "
             f"every {minutes} minutes"
         )
 
@@ -161,28 +211,25 @@ class ScraperScheduler:
         """
         job_id = f"scraper_daily_{dispensary_id}"
 
-        scraper = scraper_class(dispensary_id)
-
         job = self.scheduler.add_job(
-            func=self._run_scraper,
+            func=run_scheduled_scraper,
             trigger=CronTrigger(hour=hour, minute=minute),
             id=job_id,
-            name=f"Daily {scraper.name} for {dispensary_id}",
-            args=[scraper],
+            name=f"Daily {scraper_class.__name__} for {dispensary_id}",
+            args=[scraper_class, dispensary_id],
             replace_existing=True
         )
 
         self._scrapers[job_id] = {
             "dispensary_id": dispensary_id,
-            "scraper_class": scraper_class.__name__,
+            "scraper_class": scraper_class,
             "schedule": f"Daily at {hour:02d}:{minute:02d}",
             "job": job,
-            "scraper": scraper,
             "added_at": datetime.utcnow()
         }
 
         logger.info(
-            f"Scheduled daily {scraper.name} for {dispensary_id} "
+            f"Scheduled daily {scraper_class.__name__} for {dispensary_id} "
             f"at {hour:02d}:{minute:02d}"
         )
 
@@ -245,72 +292,23 @@ class ScraperScheduler:
         """
         job_id = f"scraper_{dispensary_id}"
         if job_id in self._scrapers:
-            scraper = self._scrapers[job_id]["scraper"]
-            return await self._run_scraper(scraper)
+            info = self._scrapers[job_id]
+            scraper_class = info["scraper_class"]
+            return await run_scheduled_scraper(scraper_class, dispensary_id)
         return None
-
-    async def _run_scraper(self, scraper: BaseScraper) -> dict:
-        """
-        Execute a scraper with error handling.
-
-        This is the function called by the scheduler.
-        """
-        logger.info(f"Running {scraper.name}")
-
-        try:
-            result = await scraper.run_with_retries(max_retries=3)
-
-            if result["status"] == "success":
-                # Process results (update database, etc.)
-                await self._process_scraper_results(result)
-            else:
-                logger.error(
-                    f"{scraper.name} failed: {result.get('error', 'Unknown error')}"
-                )
-
-            return result
-
-        except Exception as e:
-            logger.exception(f"Unexpected error running {scraper.name}: {e}")
-            return {
-                "dispensary_id": scraper.dispensary_id,
-                "status": "error",
-                "error": str(e)
-            }
-
-    async def _process_scraper_results(self, result: dict):
-        """
-        Process scraper results and update database.
-
-        This method should be overridden or extended to handle
-        database updates based on scraper results.
-        """
-        # Import here to avoid circular imports
-        # This would typically use ConfidenceScorer to process products
-
-        products = result.get("products", [])
-        promotions = result.get("promotions", [])
-
-        logger.info(
-            f"Processing {len(products)} products and {len(promotions)} promotions "
-            f"for {result['dispensary_id']}"
-        )
-
-        # TODO: Integrate with ConfidenceScorer to process products
-        # and update Price/Promotion tables
 
     def get_all_jobs(self) -> List[dict]:
         """Get information about all scheduled jobs"""
         jobs = []
         for job_id, info in self._scrapers.items():
             job = info["job"]
+            scraper_class = info["scraper_class"]
             jobs.append({
                 "job_id": job_id,
                 "dispensary_id": info["dispensary_id"],
-                "scraper": info["scraper_class"],
+                "scraper": scraper_class.__name__,
                 "next_run": job.next_run_time.isoformat() if job.next_run_time else None,
                 "is_paused": job.next_run_time is None,
-                "last_run": info["scraper"].get_last_run(),
                 "interval": info.get("interval_minutes", info.get("schedule", "N/A"))
             })
         return jobs
@@ -321,18 +319,12 @@ class ScraperScheduler:
         if job_id in self._scrapers:
             info = self._scrapers[job_id]
             job = info["job"]
-            scraper = info["scraper"]
             return {
                 "job_id": job_id,
                 "dispensary_id": info["dispensary_id"],
-                "scraper": info["scraper_class"],
+                "scraper": info["scraper_class"].__name__,
                 "next_run": job.next_run_time.isoformat() if job.next_run_time else None,
                 "is_paused": job.next_run_time is None,
-                "last_run": scraper.get_last_run(),
-                "last_result_status": (
-                    scraper.get_last_result().get("status")
-                    if scraper.get_last_result() else None
-                ),
                 "interval_minutes": info.get("interval_minutes"),
                 "added_at": info["added_at"].isoformat()
             }
@@ -353,11 +345,16 @@ class ScraperScheduler:
 _scheduler: Optional[ScraperScheduler] = None
 
 
-def get_scheduler() -> ScraperScheduler:
-    """Get or create the global scheduler instance"""
+def get_scheduler(database_url: Optional[str] = None) -> ScraperScheduler:
+    """Get or create the global scheduler instance.
+
+    Args:
+        database_url: Database URL for persistent job storage.
+                      Only used when creating a new instance.
+    """
     global _scheduler
     if _scheduler is None:
-        _scheduler = ScraperScheduler()
+        _scheduler = ScraperScheduler(database_url=database_url)
     return _scheduler
 
 

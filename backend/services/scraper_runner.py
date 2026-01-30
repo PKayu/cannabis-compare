@@ -19,7 +19,7 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from models import Product, Price, Dispensary
+from models import Product, Price, Dispensary, ScraperRun
 from services.product_matcher import ProductMatcher
 from services.scrapers.registry import ScraperRegistry
 
@@ -34,25 +34,22 @@ class ScraperRunner:
     any registered scraper by its ID.
     """
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, triggered_by: str = "manual"):
         """
         Initialize the scraper runner.
 
         Args:
             db: SQLAlchemy database session
+            triggered_by: Who triggered the run ("scheduler", "manual", or admin user id)
         """
         self.db = db
+        self.triggered_by = triggered_by
 
     async def run_by_id(self, scraper_id: str) -> Dict[str, Any]:
         """
         Run a scraper by its registry ID and save results to database.
 
-        This is the primary method for running scrapers. It:
-        1. Looks up the scraper configuration in the registry
-        2. Instantiates the scraper
-        3. Executes the scrape
-        4. Processes products through ProductMatcher
-        5. Updates prices in the database
+        Every execution is logged to the scraper_runs table for monitoring.
 
         Args:
             scraper_id: The scraper's registry ID (e.g., "wholesomeco", "beehive")
@@ -63,6 +60,7 @@ class ScraperRunner:
                 - products_found: Number of products scraped
                 - dispensary: Name of the dispensary
                 - error: Error message if status is "error"
+                - run_id: ID of the ScraperRun log entry
 
         Raises:
             ValueError: If scraper_id is not found in registry
@@ -83,60 +81,98 @@ class ScraperRunner:
                 "scraper_id": scraper_id
             }
 
-        logger.info(f"Starting {config.name} scraper...")
+        # Create run log entry
+        run_log = ScraperRun(
+            scraper_id=scraper_id,
+            scraper_name=config.name,
+            triggered_by=self.triggered_by,
+            status="running"
+        )
+        self.db.add(run_log)
+        self.db.flush()
 
-        # 1. Instantiate and run the scraper
-        scraper = config.scraper_class(dispensary_id=scraper_id)
-        products = await scraper.scrape_products()
+        logger.info(f"Starting {config.name} scraper (run_id={run_log.id})...")
 
-        if not products:
-            logger.warning(f"No products found for {config.name}")
+        try:
+            # 1. Instantiate and run the scraper
+            scraper = config.scraper_class(dispensary_id=scraper_id)
+            products = await scraper.scrape_products()
+
+            if not products:
+                logger.warning(f"No products found for {config.name}")
+                run_log.complete(status="warning")
+                self.db.commit()
+                return {
+                    "status": "warning",
+                    "message": "No products found",
+                    "count": 0,
+                    "scraper_id": scraper_id,
+                    "run_id": run_log.id
+                }
+
+            logger.info(f"Scraped {len(products)} products from {config.name}. Saving to DB...")
+
+            # 2. Get or create the dispensary record
+            dispensary = self._get_or_create_dispensary(
+                name=config.dispensary_name,
+                location=config.dispensary_location
+            )
+
+            # Link run log to dispensary now that we have it
+            run_log.dispensary_id = dispensary.id
+
+            # 3. Process each product through ProductMatcher
+            matcher = ProductMatcher(self.db)
+            processed_count = 0
+
+            for scraped in products:
+                try:
+                    product = matcher.match_or_create(scraped)
+                    self._update_price(
+                        product,
+                        dispensary,
+                        scraped.price,
+                        scraped.in_stock
+                    )
+                    processed_count += 1
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to process product '{scraped.name}': {e}"
+                    )
+                    continue
+
+            # 4. Complete run log and commit all changes
+            run_log.complete(
+                status="success",
+                products_found=len(products),
+                products_processed=processed_count
+            )
+            self.db.commit()
+            logger.info(f"Database import complete for {config.name}!")
+
             return {
-                "status": "warning",
-                "message": "No products found",
-                "count": 0,
-                "scraper_id": scraper_id
+                "status": "success",
+                "products_found": len(products),
+                "products_processed": processed_count,
+                "dispensary": config.dispensary_name,
+                "scraper_id": scraper_id,
+                "run_id": run_log.id
             }
 
-        logger.info(f"Scraped {len(products)} products from {config.name}. Saving to DB...")
-
-        # 2. Get or create the dispensary record
-        dispensary = self._get_or_create_dispensary(
-            name=config.dispensary_name,
-            location=config.dispensary_location
-        )
-
-        # 3. Process each product through ProductMatcher
-        matcher = ProductMatcher(self.db)
-        processed_count = 0
-
-        for scraped in products:
-            try:
-                product = matcher.match_or_create(scraped)
-                self._update_price(
-                    product,
-                    dispensary,
-                    scraped.price,
-                    scraped.in_stock
-                )
-                processed_count += 1
-            except Exception as e:
-                logger.warning(
-                    f"Failed to process product '{scraped.name}': {e}"
-                )
-                continue
-
-        # 4. Commit all changes
-        self.db.commit()
-        logger.info(f"✅ Database import complete for {config.name}!")
-
-        return {
-            "status": "success",
-            "products_found": len(products),
-            "products_processed": processed_count,
-            "dispensary": config.dispensary_name,
-            "scraper_id": scraper_id
-        }
+        except Exception as e:
+            logger.error(f"Scraper {scraper_id} failed: {e}", exc_info=True)
+            run_log.complete(
+                status="error",
+                error_message=str(e),
+                error_type=type(e).__name__
+            )
+            self.db.commit()
+            return {
+                "status": "error",
+                "error": str(e),
+                "scraper_id": scraper_id,
+                "run_id": run_log.id
+            }
 
     async def run_all(self) -> Dict[str, Any]:
         """

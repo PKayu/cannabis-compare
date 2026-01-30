@@ -11,6 +11,7 @@ Tables:
 - Review: User reviews with intention tags
 - ScraperFlag: Products requiring manual normalization review
 - Promotion: Recurring and one-time promotional offers
+- ScraperRun: Log of every scraper execution for monitoring
 """
 from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
@@ -356,3 +357,52 @@ class NotificationPreference(Base):
 
     def __repr__(self):
         return f"<NotificationPreference user={self.user_id} frequency={self.email_frequency}>"
+
+
+class ScraperRun(Base):
+    """Log of every scraper execution for monitoring and diagnostics."""
+    __tablename__ = "scraper_runs"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+
+    # Scraper identity
+    scraper_id = Column(String, nullable=False, index=True)
+    scraper_name = Column(String, nullable=False)
+    dispensary_id = Column(String, ForeignKey("dispensaries.id"), nullable=True, index=True)
+
+    # Execution details
+    started_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    completed_at = Column(DateTime, nullable=True)
+    duration_seconds = Column(Float, nullable=True)
+
+    # Results
+    status = Column(String, nullable=False, default="running", index=True)  # running, success, error, warning
+    products_found = Column(Integer, default=0)
+    products_processed = Column(Integer, default=0)
+    flags_created = Column(Integer, default=0)
+
+    # Error tracking
+    error_message = Column(Text, nullable=True)
+    error_type = Column(String, nullable=True)
+    retry_count = Column(Integer, default=0)
+
+    # Metadata
+    triggered_by = Column(String, nullable=True)  # "scheduler", "manual", or admin user id
+
+    # Relationships
+    dispensary = relationship("Dispensary")
+
+    def complete(self, status: str, products_found: int = 0, products_processed: int = 0,
+                 flags_created: int = 0, error_message: str = None, error_type: str = None):
+        """Mark run as completed with results."""
+        self.status = status
+        self.completed_at = datetime.utcnow()
+        self.duration_seconds = (self.completed_at - self.started_at).total_seconds()
+        self.products_found = products_found
+        self.products_processed = products_processed
+        self.flags_created = flags_created
+        self.error_message = error_message
+        self.error_type = error_type
+
+    def __repr__(self):
+        return f"<ScraperRun {self.scraper_id} {self.status} at {self.started_at}>"

@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from routers import (
-    admin_flags, search, products, dispensaries, auth, users,
+    admin_flags, admin_scrapers, search, products, dispensaries, auth, users,
     scrapers, reviews, watchlist, notifications
 )
 
@@ -49,21 +49,20 @@ async def lifespan(_app: FastAPI):
         status = "enabled" if config.enabled else "disabled"
         logger.info(f"  - {config.name} ({scraper_id}): {status}")
 
-    # Optionally start the scraper scheduler
-    # Uncomment the following lines to enable automatic scheduling:
-    # from services.scheduler import get_scheduler, register_all_scrapers
-    # scheduler = get_scheduler()
-    # register_all_scrapers(scheduler)
-    # await scheduler.start()
-    # logger.info("Scraper scheduler started")
+    # Start the scraper scheduler with persistent job storage
+    from services.scheduler import get_scheduler, register_all_scrapers
+    from config import settings
+    scheduler = get_scheduler(database_url=settings.database_url)
+    register_all_scrapers(scheduler)
+    await scheduler.start()
+    logger.info(f"Scraper scheduler started with {scheduler.job_count} jobs")
 
     yield
 
-    # Cleanup on shutdown
-    # from services.scheduler import get_scheduler
-    # scheduler = get_scheduler()
-    # await scheduler.stop()
-    # logger.info("Scraper scheduler stopped")
+    # Graceful shutdown - wait for running jobs to complete
+    scheduler = get_scheduler()
+    await scheduler.stop(wait=True)
+    logger.info("Scraper scheduler stopped")
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -75,6 +74,7 @@ app = FastAPI(
 
 # Register routers
 app.include_router(admin_flags.router)
+app.include_router(admin_scrapers.router)
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(reviews.router)

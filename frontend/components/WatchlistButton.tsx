@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/AuthContext'
+import { useToast } from '@/components/Toast'
 
 interface WatchlistButtonProps {
   productId: string
@@ -11,10 +12,12 @@ interface WatchlistButtonProps {
 
 export default function WatchlistButton({ productId, initialWatched = false }: WatchlistButtonProps) {
   const { user } = useAuth()
+  const { showToast } = useToast()
   const [watched, setWatched] = useState(initialWatched)
   const [loading, setLoading] = useState(false)
   const [showConfig, setShowConfig] = useState(false)
   const [threshold, setThreshold] = useState(10)
+  const [isBouncing, setIsBouncing] = useState(false)
 
   // Check watchlist status when user or productId changes
   useEffect(() => {
@@ -41,11 +44,16 @@ export default function WatchlistButton({ productId, initialWatched = false }: W
   const handleToggle = async () => {
     setLoading(true)
 
+    // Trigger bounce animation
+    setIsBouncing(true)
+    setTimeout(() => setIsBouncing(false), 300)
+
     try {
       if (watched) {
         await api.watchlist.remove(productId)
         setWatched(false)
         setShowConfig(false)
+        showToast('Removed from watchlist', 'info')
       } else {
         await api.watchlist.add({
           product_id: productId,
@@ -54,6 +62,7 @@ export default function WatchlistButton({ productId, initialWatched = false }: W
           price_drop_threshold: threshold
         })
         setWatched(true)
+        showToast('Added to your list! ✓', 'success')
       }
     } catch (error: any) {
       if (error.response?.status === 401) {
@@ -61,7 +70,7 @@ export default function WatchlistButton({ productId, initialWatched = false }: W
         window.location.href = `/auth/login?returnUrl=${encodeURIComponent(window.location.pathname)}`
       } else {
         console.error('Failed to toggle watchlist:', error)
-        alert('Failed to update watchlist. Please try again.')
+        showToast('Failed to update watchlist. Please try again.', 'info')
       }
     } finally {
       setLoading(false)
@@ -95,7 +104,7 @@ export default function WatchlistButton({ productId, initialWatched = false }: W
           watched
             ? 'bg-cannabis-100 text-cannabis-700 border-2 border-cannabis-300 hover:bg-cannabis-200'
             : 'bg-white text-gray-700 border-2 border-gray-300 hover:bg-gray-50'
-        } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+        } ${loading ? 'opacity-50 cursor-not-allowed' : ''} ${isBouncing ? 'animate-star-bounce' : ''}`}
       >
         <span className="text-xl">{watched ? '★' : '☆'}</span>
         <span className="font-medium">{watched ? 'Watching' : 'Watch'}</span>

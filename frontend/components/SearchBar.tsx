@@ -12,11 +12,22 @@ interface Suggestion {
   type: string
 }
 
+// Fun placeholder suggestions that rotate
+const PLACEHOLDER_SUGGESTIONS = [
+  "Search for strains, brands, or effects...",
+  "Try 'Gorilla Glue'...",
+  "Search for 'Blue Dream'...",
+  "Find 'OG Kush'...",
+  "Look up 'Girl Scout Cookies'...",
+  "Search for 'Sour Diesel'...",
+]
+
 export default function SearchBar({ onSearch }: SearchBarProps) {
   const [query, setQuery] = useState('')
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [placeholderIndex, setPlaceholderIndex] = useState(0)
   const wrapperRef = useRef<HTMLDivElement>(null)
 
   // Handle click outside to close suggestions
@@ -30,6 +41,17 @@ export default function SearchBar({ onSearch }: SearchBarProps) {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  // Rotate placeholder text every 3 seconds (only when not focused and empty)
+  useEffect(() => {
+    if (query) return // Don't rotate if user has typed something
+
+    const interval = setInterval(() => {
+      setPlaceholderIndex((prev) => (prev + 1) % PLACEHOLDER_SUGGESTIONS.length)
+    }, 3000)
+
+    return () => clearInterval(interval)
+  }, [query])
 
   // Debounced autocomplete
   useEffect(() => {
@@ -83,12 +105,14 @@ export default function SearchBar({ onSearch }: SearchBarProps) {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search for strains, brands, or effects..."
-              className="w-full px-4 py-3 pl-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cannabis-500 focus:border-transparent"
+              placeholder={PLACEHOLDER_SUGGESTIONS[placeholderIndex]}
+              className="w-full px-4 py-3 pl-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cannabis-500 focus:border-transparent placeholder-transition"
               aria-label="Search products"
             />
             <svg
-              className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400"
+              className={`absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 transition-all duration-300 ${
+                query ? 'text-cannabis-600 animate-pulse-slow' : 'text-gray-400'
+              }`}
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"

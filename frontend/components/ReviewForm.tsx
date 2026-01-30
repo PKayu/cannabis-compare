@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/AuthContext'
+import { useToast } from '@/components/Toast'
 
 interface ReviewFormProps {
   productId: string
@@ -28,6 +29,7 @@ const moodIntentions = [
 
 export default function ReviewForm({ productId, onSubmit, onCancel }: ReviewFormProps) {
   const { user, loading: authLoading } = useAuth()
+  const { showToast } = useToast()
   const [formData, setFormData] = useState({
     effects_rating: 3,
     taste_rating: 3,
@@ -89,6 +91,9 @@ export default function ReviewForm({ productId, onSubmit, onCancel }: ReviewForm
         cultivation_date: '',
         comment: ''
       })
+
+      // Show celebration toast
+      showToast('Review shared! 🌿', 'celebration')
 
       if (onSubmit) onSubmit()
     } catch (err: any) {
@@ -249,6 +254,15 @@ interface RatingInputProps {
 }
 
 function RatingInput({ label, value, onChange }: RatingInputProps) {
+  const [bouncedRating, setBouncedRating] = React.useState<number | null>(null)
+
+  const handleRatingClick = (rating: number) => {
+    setBouncedRating(rating)
+    onChange(rating)
+    // Reset bounce animation after it completes
+    setTimeout(() => setBouncedRating(null), 300)
+  }
+
   return (
     <div className="mb-4">
       <label className="block font-semibold mb-2 text-gray-700">{label}</label>
@@ -257,11 +271,13 @@ function RatingInput({ label, value, onChange }: RatingInputProps) {
           <button
             key={rating}
             type="button"
-            onClick={() => onChange(rating)}
-            className={`w-12 h-12 rounded border-2 transition-all ${
+            onClick={() => handleRatingClick(rating)}
+            className={`w-12 h-12 rounded border-2 transition-all animate-star-wiggle ${
               value >= rating
                 ? 'border-cannabis-600 bg-cannabis-100 text-cannabis-700'
                 : 'border-gray-300 bg-white text-gray-400 hover:border-cannabis-400'
+            } ${
+              bouncedRating === rating ? 'animate-star-bounce' : ''
             }`}
           >
             <span className="text-xl">{rating}★</span>

@@ -1,4 +1,7 @@
-import React from 'react'
+'use client'
+
+import React, { useState } from 'react'
+import { useToast } from '@/components/Toast'
 
 interface FilterPanelProps {
   filters: {
@@ -15,6 +18,9 @@ interface FilterPanelProps {
 }
 
 export default function FilterPanel({ filters, onChange }: FilterPanelProps) {
+  const { showToast } = useToast()
+  const [isShaking, setIsShaking] = useState(false)
+
   const handleChange = (field: string, value: any) => {
     onChange({
       ...filters,
@@ -23,6 +29,10 @@ export default function FilterPanel({ filters, onChange }: FilterPanelProps) {
   }
 
   const handleReset = () => {
+    // Trigger shake animation
+    setIsShaking(true)
+    setTimeout(() => setIsShaking(false), 500)
+
     onChange({
       productType: '',
       minPrice: undefined,
@@ -33,6 +43,8 @@ export default function FilterPanel({ filters, onChange }: FilterPanelProps) {
       maxCbd: undefined,
       sortBy: 'relevance'
     })
+
+    showToast('Filters cleared! Starting fresh...', 'info')
   }
 
   return (
@@ -41,7 +53,7 @@ export default function FilterPanel({ filters, onChange }: FilterPanelProps) {
         <h2 className="text-lg font-semibold text-gray-900">Filters</h2>
         <button
           onClick={handleReset}
-          className="text-sm text-cannabis-600 hover:text-cannabis-700 font-medium"
+          className={`text-sm text-cannabis-600 hover:text-cannabis-700 font-medium ${isShaking ? 'animate-shake' : ''}`}
         >
           Reset
         </button>

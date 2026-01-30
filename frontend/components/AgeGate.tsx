@@ -45,10 +45,13 @@ export default function AgeGate({ onVerify }: AgeGateProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 shadow-lg">
-        <h2 className="text-2xl font-bold mb-4 text-cannabis-700">Age Verification Required</h2>
+      <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 shadow-lg animate-modal-in">
+        <div className="text-center mb-4">
+          <span className="text-4xl" role="img" aria-label="Welcome">👋</span>
+        </div>
+        <h2 className="text-2xl font-bold mb-4 text-cannabis-700 text-center">Welcome! Let's verify your age</h2>
 
-        <p className="text-gray-600 mb-6 text-sm leading-relaxed">
+        <p className="text-gray-600 mb-6 text-sm leading-relaxed text-center">
           This site is only for individuals 21 years of age or older. We require age verification to access cannabis-related information and content.
         </p>
 
@@ -84,8 +87,11 @@ export default function AgeGate({ onVerify }: AgeGateProps) {
 
           {/* Error Message */}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-md p-3">
-              <p className="text-red-700 text-sm">{error}</p>
+            <div className="bg-amber-50 border border-amber-200 rounded-md p-3 animate-shake">
+              <p className="text-amber-700 text-sm flex items-center gap-2">
+                <span role="img" aria-label="Alert">⚠️</span>
+                {error}
+              </p>
             </div>
           )}
 

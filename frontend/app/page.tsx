@@ -28,8 +28,8 @@ export default function Home() {
       <section className="max-w-7xl mx-auto px-4 py-16">
         <div className="grid md:grid-cols-2 gap-8 mb-16">
           {/* Feature 1: Price Comparison */}
-          <div className="bg-white rounded-lg shadow-md p-8">
-            <div className="text-4xl mb-4">💰</div>
+          <div className="bg-white rounded-lg shadow-md p-8 transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
+            <div className="text-4xl mb-4 animate-float-delayed">💰</div>
             <h2 className="text-2xl font-bold text-cannabis-700 mb-3">
               Compare Prices
             </h2>
@@ -40,8 +40,8 @@ export default function Home() {
           </div>
 
           {/* Feature 2: Community Reviews */}
-          <div className="bg-white rounded-lg shadow-md p-8">
-            <div className="text-4xl mb-4">⭐</div>
+          <div className="bg-white rounded-lg shadow-md p-8 transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
+            <div className="text-4xl mb-4 animate-float-delayed-2">⭐</div>
             <h2 className="text-2xl font-bold text-cannabis-700 mb-3">
               Read Reviews
             </h2>
@@ -55,11 +55,11 @@ export default function Home() {
         {/* CTA Buttons */}
         <div className="flex gap-4 justify-center flex-wrap">
           <Link href="/products/search">
-            <button className="bg-cannabis-600 hover:bg-cannabis-700 text-white font-bold py-3 px-8 rounded-lg transition">
+            <button className="bg-gradient-to-r from-cannabis-600 to-cannabis-500 hover:from-cannabis-700 hover:to-cannabis-600 text-white font-bold py-3 px-8 rounded-lg transition-all duration-300 hover:shadow-lg hover:scale-105 animate-pulse-slow">
               Browse Products
             </button>
           </Link>
-          <button className="bg-white text-cannabis-600 border-2 border-cannabis-600 hover:bg-cannabis-50 font-bold py-3 px-8 rounded-lg transition">
+          <button className="bg-white text-cannabis-600 border-2 border-cannabis-600 hover:bg-cannabis-50 font-bold py-3 px-8 rounded-lg transition-all duration-300 hover:shadow-md hover:scale-105">
             Learn More
           </button>
         </div>

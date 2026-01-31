@@ -4,21 +4,35 @@
 import axios from 'axios'
 import MockAdapter from 'axios-mock-adapter'
 
-// This must be defined before importing api.ts
-const mockGetSession = jest.fn()
-const mockSignOut = jest.fn()
-
+// Mock both the supabase-js library and our local wrapper
+// Use inline factory to avoid hoisting issues
 jest.mock('@supabase/supabase-js', () => ({
   createClient: jest.fn(() => ({
     auth: {
-      getSession: mockGetSession,
-      signOut: mockSignOut,
+      getSession: jest.fn(() => Promise.resolve({ data: { session: null }, error: null })),
+      signOut: jest.fn(() => Promise.resolve({ error: null })),
     },
   })),
 }))
 
+// Mock our local supabase module to use the same mock
+// We'll get the mock reference after importing
+jest.mock('@/lib/supabase', () => ({
+  supabase: {
+    auth: {
+      getSession: jest.fn(() => Promise.resolve({ data: { session: null }, error: null })),
+      signOut: jest.fn(() => Promise.resolve({ error: null })),
+    },
+  },
+}))
+
 // Import after mocking
 import { apiClient, api } from '../api'
+import { supabase } from '../supabase'
+
+// Get reference to the mocked auth methods
+const mockGetSession = supabase.auth.getSession as jest.MockedFunction<typeof supabase.auth.getSession>
+const mockSignOut = supabase.auth.signOut as jest.MockedFunction<typeof supabase.auth.signOut>
 
 describe('API Client', () => {
   let mock: MockAdapter
@@ -95,11 +109,7 @@ describe('API Client', () => {
       expect(response.data).toEqual({ data: 'success' })
     })
 
-    it('should sign out and redirect on 401 Unauthorized', async () => {
-      // Mock window.location
-      delete (window as any).location
-      window.location = { href: '', pathname: '/profile' } as any
-
+    it('should sign out on 401 Unauthorized but NOT redirect', async () => {
       mock.onGet('/test').reply(401, { detail: 'Unauthorized' })
 
       await expect(apiClient.get('/test')).rejects.toThrow()
@@ -107,8 +117,8 @@ describe('API Client', () => {
       // Should have called sign out
       expect(mockSignOut).toHaveBeenCalled()
 
-      // Should have redirected to login with return URL
-      expect(window.location.href).toBe('/auth/login?returnUrl=%2Fprofile')
+      // NOTE: The interceptor does NOT redirect - components handle redirects
+      // This prevents infinite loops when Navigation checks auth
     })
 
     it('should reject other error codes without redirect', async () => {

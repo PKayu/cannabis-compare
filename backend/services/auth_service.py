@@ -1,7 +1,7 @@
 """
 Authentication service for JWT token management and user operations
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -48,9 +48,9 @@ def create_access_token(user_id: str, email: str, expires_delta: Optional[timede
         Encoded JWT token
     """
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(
+        expire = datetime.now(timezone.utc) + timedelta(
             minutes=settings.access_token_expire_minutes
         )
 
@@ -58,7 +58,7 @@ def create_access_token(user_id: str, email: str, expires_delta: Optional[timede
         "user_id": user_id,
         "email": email,
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": datetime.now(timezone.utc),
     }
 
     encoded_jwt = jwt.encode(

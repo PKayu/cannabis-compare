@@ -22,7 +22,21 @@ jest.mock('next/navigation', () => ({
   },
 }))
 
-// Mock Supabase client
+// Mock Supabase client - must be mocked before lib/supabase.ts is imported
+jest.mock('@supabase/supabase-js', () => ({
+  createClient: jest.fn(() => ({
+    auth: {
+      getSession: jest.fn(() => Promise.resolve({ data: { session: null }, error: null })),
+      getUser: jest.fn(() => Promise.resolve({ data: { user: null }, error: null })),
+      signOut: jest.fn(() => Promise.resolve({ error: null })),
+      onAuthStateChange: jest.fn(() => ({
+        data: { subscription: { unsubscribe: jest.fn() } },
+      })),
+    },
+  })),
+}))
+
+// Mock Supabase auth helpers
 jest.mock('@supabase/auth-helpers-nextjs', () => ({
   createClientComponentClient: jest.fn(() => ({
     auth: {

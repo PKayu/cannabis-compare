@@ -4,7 +4,7 @@ Tests for /api/products/{id}, /api/products/{id}/prices, /api/products/{id}/rela
 """
 import pytest
 from fastapi import status
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from models import Product, Brand, Price, Dispensary, Promotion
 
 
@@ -122,8 +122,8 @@ class TestProductEndpoints:
             description="20% off all products",
             discount_percentage=20.0,
             is_active=True,
-            start_date=datetime.utcnow() - timedelta(days=1),
-            end_date=datetime.utcnow() + timedelta(days=1),
+            start_date=datetime.now(timezone.utc) - timedelta(days=1),
+            end_date=datetime.now(timezone.utc) + timedelta(days=1),
             dispensary_id=self.dispensary1.id
         )
         db_session.add(promotion)
@@ -238,7 +238,7 @@ class TestProductEndpoints:
         """Test GET /api/products/{id}/pricing-history returns price history"""
         # Add price change history
         self.price1.previous_price = 50.00
-        self.price1.price_change_date = datetime.utcnow() - timedelta(days=5)
+        self.price1.price_change_date = datetime.now(timezone.utc) - timedelta(days=5)
         self.price1.price_change_percentage = -10.0
         db_session.commit()
 

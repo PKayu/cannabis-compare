@@ -17,7 +17,7 @@ Usage:
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 import logging
 import asyncio
@@ -111,14 +111,14 @@ class BaseScraper(ABC):
                 - status: "success" | "error"
                 - error: Optional error message
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         self.logger.info(f"Starting scrape for {self.name}")
 
         try:
             products = await self.scrape_products()
             promotions = await self.scrape_promotions()
 
-            self._last_run = datetime.utcnow()
+            self._last_run = datetime.now(timezone.utc)
             duration = (self._last_run - start_time).total_seconds()
 
             self.logger.info(
@@ -142,7 +142,7 @@ class BaseScraper(ABC):
                 "dispensary_id": self.dispensary_id,
                 "products": [],
                 "promotions": [],
-                "scraped_at": datetime.utcnow(),
+                "scraped_at": datetime.now(timezone.utc),
                 "status": "error",
                 "error": str(e)
             }
@@ -187,7 +187,7 @@ class BaseScraper(ABC):
             "dispensary_id": self.dispensary_id,
             "products": [],
             "promotions": [],
-            "scraped_at": datetime.utcnow(),
+            "scraped_at": datetime.now(timezone.utc),
             "status": "error",
             "error": last_error,
             "attempts": max_retries

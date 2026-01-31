@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_
 from database import get_db
 from models import Product, Price, Dispensary, Promotion
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 
 router = APIRouter(prefix="/api/products", tags=["products"])
@@ -93,7 +93,7 @@ async def get_price_comparison(
 
     # Build comparison data
     comparison = []
-    current_time = datetime.utcnow()
+    current_time = datetime.now(timezone.utc)
 
     for price in prices:
         # Find active promotions for this dispensary
@@ -260,7 +260,7 @@ async def get_pricing_history(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    start_date = datetime.utcnow() - timedelta(days=days)
+    start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
     # Get price records within the date range
     # Note: In production, you'd want a separate price_history table

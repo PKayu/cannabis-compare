@@ -4,7 +4,7 @@ Tests for scraper functionality.
 Run with: pytest backend/tests/test_scraper.py -v
 """
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from services.scrapers.base_scraper import BaseScraper, ScrapedProduct, ScrapedPromotion
 from services.scrapers.wholesome_co_scraper import WholesomeCoScraper
 
@@ -76,7 +76,7 @@ class TestScrapedPromotion:
         """Test creating a ScrapedPromotion"""
         promo = ScrapedPromotion(
             title="Medical Monday 15% Off",
-            start_date=datetime.utcnow(),
+            start_date=datetime.now(timezone.utc),
             discount_percentage=15.0,
             is_recurring=True,
             recurring_day="monday"
@@ -91,7 +91,7 @@ class TestScrapedPromotion:
         """Test ScrapedPromotion default values"""
         promo = ScrapedPromotion(
             title="Test Promo",
-            start_date=datetime.utcnow()
+            start_date=datetime.now(timezone.utc)
         )
 
         assert promo.description is None
@@ -110,7 +110,7 @@ class TestBaseScraper:
             ScrapedProduct(name="Product 1", brand="Brand", category="Flower", price=30.0)
         ]
         promotions = [
-            ScrapedPromotion(title="Promo 1", start_date=datetime.utcnow())
+            ScrapedPromotion(title="Promo 1", start_date=datetime.now(timezone.utc))
         ]
 
         scraper = MockScraper("test-dispensary", products, promotions)
@@ -174,79 +174,65 @@ class TestBaseScraper:
 class TestWholesomeCoScraper:
     """Test cases for WholesomeCoScraper"""
 
-    def test_normalize_category(self):
-        """Test category normalization"""
-        assert WholesomeCoScraper._normalize_category("flower") == "Flower"
-        assert WholesomeCoScraper._normalize_category("FLOWER") == "Flower"
-        assert WholesomeCoScraper._normalize_category("vapes") == "Vape"
-        assert WholesomeCoScraper._normalize_category("cartridge") == "Vape"
-        assert WholesomeCoScraper._normalize_category("edibles") == "Edible"
-        assert WholesomeCoScraper._normalize_category("gummy") == "Edible"
-        assert WholesomeCoScraper._normalize_category("unknown") == "Other"
-
-    def test_parse_price(self):
-        """Test price parsing"""
-        assert WholesomeCoScraper._parse_price("$45.00") == 45.00
-        assert WholesomeCoScraper._parse_price("45") == 45.00
-        assert WholesomeCoScraper._parse_price("$99.99") == 99.99
-        assert WholesomeCoScraper._parse_price("") == 0.0
-        assert WholesomeCoScraper._parse_price("invalid") == 0.0
-
-    def test_parse_percentage(self):
-        """Test percentage parsing"""
-        assert WholesomeCoScraper._parse_percentage("24.5%") == 24.5
-        assert WholesomeCoScraper._parse_percentage("24.5") == 24.5
-        assert WholesomeCoScraper._parse_percentage(24.5) == 24.5
-        assert WholesomeCoScraper._parse_percentage(None) is None
-        assert WholesomeCoScraper._parse_percentage("") is None
-
-    def test_check_recurring(self):
-        """Test recurring promotion detection"""
-        from bs4 import BeautifulSoup
-
-        # Recurring Monday promotion
-        html = '<div class="promo">Every Monday get 15% off!</div>'
-        soup = BeautifulSoup(html, "html.parser")
-        elem = soup.find("div")
-
+    def test_map_category_from_string(self):
+        """Test category mapping from string input"""
         scraper = WholesomeCoScraper("test")
-        is_recurring, day = scraper._check_recurring(elem)
+        assert scraper._map_category("flower") == "flower"
+        assert scraper._map_category("FLOWER") == "flower"
+        assert scraper._map_category("vapes") == "vaporizer"
+        assert scraper._map_category("cartridge") == "vaporizer"
+        assert scraper._map_category("edibles") == "edible"
+        assert scraper._map_category("gummy") == "edible"
+        assert scraper._map_category("pre-roll") == "pre-roll"
+        assert scraper._map_category("preroll") == "pre-roll"
+        assert scraper._map_category("concentrate") == "concentrate"
+        assert scraper._map_category("tincture") == "tincture"
+        assert scraper._map_category("topical") == "topical"
+        assert scraper._map_category("unknown") == "other"
 
-        assert is_recurring is True
-        assert day == "monday"
-
-    def test_check_recurring_not_recurring(self):
-        """Test non-recurring promotion detection"""
-        from bs4 import BeautifulSoup
-
-        html = '<div class="promo">One time sale!</div>'
-        soup = BeautifulSoup(html, "html.parser")
-        elem = soup.find("div")
-
+    def test_map_category_from_list(self):
+        """Test category mapping from list input"""
         scraper = WholesomeCoScraper("test")
-        is_recurring, day = scraper._check_recurring(elem)
+        assert scraper._map_category(["flower", "indica"]) == "flower"
+        assert scraper._map_category(["vape", "cartridge"]) == "vaporizer"
+        assert scraper._map_category(["edible", "gummy"]) == "edible"
+        assert scraper._map_category([]) == "other"
 
-        assert is_recurring is False
-        assert day is None
-
-    def test_extract_discount_percentage(self):
-        """Test discount percentage extraction"""
-        from bs4 import BeautifulSoup
-
-        html = '<div class="promo">Get 15% off all flowers!</div>'
-        soup = BeautifulSoup(html, "html.parser")
-        elem = soup.find("div")
-
+    def test_extract_percentage(self):
+        """Test THC/CBD percentage extraction"""
         scraper = WholesomeCoScraper("test")
-        discount = scraper._extract_discount_percentage(elem)
+        assert scraper._extract_percentage("24.5% THC") == 24.5
+        assert scraper._extract_percentage("24.5%") == 24.5
+        assert scraper._extract_percentage("THC 24.5%") == 24.5
+        assert scraper._extract_percentage("no percentage") is None
+        assert scraper._extract_percentage("") is None
+        assert scraper._extract_percentage(None) is None
 
-        assert discount == 15.0
+    def test_extract_unit_size(self):
+        """Test unit size extraction from product name"""
+        scraper = WholesomeCoScraper("test")
+        assert scraper._extract_unit_size("Gorilla Glue 3.5g") == "3.5g"
+        assert scraper._extract_unit_size("Product 1g") == "1g"
+        assert scraper._extract_unit_size("100mg edible") == "100mg"
+        assert scraper._extract_unit_size("30ml tincture") == "30ml"
+        assert scraper._extract_unit_size("no size") is None
+        assert scraper._extract_unit_size("") is None
+        assert scraper._extract_unit_size(None) is None
 
     @pytest.mark.asyncio
     async def test_scraper_initialization(self):
         """Test scraper initialization"""
         scraper = WholesomeCoScraper("wholesome-co-dispensary-id")
 
+        # Test instance attributes
         assert scraper.dispensary_id == "wholesome-co-dispensary-id"
-        assert scraper.name == "WholesomeCoScraper"
-        assert scraper.BASE_URL == "https://www.wholesomeco.com"
+        assert scraper.SHOP_URL == "https://www.wholesome.co/shop"
+        assert scraper.name == "WholesomeCoScraper"  # name property returns class name
+
+        # Test that scraper is registered in the registry
+        from services.scrapers.registry import ScraperRegistry
+        config = ScraperRegistry.get("wholesomeco")
+        assert config is not None
+        assert config.name == "WholesomeCo"
+        assert config.dispensary_name == "WholesomeCo"
+        assert config.dispensary_location == "Bountiful, UT"

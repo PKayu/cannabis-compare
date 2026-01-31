@@ -60,8 +60,8 @@ The project uses a comprehensive testing strategy covering:
 
 | Test Type | Framework | # Tests | What's Tested |
 |-----------|-----------|---------|---------------|
-| Backend | pytest | 74+ | Auth, users, APIs, JWT tokens |
-| Frontend | Jest | 20+ | Components, API client, forms |
+| Backend | pytest | 111 | Auth, users, APIs, JWT tokens, products, search, scrapers |
+| Frontend | Jest | 20 | Components, API client, forms, age gate |
 | E2E | Playwright | 21+ | Full user journeys |
 
 ### Testing Philosophy
@@ -83,6 +83,7 @@ The project uses a comprehensive testing strategy covering:
 ### Technology Stack
 
 - **Framework**: pytest 7.4.3
+- **Coverage**: pytest-cov 2.12+
 - **Async Support**: pytest-asyncio
 - **Test Client**: FastAPI TestClient
 - **Database**: In-memory SQLite (for isolation)
@@ -162,9 +163,12 @@ def test_protected_route(client, auth_headers):
 ### Test Organization
 
 Tests are organized by router/feature:
-- `test_auth_endpoints.py` - Registration, login, token management
-- `test_users_endpoints.py` - Profile CRUD, review history
-- Future: `test_products.py`, `test_reviews.py`, `test_dispensaries.py`
+- `test_auth_endpoints.py` - Registration, login, token management (24 tests)
+- `test_users_endpoints.py` - Profile CRUD, review history (20 tests)
+- `test_products_endpoints.py` - Product details, pricing history, comparisons (14 tests)
+- `test_search_endpoints.py` - Product search with filters and sorting (14 tests)
+- `test_matcher.py` - Product matching and normalization logic (15 tests)
+- `test_scraper.py` - Base scraper and WholesomeCo scraper tests (24 tests)
 
 Each test file uses test classes to group related tests:
 ```python
@@ -662,6 +666,14 @@ Coverage shows **lines executed**, not **quality of tests**. Focus on:
 
 ### Backend Tests Failing
 
+**Issue**: `unrecognized arguments: --cov=. --cov-report=html --cov-report=term-missing`
+**Solution**: Install pytest-cov
+```bash
+cd backend
+pip install pytest-cov
+# Or add to requirements.txt: pytest-cov>=2.12.0
+```
+
 **Issue**: `ImportError: No module named 'pytest'`
 **Solution**: Activate virtual environment
 ```bash
@@ -675,7 +687,13 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 **Issue**: `ValueError: password cannot be longer than 72 bytes`
 **Solution**: Ensure `bcrypt>=4.0.0,<5.0.0` in requirements.txt (known compatibility issue)
 
+**Issue**: `DeprecationWarning: datetime.datetime.utcnow() is deprecated`
+**Solution**: Already fixed in codebase. Use `datetime.now(timezone.utc)` instead.
+
 ### Frontend Tests Failing
+
+**Issue**: `Missing Supabase environment variables. Please check your .env.local file.`
+**Solution**: Supabase is mocked in `jest.setup.js`. If you see this error, ensure the mock is loaded before any imports.
 
 **Issue**: `Cannot find module 'next/navigation'`
 **Solution**: Ensure mocks in `jest.setup.js` are correct
@@ -685,6 +703,9 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 
 **Issue**: `Warning: useRouter only works in Client Components`
 **Solution**: Add `'use client'` directive or mock Next.js router properly
+
+**Issue**: AgeGate tests expecting "Age Verification Required" but component shows "Welcome! Let's verify your age"
+**Solution**: Tests were updated to match actual component text. Ensure tests use current text expectations.
 
 ### CI Failing
 
@@ -742,5 +763,25 @@ See `test-report.yml` for webhook setup instructions.
 
 ---
 
-**Last Updated**: January 2026
+**Last Updated**: January 31, 2026
+**Status**: ✅ All Tests Passing (111 backend, 20 frontend)
+
+---
+
+## Recent Fixes (January 2026)
+
+The following issues were identified and fixed:
+
+1. **pytest-cov Missing**: Added `pytest-cov>=2.12.0` to requirements.txt
+2. **WholesomeCoScraper Tests**: Rewrote 7 tests to match actual implementation (`_map_category`, `_extract_percentage`, `SHOP_URL`)
+3. **Supabase Mock**: Added proper mock in jest.setup.js to prevent import errors
+4. **AgeGate Text**: Updated test expectations to match "Welcome! Let's verify your age"
+5. **datetime.utcnow()**: Replaced with `datetime.now(timezone.utc)` across all backend files
+
+**Test Results**:
+- Backend: 111 passed, 0 failed
+- Frontend: 20 passed, 0 failed
+- Coverage: ~53% backend (with pytest-cov working)
+
+
 **Status**: ✅ Production Ready

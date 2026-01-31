@@ -16,7 +16,7 @@ test.describe('Age Gate', () => {
     await page.goto('/')
 
     // Age gate should be visible
-    await expect(page.getByText('Age Verification Required')).toBeVisible()
+    await expect(page.getByText('Welcome! Let's verify your age')).toBeVisible()
     await expect(page.getByLabel('Date of Birth')).toBeVisible()
     await expect(page.getByRole('button', { name: /continue/i })).toBeVisible()
   })
@@ -38,7 +38,7 @@ test.describe('Age Gate', () => {
     await expect(page.getByText(/you must be 21 years or older/i)).toBeVisible()
 
     // Should still be on age gate (not dismissed)
-    await expect(page.getByText('Age Verification Required')).toBeVisible()
+    await expect(page.getByText('Welcome! Let's verify your age')).toBeVisible()
   })
 
   test('should accept users over 21 and persist verification', async ({ page }) => {
@@ -51,7 +51,7 @@ test.describe('Age Gate', () => {
     await page.getByRole('button', { name: /continue/i }).click()
 
     // Age gate should disappear and home page should load
-    await expect(page.getByText('Age Verification Required')).not.toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Welcome! Let's verify your age')).not.toBeVisible({ timeout: 5000 })
 
     // Verify localStorage was set
     const ageVerified = await page.evaluate(() => localStorage.getItem('age_verified'))
@@ -59,7 +59,7 @@ test.describe('Age Gate', () => {
 
     // Refresh page - age gate should NOT appear again
     await page.reload()
-    await expect(page.getByText('Age Verification Required')).not.toBeVisible()
+    await expect(page.getByText('Welcome! Let's verify your age')).not.toBeVisible()
   })
 
   test('should require both date and checkbox', async ({ page }) => {

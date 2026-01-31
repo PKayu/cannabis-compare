@@ -30,7 +30,7 @@ describe('AgeGate Component', () => {
     it('should render age gate modal', () => {
       render(<AgeGate onVerify={mockOnVerify} />)
 
-      expect(screen.getByText('Age Verification Required')).toBeInTheDocument()
+      expect(screen.getByText('Welcome! Let\'s verify your age')).toBeInTheDocument()
       expect(screen.getByLabelText('Date of Birth')).toBeInTheDocument()
       expect(screen.getByRole('checkbox')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument()

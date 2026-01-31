@@ -12,16 +12,26 @@ export default function LoginPage() {
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
   const router = useRouter()
 
+  // Get returnUrl from query params
+  const getReturnUrl = () => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      return params.get('returnUrl') || '/profile'
+    }
+    return '/profile'
+  }
+
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setMessage('')
 
     try {
+      const returnUrl = getReturnUrl()
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: `${window.location.origin}/auth/callback?returnUrl=${encodeURIComponent(returnUrl)}`,
         },
       })
 
@@ -43,10 +53,11 @@ export default function LoginPage() {
     setMessage('')
 
     try {
+      const returnUrl = getReturnUrl()
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: `${window.location.origin}/auth/callback?returnUrl=${encodeURIComponent(returnUrl)}`,
         },
       })
 

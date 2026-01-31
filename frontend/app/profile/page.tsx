@@ -2,9 +2,9 @@
 
 import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 import { api } from '@/lib/api'
 import Link from 'next/link'
+import { useAuth } from '@/lib/AuthContext'
 
 interface UserProfile {
   id: string
@@ -28,29 +28,30 @@ interface Review {
 }
 
 export default function ProfilePage() {
+  const { user: authUser, session, loading: authLoading, signOut } = useAuth()
   const [user, setUser] = useState<UserProfile | null>(null)
   const [reviews, setReviews] = useState<Review[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
+    if (authLoading) return
+
+    if (!session || !authUser) {
+      router.push('/auth/login?returnUrl=/profile')
+      return
+    }
+
     loadProfile()
-  }, [])
+  }, [authLoading, session, authUser, router])
 
   const loadProfile = async () => {
     try {
       setLoading(true)
       setError(null)
 
-      // Check if user is authenticated
-      const { data, error: sessionError } = await supabase.auth.getSession()
-      if (sessionError || !data.session) {
-        router.push('/auth/login')
-        return
-      }
-
-      // Get user profile from backend
+      // Get user profile from backend (token auto-added by interceptor)
       const userRes = await api.get('/api/users/me')
       setUser(userRes.data)
 
@@ -62,7 +63,7 @@ export default function ProfilePage() {
       setError(message)
       // If unauthorized, redirect to login
       if (err.response?.status === 401) {
-        setTimeout(() => router.push('/auth/login'), 2000)
+        setTimeout(() => router.push('/auth/login?returnUrl=/profile'), 2000)
       }
     } finally {
       setLoading(false)
@@ -71,14 +72,14 @@ export default function ProfilePage() {
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut()
+      await signOut()
       router.push('/')
     } catch (err) {
       console.error('Logout failed:', err)
     }
   }
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">

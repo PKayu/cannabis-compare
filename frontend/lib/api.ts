@@ -15,19 +15,12 @@ export const apiClient = axios.create({
  */
 apiClient.interceptors.request.use(async (config) => {
   try {
-    // Dynamically import Supabase to avoid SSR issues
-    const { createClient } = await import('@supabase/supabase-js')
+    // Use singleton instance
+    const { supabase } = await import('./supabase')
+    const { data } = await supabase.auth.getSession()
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-    if (supabaseUrl && supabaseAnonKey) {
-      const supabase = createClient(supabaseUrl, supabaseAnonKey)
-      const { data } = await supabase.auth.getSession()
-
-      if (data?.session?.access_token) {
-        config.headers.Authorization = `Bearer ${data.session.access_token}`
-      }
+    if (data?.session?.access_token) {
+      config.headers.Authorization = `Bearer ${data.session.access_token}`
     }
   } catch (error) {
     console.error('Failed to add auth token to request:', error)
@@ -46,15 +39,9 @@ apiClient.interceptors.response.use(
     // Handle 401 Unauthorized - redirect to login
     if (error.response?.status === 401) {
       try {
-        // Clear auth state
-        const { createClient } = await import('@supabase/supabase-js')
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-        if (supabaseUrl && supabaseAnonKey) {
-          const supabase = createClient(supabaseUrl, supabaseAnonKey)
-          await supabase.auth.signOut()
-        }
+        // Clear auth state using singleton instance
+        const { supabase } = await import('./supabase')
+        await supabase.auth.signOut()
       } catch (signOutError) {
         console.error('Failed to sign out:', signOutError)
       }

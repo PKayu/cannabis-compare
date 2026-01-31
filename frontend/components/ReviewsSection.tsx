@@ -1,8 +1,10 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { api } from '@/lib/api'
 import ReviewForm from './ReviewForm'
+import { useAuth } from '@/lib/AuthContext'
 
 interface ReviewsSectionProps {
   productId: string
@@ -24,6 +26,8 @@ interface Review {
 }
 
 export default function ReviewsSection({ productId }: ReviewsSectionProps) {
+  const { user, loading: authLoading } = useAuth()
+  const router = useRouter()
   const [reviews, setReviews] = useState<Review[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -51,6 +55,14 @@ export default function ReviewsSection({ productId }: ReviewsSectionProps) {
     }
   }
 
+  const handleWriteReview = () => {
+    if (!user) {
+      router.push(`/auth/login?returnUrl=${encodeURIComponent(window.location.pathname)}`)
+      return
+    }
+    setShowForm(true)
+  }
+
   const handleReviewSubmitted = () => {
     setShowForm(false)
     loadReviews() // Refresh reviews list
@@ -62,10 +74,11 @@ export default function ReviewsSection({ productId }: ReviewsSectionProps) {
         <h3 className="text-2xl font-bold text-cannabis-800">Community Reviews</h3>
         {!showForm && (
           <button
-            onClick={() => setShowForm(true)}
-            className="px-4 py-2 bg-cannabis-600 text-white rounded-lg hover:bg-cannabis-700 transition-colors font-semibold"
+            onClick={handleWriteReview}
+            disabled={authLoading}
+            className="px-4 py-2 bg-cannabis-600 text-white rounded-lg hover:bg-cannabis-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Write a Review
+            {authLoading ? 'Loading...' : 'Write a Review'}
           </button>
         )}
       </div>
@@ -160,10 +173,11 @@ export default function ReviewsSection({ productId }: ReviewsSectionProps) {
           <p className="text-gray-500">Be the first to share your experience with this product!</p>
           {!showForm && (
             <button
-              onClick={() => setShowForm(true)}
-              className="mt-4 px-4 py-2 bg-cannabis-600 text-white rounded-lg hover:bg-cannabis-700 transition-colors"
+              onClick={handleWriteReview}
+              disabled={authLoading}
+              className="mt-4 px-4 py-2 bg-cannabis-600 text-white rounded-lg hover:bg-cannabis-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Write the First Review
+              {authLoading ? 'Loading...' : 'Write the First Review'}
             </button>
           )}
         </div>

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import AgeGateWrapper from './age-gate-wrapper'
+import { AuthProvider } from '@/lib/AuthContext'
 
 export const metadata: Metadata = {
   title: 'Utah Cannabis Aggregator',
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <AgeGateWrapper>{children}</AgeGateWrapper>
+        <AuthProvider>
+          <AgeGateWrapper>{children}</AgeGateWrapper>
+        </AuthProvider>
       </body>
     </html>
   )

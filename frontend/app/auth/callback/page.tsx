@@ -12,16 +12,21 @@ export default function CallbackPage() {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        // Get the code from URL hash (Supabase auth redirect)
-        const hash = window.location.hash
-        if (!hash) {
-          setError('No authentication data received. Please try signing in again.')
+        // Check for error in URL (e.g., user denied access)
+        const params = new URLSearchParams(window.location.search)
+        const errorParam = params.get('error')
+        const errorDescription = params.get('error_description')
+
+        if (errorParam) {
+          setError(errorDescription || 'Authentication failed. Please try signing in again.')
           setLoading(false)
           return
         }
 
-        // Supabase automatically exchanges the code for a session
-        // Check if we have an active session
+        // Wait a moment for Supabase to process the callback
+        await new Promise(resolve => setTimeout(resolve, 100))
+
+        // Check if we have an active session after OAuth callback
         const {
           data: { session },
           error: sessionError,
@@ -32,10 +37,11 @@ export default function CallbackPage() {
         }
 
         if (session) {
-          // Session established successfully, redirect to profile
-          router.push('/profile')
+          // Check for return URL in query params
+          const returnUrl = params.get('returnUrl') || '/profile'
+          router.push(returnUrl)
         } else {
-          // No session means the user rejected the auth or link expired
+          // No session means the callback failed or token exchange didn't happen
           setError('Authentication failed. Please try signing in again.')
         }
       } catch (err: any) {

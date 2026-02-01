@@ -39,11 +39,22 @@ def get_status():
     output = run_git(['status', '--porcelain'])
     changes = []
 
+    # Files to skip (problematic or temp files)
+    skip_files = {'nul', '.DS_Store', 'Thumbs.db', 'desktop.ini'}
+    skip_patterns = {'.tsbuildinfo', '__pycache__'}
+
     for line in output.split('\n'):
         if not line:
             continue
         status = line[:2]
         filepath = line[3:]
+
+        # Skip problematic files
+        if filepath in skip_files:
+            continue
+        if any(pattern in filepath for pattern in skip_patterns):
+            continue
+
         changes.append((status, filepath))
 
     return changes

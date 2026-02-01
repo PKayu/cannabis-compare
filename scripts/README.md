@@ -6,6 +6,7 @@ Utility scripts for common development tasks on Windows.
 
 | Script | Purpose |
 |--------|---------|
+| `commit-helper.bat` | Organize changes into logical commits |
 | `start-dev.bat` | Start both backend and frontend servers |
 | `start-backend.bat` | Start backend server only |
 | `start-frontend.bat` | Start frontend server only |
@@ -23,6 +24,36 @@ Utility scripts for common development tasks on Windows.
 ---
 
 ## Scripts Reference
+
+### commit-helper.bat
+
+Organize uncommitted changes into logical commits with generated commit messages.
+
+```cmd
+scripts\commit-helper.bat
+```
+
+Features:
+- Groups changes by file type (backend, frontend, scrapers, tests, docs, etc.)
+- Suggests conventional commit messages based on changes
+- Interactive selection of which changes to commit together
+- Supports Co-Authored-By header generation
+
+Workflow:
+1. Shows all uncommitted changes grouped by category
+2. Select a group to commit, specific files, or commit all
+3. Review/edit the suggested commit message
+4. Automatically stages and commits selected changes
+
+Example output:
+```
+[SCRAPER] (3 files)
+  [modified  ] backend/services/scrapers/wholesome_co_scraper.py
+              +42/-12
+
+[FRONTEND] (2 files)
+  [untracked ] frontend/components/NewProduct.tsx
+```
 
 ### start-dev.bat
 

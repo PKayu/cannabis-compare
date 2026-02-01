@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { api, apiClient } from '@/lib/api'
 import SearchBar from '@/components/SearchBar'
 import FilterPanel from '@/components/FilterPanel'
@@ -85,6 +86,28 @@ export default function SearchPage() {
 
     return () => clearInterval(interval)
   }, [loading, query])
+
+  // Read URL parameters and execute search on mount
+  const searchParams = useSearchParams()
+  useEffect(() => {
+    const urlQuery = searchParams.get('q')
+    if (urlQuery && urlQuery.length >= 2) {
+      // Also read filter parameters from URL
+      const urlFilters: SearchFilters = {
+        productType: searchParams.get('product_type') || '',
+        minPrice: searchParams.get('min_price') ? Number(searchParams.get('min_price')) : undefined,
+        maxPrice: searchParams.get('max_price') ? Number(searchParams.get('max_price')) : undefined,
+        minThc: searchParams.get('min_thc') ? Number(searchParams.get('min_thc')) : undefined,
+        maxThc: searchParams.get('max_thc') ? Number(searchParams.get('max_thc')) : undefined,
+        minCbd: searchParams.get('min_cbd') ? Number(searchParams.get('min_cbd')) : undefined,
+        maxCbd: searchParams.get('max_cbd') ? Number(searchParams.get('max_cbd')) : undefined,
+        sortBy: searchParams.get('sort_by') || 'relevance'
+      }
+
+      setFilters(urlFilters)
+      handleSearch(urlQuery, urlFilters)
+    }
+  }, [searchParams])
 
   const handleSearch = async (searchQuery: string, overrideFilters?: SearchFilters) => {
     if (!searchQuery || searchQuery.length < 2) {

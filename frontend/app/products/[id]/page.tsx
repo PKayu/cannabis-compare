@@ -199,7 +199,7 @@ export default function ProductDetailPage() {
         <section className="mb-12">
           <h2 className="text-2xl font-bold mb-4 text-gray-800">Prices Across Dispensaries</h2>
           {prices.length > 0 ? (
-            <PriceComparisonTable prices={prices} productId={productId} />
+            <PriceComparisonTable prices={prices} productId={productId} productName={product.name} />
           ) : (
             <div className="bg-white rounded-lg shadow p-6 text-center text-gray-600">
               No pricing data available for this product.

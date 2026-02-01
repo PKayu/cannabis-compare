@@ -24,6 +24,7 @@ interface PriceData {
 interface PriceComparisonTableProps {
   prices: PriceData[]
   productId: string
+  productName?: string
 }
 
 // Deep link patterns for Utah dispensaries
@@ -35,22 +36,23 @@ const DISPENSARY_LINKS: Record<string, string> = {
 }
 
 function generateOrderLink(dispensaryId: string, dispensaryWebsite: string | null, productName?: string): string {
-  // Check if we have a known pattern
+  // Prioritize dispensary website if available
+  if (dispensaryWebsite && dispensaryWebsite.trim() !== '') {
+    const url = dispensaryWebsite.trim()
+    return url.startsWith('http') ? url : `https://${url}`
+  }
+
+  // Check if we have a known pattern for this dispensary
   const pattern = DISPENSARY_LINKS[dispensaryId.toLowerCase()]
   if (pattern && productName) {
     return pattern + encodeURIComponent(productName)
   }
 
-  // Fall back to dispensary website
-  if (dispensaryWebsite) {
-    return dispensaryWebsite.startsWith('http') ? dispensaryWebsite : `https://${dispensaryWebsite}`
-  }
-
-  // Last resort: search
+  // Last resort: return empty href to prevent navigation
   return '#'
 }
 
-export default function PriceComparisonTable({ prices, productId }: PriceComparisonTableProps) {
+export default function PriceComparisonTable({ prices, productId, productName }: PriceComparisonTableProps) {
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
       {/* Desktop Table View */}
@@ -121,7 +123,7 @@ export default function PriceComparisonTable({ prices, productId }: PriceCompari
                 </td>
                 <td className="text-center px-4 py-4">
                   <a
-                    href={generateOrderLink(price.dispensary_id, price.dispensary_website)}
+                    href={generateOrderLink(price.dispensary_id, price.dispensary_website, productName)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className={`inline-block px-4 py-2 rounded text-sm font-medium transition-colors ${

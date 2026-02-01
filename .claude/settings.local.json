@@ -85,7 +85,16 @@
       "Bash(git config:*)",
       "Bash(where:*)",
       "Bash(py:*)",
-      "Bash(\"./venv/Scripts/python.exe\" -c \"\nimport asyncio\nfrom playwright.async_api import async_playwright\n\nasync def check\\(\\):\n    async with async_playwright\\(\\) as p:\n        browser = await p.chromium.launch\\(headless=True\\)\n        page = await browser.new_page\\(\\)\n\n        # Try common category URLs\n        categories = [''flower'', ''vaporizer'', ''cartridge'', ''edible'', ''concentrate'', ''tincture'', ''topical'', ''pre-roll'', ''preroll'', ''specials'']\n\n        print\\(''Checking category pages:''\\)\n        for cat in categories:\n            try:\n                await page.goto\\(f''https://ut.curaleaf.com/stores/curaleaf-ut-lehi/products/{cat}'', wait_until=''domcontentloaded'', timeout=10000\\)\n                await page.wait_for_timeout\\(2000\\)\n                \n                # Handle age gate if needed\n                try:\n                    btn = await page.wait_for_selector\\(''button:has-text\\(\"\"I\\\\''m over 18\"\"\\)'', timeout=2000\\)\n                    await btn.click\\(\\)\n                    await page.wait_for_timeout\\(3000\\)\n                except:\n                    pass\n                \n                title = await page.title\\(\\)\n                count = await page.locator\\(''[class*=\"\"product-carousel\"\"]''\\).count\\(\\)\n                \n                if ''404'' not in title and count > 0:\n                    print\\(f''  /products/{cat}: {count} products''\\)\n            except:\n                pass\n\n        await browser.close\\(\\)\n\nasyncio.run\\(check\\(\\)\\)\n\")"
+      "Bash(\"./venv/Scripts/python.exe\" -c \"\nimport asyncio\nfrom playwright.async_api import async_playwright\n\nasync def check\\(\\):\n    async with async_playwright\\(\\) as p:\n        browser = await p.chromium.launch\\(headless=True\\)\n        page = await browser.new_page\\(\\)\n\n        # Try common category URLs\n        categories = [''flower'', ''vaporizer'', ''cartridge'', ''edible'', ''concentrate'', ''tincture'', ''topical'', ''pre-roll'', ''preroll'', ''specials'']\n\n        print\\(''Checking category pages:''\\)\n        for cat in categories:\n            try:\n                await page.goto\\(f''https://ut.curaleaf.com/stores/curaleaf-ut-lehi/products/{cat}'', wait_until=''domcontentloaded'', timeout=10000\\)\n                await page.wait_for_timeout\\(2000\\)\n                \n                # Handle age gate if needed\n                try:\n                    btn = await page.wait_for_selector\\(''button:has-text\\(\"\"I\\\\''m over 18\"\"\\)'', timeout=2000\\)\n                    await btn.click\\(\\)\n                    await page.wait_for_timeout\\(3000\\)\n                except:\n                    pass\n                \n                title = await page.title\\(\\)\n                count = await page.locator\\(''[class*=\"\"product-carousel\"\"]''\\).count\\(\\)\n                \n                if ''404'' not in title and count > 0:\n                    print\\(f''  /products/{cat}: {count} products''\\)\n            except:\n                pass\n\n        await browser.close\\(\\)\n\nasyncio.run\\(check\\(\\)\\)\n\")",
+      "Bash(git rm:*)",
+      "Bash(./venv/Scripts/python.exe:*)",
+      "Bash(git push:*)",
+      "Bash(start:*)",
+      "Bash(for:*)",
+      "Bash(do taskkill /F /PID $pid)",
+      "Bash(done)",
+      "Bash(venvScriptspython.exe:*)",
+      "Bash(ping:*)"
     ]
   },
   "mcpServers": {

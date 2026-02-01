@@ -88,7 +88,7 @@ class CuraleafScraper(PlaywrightScraper):
             async with await self._get_playwright() as p:
                 browser = await p.chromium.launch(headless=self.headless)
                 page = await browser.new_page()
-                page.set_default_timeout(30000)
+                page.set_default_timeout(60000)  # 60 second timeout for all operations
 
                 # First, navigate to main page and handle age gate
                 logger.info(f"Loading {self.menu_url}...")
@@ -96,24 +96,29 @@ class CuraleafScraper(PlaywrightScraper):
                 await self._dismiss_age_gate(page)
 
                 # Now visit each category page
-                for category in self.CATEGORIES:
-                    logger.info(f"Scraping category: {category}")
+                total_categories = len(self.CATEGORIES)
+                for idx, category in enumerate(self.CATEGORIES, 1):
+                    logger.info(f"Scraping category {idx}/{total_categories}: {category}")
                     category_url = f"{self.menu_url}/products/{category}"
 
                     try:
-                        await page.goto(category_url, wait_until="domcontentloaded")
-                        await page.wait_for_timeout(3000)
+                        logger.info(f"  Loading {category_url}...")
+                        await page.goto(category_url, wait_until="domcontentloaded", timeout=30000)
+                        await page.wait_for_timeout(2000)
 
                         # Wait for products to load on this category page
+                        logger.info(f"  Waiting for products to load...")
                         await self._wait_for_products(page)
 
                         # CRITICAL: Load all products via infinite scroll/load more
                         # This was missing - causing only initial products to be scraped
+                        logger.info(f"  Loading all products (clicking View More buttons)...")
                         await self._load_all_products(page)
 
                         # Extract products from this category
+                        logger.info(f"  Extracting products...")
                         category_products = await self._extract_products(page)
-                        logger.info(f"Found {len(category_products)} products in {category}")
+                        logger.info(f"  Found {len(category_products)} products in {category}")
 
                         all_products.extend(category_products)
 
@@ -127,6 +132,8 @@ class CuraleafScraper(PlaywrightScraper):
         except Exception as e:
             logger.error(f"Error scraping Curaleaf {self.location}: {e}", exc_info=True)
             logger.error(f"Exception type: {type(e).__name__}")
+            # Re-raise so the caller sees the error
+            raise
 
         finally:
             if browser:
@@ -254,7 +261,7 @@ class CuraleafScraper(PlaywrightScraper):
 
         last_count = 0
         attempts = 0
-        max_attempts = 50  # Increased from 30 to allow more scrolling
+        max_attempts = 30  # Reduced to prevent excessive wait times
 
         # Try to determine which product selector to use for this page
         # Category pages use product-item-list, main page uses product-carousel
@@ -313,7 +320,7 @@ class CuraleafScraper(PlaywrightScraper):
             except:
                 current_count = 0
 
-            logger.debug(f"Scroll attempt {attempts + 1}: {current_count} products")
+            logger.info(f"Scroll attempt {attempts + 1}/{max_attempts}: {current_count} products")
 
             if current_count == last_count and current_count > 0:
                 # Product count stabilized - try a couple more times to be sure

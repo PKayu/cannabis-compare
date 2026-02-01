@@ -27,7 +27,11 @@ from services.scrapers.playwright_scraper import (  # noqa: F401
     WholesomeCoScraper as WholesomeCoPlaywrightScraper,
     BeehiveScraper
 )
-from services.scrapers.curaleaf_scraper import CuraleafScraper  # noqa: F401
+from services.scrapers.curaleaf_scraper import (  # noqa: F401
+    CuraleafScraper,
+    CuraleafProvoScraper,
+    CuraleafSpringvilleScraper
+)
 
 from services.scrapers.registry import ScraperRegistry
 

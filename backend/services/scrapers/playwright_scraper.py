@@ -9,7 +9,7 @@ Works for:
 """
 import logging
 from typing import List, Optional, TYPE_CHECKING
-from .base_scraper import BaseScraper, ScrapedProduct
+from .base_scraper import BaseScraper, ScrapedProduct, ScrapedPromotion
 from .registry import register_scraper
 
 logger = logging.getLogger(__name__)
@@ -219,7 +219,7 @@ class PlaywrightScraper(BaseScraper):
 
         return products
 
-    async def scrape_promotions(self):
+    async def scrape_promotions(self) -> List[ScrapedPromotion]:
         """
         Scrape promotional information from the page
 
@@ -330,6 +330,8 @@ class WholesomeCoScraper(PlaywrightScraper):
             logger.error(f"Exception type: {type(e).__name__}")
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
+            # Re-raise so the caller sees the error
+            raise
 
         finally:
             if browser:

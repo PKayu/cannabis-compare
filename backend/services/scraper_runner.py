@@ -95,8 +95,14 @@ class ScraperRunner:
 
         try:
             # 1. Instantiate and run the scraper
+            logger.info(f"Instantiating scraper class: {config.scraper_class}")
+            logger.info(f"Scraper module: {config.scraper_class.__module__}")
+            logger.info(f"Scraper name: {config.scraper_class.__name__}")
             scraper = config.scraper_class(dispensary_id=scraper_id)
+            logger.info(f"Scraper instantiated successfully: {scraper}")
+            logger.info(f"Calling scrape_products()...")
             products = await scraper.scrape_products()
+            logger.info(f"scrape_products() returned {len(products)} products")
 
             if not products:
                 logger.warning(f"No products found for {config.name}")
@@ -139,6 +145,8 @@ class ScraperRunner:
                     logger.warning(
                         f"Failed to process product '{scraped.name}': {e}"
                     )
+                    # Rollback to clear the failed transaction state
+                    self.db.rollback()
                     continue
 
             # 4. Complete run log and commit all changes
@@ -247,6 +255,18 @@ class ScraperRunner:
             amount: Price amount
             in_stock: Whether the product is in stock
         """
+        # First check in session (for newly added but uncommitted prices)
+        for obj in self.db.new:
+            if isinstance(obj, Price):
+                if obj.product_id == product.id and obj.dispensary_id == dispensary.id:
+                    # Price already added to session, update it
+                    if obj.amount != amount or obj.in_stock != in_stock:
+                        obj.amount = amount
+                        obj.in_stock = in_stock
+                        obj.last_updated = datetime.utcnow()
+                    return
+
+        # Check in database
         price = self.db.query(Price).filter(
             Price.product_id == product.id,
             Price.dispensary_id == dispensary.id

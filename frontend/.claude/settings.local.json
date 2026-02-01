@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__serena__find_file",
+      "mcp__serena__check_onboarding_performed",
+      "Bash(npm run lint:*)",
+      "Bash(npx tsc:*)",
+      "Bash(grep:*)"
+    ]
+  }
+}

@@ -266,74 +266,292 @@ class PlaywrightScraper(BaseScraper):
 # Site-specific scrapers inherit from PlaywrightScraper
 
 @register_scraper(
-    id="wholesomeco-playwright",
-    name="WholesomeCo (Playwright)",
+    id="wholesomeco",
+    name="WholesomeCo",
     dispensary_name="WholesomeCo",
     dispensary_location="Bountiful, UT",
     schedule_minutes=120,
-    description="Playwright-based scraper for WholesomeCo JavaScript-rendered pages"
+    description="Playwright-based scraper for WholesomeCo with Load More handling"
 )
 class WholesomeCoScraper(PlaywrightScraper):
     """
     Specialized scraper for WholesomeCo (wholesome.co)
 
-    WholesomeCo uses JavaScript-rendered dynamic menu
+    WholesomeCo uses JavaScript-rendered dynamic menu with:
+    - Age gate verification (21+)
+    - Products in .productListItem elements
+    - "Load More" button for pagination
+    - THC/CBD data in .productListItem-attrs
     """
 
-    def __init__(self, dispensary_id: str = "wholesomeco-playwright"):
+    def __init__(self, dispensary_id: str = "wholesomeco"):
         super().__init__(
             menu_url="https://www.wholesome.co/shop",
             dispensary_name="WholesomeCo",
             dispensary_id=dispensary_id
         )
 
+    async def scrape_products(self) -> List[ScrapedProduct]:
+        """
+        Scrape products from WholesomeCo with age gate and Load More handling
+        """
+        products = []
+        logger.info(f"Scraping WholesomeCo using Playwright ({self.menu_url})")
+
+        browser = None
+        try:
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=self.headless)
+                page = await browser.new_page()
+                page.set_default_timeout(30000)
+
+                # Navigate to the shop page
+                logger.info(f"Loading {self.menu_url}...")
+                await page.goto(self.menu_url, wait_until="domcontentloaded")
+
+                # Handle age gate
+                await self._dismiss_age_gate(page)
+
+                # Wait for initial products to load
+                await self._wait_for_products(page)
+
+                # Click "Load More" until all products are visible
+                await self._load_all_products(page)
+
+                # Extract all products from the page
+                products = await self._extract_products(page)
+
+                logger.info(f"Successfully scraped {len(products)} products from WholesomeCo")
+
+                await page.close()
+
+        except Exception as e:
+            logger.error(f"Error scraping WholesomeCo: {e}", exc_info=True)
+            logger.error(f"Exception type: {type(e).__name__}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+
+        finally:
+            if browser:
+                await browser.close()
+
+        logger.info(f"Returning {len(products)} products from WholesomeCo scraper")
+        return products
+
+    async def _dismiss_age_gate(self, page: "Page"):
+        """Dismiss the 21+ age verification modal"""
+        logger.info("Checking for age gate...")
+
+        age_gate_selectors = [
+            'button:has-text("I\'m 21 or older")',
+            'button:has-text("I am 21")',
+            'button:has-text("Enter")',
+        ]
+
+        for selector in age_gate_selectors:
+            try:
+                button = await page.wait_for_selector(selector, timeout=3000)
+                if button:
+                    logger.info(f"Dismissing age gate with selector: {selector}")
+                    await button.click()
+                    await page.wait_for_timeout(2000)
+                    return
+            except:
+                continue
+
+        logger.info("No age gate found or already dismissed")
+
     async def _wait_for_products(self, page: "Page"):
-        """Wait for WholesomeCo's specific product elements"""
+        """Wait for WholesomeCo's product elements to appear"""
         logger.info("Waiting for WholesomeCo products to load...")
 
-        # WholesomeCo uses specific classes/data attributes
         try:
-            # Wait for the products container
-            await page.wait_for_selector(
-                "[data-qa*='product'], .product, [class*='ProductCard']",
-                timeout=10000
-            )
+            # Wait for product list items to appear
+            await page.wait_for_selector(".productListItem", timeout=15000)
+            logger.info("Products loaded")
         except Exception:
-            logger.warning(
-                "Could not find WholesomeCo product selector. "
-                "The site structure may have changed."
-            )
+            logger.warning("Could not find product elements - site structure may have changed")
+
+    async def _load_all_products(self, page: "Page"):
+        """
+        Scroll to bottom of page to trigger infinite scroll loading
+
+        WholesomeCo uses infinite scroll - products load as you scroll down
+        """
+        logger.info("Loading all products via infinite scroll...")
+
+        last_product_count = 0
+        scroll_attempts = 0
+        max_scroll_attempts = 50  # Safety limit
+
+        while scroll_attempts < max_scroll_attempts:
+            # Get current product count
+            current_count = await page.locator(".productListItem").count()
+
+            # Scroll to bottom
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+
+            # Wait for new products to load
+            await page.wait_for_timeout(1500)
+
+            # Check if product count increased
+            new_count = await page.locator(".productListItem").count()
+
+            scroll_attempts += 1
+            logger.info(f"Scroll {scroll_attempts}: {current_count} -> {new_count} products")
+
+            if new_count == last_product_count:
+                # Product count hasn't changed, try a few more times
+                await page.wait_for_timeout(2000)
+                new_count = await page.locator(".productListItem").count()
+                if new_count == last_product_count:
+                    logger.info(f"Product count stabilized at {new_count} - all products loaded")
+                    break
+
+            last_product_count = new_count
+
+        logger.info(f"Finished loading products. Total: {last_product_count}")
 
     async def _extract_products(self, page: "Page") -> List[ScrapedProduct]:
-        """Extract products from WholesomeCo's specific structure"""
+        """
+        Extract products from WholesomeCo's .productListItem elements
+
+        Product structure:
+        - .productListItem (container)
+          - .productListItem-thumbnail (image)
+          - .productListItem-content
+            - Brand name
+            - Product name with weight
+          - .productListItem-attrs (THC/CBD info like "I\n19% THC\n0.42% CBG")
+          - Price info
+        """
         logger.info("Extracting WholesomeCo products...")
 
-        # WholesomeCo-specific extraction logic
+        # Extract product data using JavaScript
         product_data = await page.evaluate(
             """
             () => {
                 const products = [];
 
-                // WholesomeCo uses data-qa attributes and specific classes
-                const productElements = document.querySelectorAll(
-                    '[data-qa*="product"], .ProductCard, [class*="ProductCard"]'
-                );
+                // WholesomeCo uses .productListItem for products
+                const productElements = document.querySelectorAll('.productListItem');
 
                 productElements.forEach(el => {
                     try {
-                        const name = el.querySelector('h2, h3, [data-qa*="name"]')?.textContent?.trim();
-                        const priceText = el.querySelector('[data-qa*="price"], .price')?.textContent;
-                        const price = priceText?.match(/\\$?([\\d.]+)/)?.[1];
-                        const thcText = el.querySelector('[data-qa*="thc"]')?.textContent;
-                        const thc = thcText?.match(/(\\d+\\.?\\d*)/)?.[1];
+                        // Get all text for parsing
+                        const fullText = el.textContent || '';
+
+                        // Extract name - usually the main heading
+                        const nameEl = el.querySelector('h2, h3, h4, .product-name, [class*="name"]');
+                        let name = nameEl?.textContent?.trim() || '';
+
+                        // Extract brand - often appears before the name
+                        // Look for brand links or badges
+                        const brandEl = el.querySelector('a[href*="/brands/"], .brand, [class*="brand"]');
+                        let brand = brandEl?.textContent?.trim() || null;
+
+                        // If no brand found, try to extract from the beginning of the name
+                        if (!brand && name) {
+                            const parts = name.split('–');
+                            if (parts.length > 1) {
+                                brand = parts[0].trim();
+                                name = parts.slice(1).join('–').trim();
+                            }
+                        }
+
+                        // Extract price - look for price elements
+                        let price = null;
+                        const priceEl = el.querySelector('[class*="price"], [data-qa*="price"]');
+                        if (priceEl) {
+                            // Get numeric price, handle comma separators
+                            const priceMatch = priceEl.textContent.replace(/,/g, '').match(/\\$?(\\d+\\.?\\d*)/);
+                            if (priceMatch) {
+                                price = priceMatch[1];
+                            }
+                        }
+
+                        // If no price in price element, try to find it in full text
+                        if (!price) {
+                            const priceMatch = fullText.replace(/,/g, '').match(/\\$(\\d+\\.?\\d*)/);
+                            if (priceMatch) {
+                                price = priceMatch[1];
+                            }
+                        }
+
+                        // Extract strain type (I/S/H) from attrs or text
+                        const attrsEl = el.querySelector('.productListItem-attrs, [class*="attrs"]');
+                        const attrsText = attrsEl?.textContent || fullText;
+
+                        let strainType = null;
+                        const strainMatch = attrsText.match(/\\b([HSI])\\b/);
+                        if (strainMatch) {
+                            strainType = strainMatch[1];
+                        }
+
+                        // Extract cannabinoids - patterns like "19% THC" and "0.42% CBG"
+                        // The format is: number% CANNABINOID (e.g., "19% THC")
+                        let thc = null, cbd = null, cbg = null, cbn = null;
+
+                        // Check percentage format first (number% followed by cannabinoid name)
+                        // This is the correct format: "19% THC" not "THC19%"
+                        const thcMatch = attrsText.match(/(\\d+\\.?\\d*)%\\s*THC/i);
+                        if (thcMatch) thc = thcMatch[1];
+
+                        const cbdMatch = attrsText.match(/(\\d+\\.?\\d*)%\\s*CBD/i);
+                        if (cbdMatch) cbd = cbdMatch[1];
+
+                        const cbgMatch = attrsText.match(/(\\d+\\.?\\d*)%\\s*CBG/i);
+                        if (cbgMatch) cbg = cbgMatch[1];
+
+                        const cbnMatch = attrsText.match(/(\\d+\\.?\\d*)%\\s*CBN/i);
+                        if (cbnMatch) cbn = cbnMatch[1];
+
+                        // Extract weight/size
+                        let weight = null;
+                        const weightMatch = fullText.match(/(\\d+\\.?\\d*)\\s*(gr?|g|oz|ml|mg|each)/i);
+                        if (weightMatch) {
+                            weight = weightMatch[1] + weightMatch[2];
+                        }
+
+                        // Extract category from text
+                        let category = 'other';
+                        const lowerText = fullText.toLowerCase();
+                        if (lowerText.includes('flower') || lowerText.includes('indoor') || lowerText.includes('outdoor') || lowerText.includes('greenhouse')) {
+                            category = 'flower';
+                        } else if (lowerText.includes('vape') || lowerText.includes('cartridge') || lowerText.includes('cart')) {
+                            category = 'vaporizer';
+                        } else if (lowerText.includes('edible') || lowerText.includes('gummy') || lowerText.includes('chocolate') || lowerText.includes('caramel')) {
+                            category = 'edible';
+                        } else if (lowerText.includes('concentrate') || lowerText.includes('rosin') || lowerText.includes('badder') || lowerText.includes('shatter') || lowerText.includes('diamond')) {
+                            category = 'concentrate';
+                        } else if (lowerText.includes('tincture')) {
+                            category = 'tincture';
+                        } else if (lowerText.includes('topical') || lowerText.includes('lotion') || lowerText.includes('balm')) {
+                            category = 'topical';
+                        } else if (lowerText.includes('pre-roll') || lowerText.includes('preroll')) {
+                            category = 'pre-roll';
+                        }
+
+                        // Check stock status
+                        const outOfStock = el.classList.contains('out-of-stock') ||
+                                          el.classList.contains('sold-out') ||
+                                          fullText.toLowerCase().includes('out of stock') ||
+                                          fullText.toLowerCase().includes('sold out');
 
                         if (name && price) {
                             products.push({
-                                name,
-                                price,
-                                thc,
-                                inStock: !el.classList.contains('out-of-stock'),
-                                html: el.outerHTML.substring(0, 500)
+                                name: name.trim(),
+                                brand: brand,
+                                category: category,
+                                price: price,
+                                thc: thc,
+                                cbd: cbd,
+                                cbg: cbg,
+                                cbn: cbn,
+                                strainType: strainType,
+                                weight: weight,
+                                inStock: !outOfStock,
+                                html: el.outerHTML.substring(0, 1000)
                             });
                         }
                     } catch (e) {
@@ -352,8 +570,12 @@ class WholesomeCoScraper(PlaywrightScraper):
             try:
                 product = ScrapedProduct(
                     name=item["name"],
+                    brand=item.get("brand"),
+                    category=item.get("category") or "other",
                     price=float(item["price"]),
                     thc_percentage=float(item["thc"]) if item.get("thc") else None,
+                    cbd_percentage=float(item["cbd"]) if item.get("cbd") else None,
+                    weight=item.get("weight"),
                     in_stock=item.get("inStock", True),
                     raw_data=item
                 )
@@ -361,6 +583,7 @@ class WholesomeCoScraper(PlaywrightScraper):
             except Exception as e:
                 logger.warning(f"Failed to parse WholesomeCo product: {e}")
 
+        logger.info(f"Extracted {len(products)} valid products from page")
         return products
 
 

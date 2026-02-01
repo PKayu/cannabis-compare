@@ -19,8 +19,9 @@ if not exist "venv" (
     exit /b 1
 )
 
-echo [1/2] Activating virtual environment...
-call venv\Scripts\activate.bat
+echo [1/2] Checking virtual environment...
+REM Use explicit Python path to avoid using wrong venv (root .venv vs backend\venv)
+venv\Scripts\python.exe -c "import sys; print('Python:', sys.executable)"
 
 echo [2/2] Starting backend server...
 echo.
@@ -30,4 +31,5 @@ echo.
 echo Press Ctrl+C to stop the server.
 echo.
 
-uvicorn main:app --reload
+REM Use explicit Python path to ensure correct venv is used
+venv\Scripts\python.exe -m uvicorn main:app --reload --log-level info

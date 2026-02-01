@@ -11,7 +11,7 @@ if sys.platform == 'win32':
 # Add backend directory to path so we can import services
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from services.scrapers.wholesome_co_scraper import WholesomeCoScraper
+from services.scrapers.playwright_scraper import WholesomeCoScraper
 
 # Configure logging to see scraper output
 logging.basicConfig(

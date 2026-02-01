@@ -19,7 +19,8 @@ from routers import (
 # Import all scrapers to trigger self-registration via @register_scraper decorator
 # These imports must happen at module level for the registry to be populated
 # The imported classes are not used directly - the decorator registers them
-from services.scrapers.wholesome_co_scraper import WholesomeCoScraper  # noqa: F401
+# OLD HTTP-based scraper - replaced with Playwright version below
+# from services.scrapers.wholesome_co_scraper import WholesomeCoScraper  # noqa: F401
 from services.scrapers.iheartjane_scraper import IHeartJaneScraper  # noqa: F401
 from services.scrapers.playwright_scraper import (  # noqa: F401
     PlaywrightScraper,

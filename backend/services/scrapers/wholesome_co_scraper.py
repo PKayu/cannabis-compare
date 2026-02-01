@@ -12,12 +12,13 @@ from services.scrapers.registry import register_scraper
 logger = logging.getLogger(__name__)
 
 @register_scraper(
-    id="wholesomeco",
-    name="WholesomeCo",
+    id="wholesomeco-legacy",
+    name="WholesomeCo (Legacy - Deprecated)",
     dispensary_name="WholesomeCo",
     dispensary_location="Bountiful, UT",
     schedule_minutes=120,
-    description="Direct scraping from WholesomeCo website via embedded JSON"
+    enabled=False,  # Disabled in favor of Playwright version
+    description="DEPRECATED: Direct scraping from WholesomeCo website via embedded JSON. Use wholesomeco (Playwright) instead."
 )
 class WholesomeCoScraper(BaseScraper):
     """

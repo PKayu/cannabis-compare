@@ -23,7 +23,7 @@ if sys.platform == 'win32':
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from database import SessionLocal, engine, Base
-from services.scrapers.wholesome_co_scraper import WholesomeCoScraper
+from services.scrapers.playwright_scraper import WholesomeCoScraper
 from services.scraper_runner import ScraperRunner
 from models import Product, Price, Brand, Dispensary
 import logging

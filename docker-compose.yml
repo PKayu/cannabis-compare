@@ -1,0 +1,70 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: cannabis-db
+    environment:
+      POSTGRES_USER: cannabis_user
+      POSTGRES_PASSWORD: cannabis_password
+      POSTGRES_DB: cannabis_aggregator
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"  # Host port 5433 to avoid conflicts with local Postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cannabis_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cannabis-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cannabis-backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://cannabis_user:cannabis_password@postgres:5432/cannabis_aggregator
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+      DEBUG: ${DEBUG:-True}
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - cannabis-network
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cannabis-frontend
+    ports:
+      - "4001:3000"  # Host port 4001, container port 3000 (Next.js default)
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
+      NODE_ENV: ${NODE_ENV:-development}
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+    networks:
+      - cannabis-network
+
+volumes:
+  postgres_data:
+
+networks:
+  cannabis-network:
+    driver: bridge

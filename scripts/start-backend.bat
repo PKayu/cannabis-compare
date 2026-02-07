@@ -32,4 +32,5 @@ echo Press Ctrl+C to stop the server.
 echo.
 
 REM Use explicit Python path to ensure correct venv is used
-venv\Scripts\python.exe -m uvicorn main:app --reload --log-level info
+REM Using run_server.py entrypoint to ensure event loop policy is set for Windows + Python 3.13
+venv\Scripts\python.exe run_server.py

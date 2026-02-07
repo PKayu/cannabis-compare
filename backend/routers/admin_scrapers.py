@@ -215,8 +215,8 @@ async def trigger_scraper_run(
         raise HTTPException(status_code=400, detail=f"Scraper '{scraper_id}' is disabled")
 
     # Schedule the scraper to run in the background with its own DB session
-    loop = asyncio.get_event_loop()
-    loop.create_task(_run_scraper_in_background(scraper_id))
+    # Use asyncio.create_task() which uses the current running event loop
+    asyncio.create_task(_run_scraper_in_background(scraper_id))
 
     return {
         "status": "started",

@@ -52,7 +52,7 @@ timeout /t 2 /nobreak
 start http://localhost:8000/docs
 
 REM Create two new windows for backend and frontend
-start "Cannabis Backend" cmd /k "cd backend && venv\Scripts\activate.bat && uvicorn main:app --reload"
+start "Cannabis Backend" cmd /k "cd backend && venv\Scripts\activate.bat && python run_server.py"
 start "Cannabis Frontend" cmd /k "cd frontend && npm run dev"
 
 echo.

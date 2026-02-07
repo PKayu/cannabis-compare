@@ -7,9 +7,10 @@ from sqlalchemy.ext.declarative import declarative_base
 from config import settings
 
 # Create database engine with conditional SSL config
-# PostgreSQL (Supabase) requires SSL, but SQLite doesn't support it
+# PostgreSQL (Supabase) requires SSL, but local PostgreSQL doesn't
 is_postgres = settings.database_url.startswith("postgresql://")
-connect_args = {"sslmode": "require"} if is_postgres else {}
+is_supabase = "supabase" in settings.database_url.lower()
+connect_args = {"sslmode": "require"} if is_supabase else {}
 
 engine = create_engine(
     settings.database_url,

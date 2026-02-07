@@ -7,6 +7,14 @@ This module:
 3. Imports scrapers to trigger self-registration via decorators
 4. Configures CORS middleware
 """
+import sys
+import asyncio
+
+# Fix for Python 3.13 + Playwright on Windows
+# Python 3.13 changed default event loop policy which breaks Playwright's async subprocess
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -98,8 +106,12 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:3001",
+        "http://localhost:4001",  # Docker frontend port
+        "http://localhost:4002",  # Local dev frontend port (4001-4009 range)
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
+        "http://127.0.0.1:4001",
+        "http://127.0.0.1:4002",
         "http://localhost:8000",
         "http://127.0.0.1:8000"
     ],  # Update for production

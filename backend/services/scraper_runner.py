@@ -81,7 +81,8 @@ class ScraperRunner:
                 "scraper_id": scraper_id
             }
 
-        # Create run log entry
+        # Create run log entry and commit immediately so it's visible
+        # to other sessions (e.g., admin dashboard polling for status)
         run_log = ScraperRun(
             scraper_id=scraper_id,
             scraper_name=config.name,
@@ -89,7 +90,8 @@ class ScraperRunner:
             status="running"
         )
         self.db.add(run_log)
-        self.db.flush()
+        self.db.commit()
+        self.db.refresh(run_log)
 
         logger.info(f"Starting {config.name} scraper (run_id={run_log.id})...")
 

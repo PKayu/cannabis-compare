@@ -442,6 +442,107 @@ class CuraleafScraper(PlaywrightScraper):
                         else if (fullText.includes('Sativa')) strainType = 'Sativa';
                         else if (fullText.includes('Hybrid')) strainType = 'Hybrid';
 
+                        // Extract brand from original fullText BEFORE processing
+                        // Curaleaf brands - comprehensive list based on their inventory
+                        const knownBrands = [
+                            'Curaleaf', 'Grassroots', 'Select', 'DGT', 'Find.', 'Jams',
+                            'Chief', 'Incredibles', 'Mindseye', 'BCD', 'AbsoluteXtracts',
+                            'Care By Design', 'Guild', 'Lowell', 'Floyds of Leadville',
+                            'CBD Clinic', 'CBD For Life', 'Platinum', 'Dixie',
+                            'Canna Pros', 'Green Therapies', 'Utah Cannabis',
+                            'WholesomeCo', 'Tryke', 'Standard', 'Dragonfly',
+                            'Boojum', 'Hoodoo', 'Riverside Farm', 'Hi Variety',
+                            'Surplus', 'Element', 'Cresco', 'Bazelet',
+                            'Floweer', 'Plus', 'Loud', 'Connected',
+                            'Stiiizy', 'Select', 'RYTHM', 'Justice'
+                        ];
+
+                        let brand = null;
+                        // Search in original fullText for brand names
+                        // Use word boundaries where possible, but also handle concatenated text
+                        for (const b of knownBrands) {
+                            // First try simple string matching (handles special chars like . in "Find.")
+                            if (fullText.includes(b)) {
+                                brand = b;
+                                break;
+                            }
+                            // Also try case-insensitive search
+                            const lowerText = fullText.toLowerCase();
+                            const lowerBrand = b.toLowerCase();
+                            if (lowerText.includes(lowerBrand)) {
+                                brand = b;
+                                break;
+                            }
+                        }
+
+                        // Fallback: Try to extract brand using position patterns
+                        // Brands often appear right before strain type or product type
+                        if (!brand) {
+                            // Words that should never be treated as brands
+                            const nonBrandWords = [
+                                'Flower', 'Whole', 'Cartridge', 'Vape', 'Edible', 'Tincture',
+                                'Topical', 'Concentrate', 'Preroll', 'Infusion', 'Gummies',
+                                'Balm', 'Cream', 'Salve', 'Patch', 'Tablet', 'Tablets',
+                                'Capsule', 'Capsules', 'Pod', 'Pods', 'Pen', 'Pens',
+                                'Add', 'Buy', 'Cart', 'Off', 'Each', 'Pack', 'mg',
+                                'THC', 'CBD', 'Sativa', 'Indica', 'Hybrid', 'or'
+                            ];
+
+                            // Pattern 1: Extract text between product type and strain type
+                            // This is where brands typically appear in Curaleaf's format
+                            const productTypes = ['Whole Flower', 'Cartridge', 'Infusion', 'Gummies', 'Tincture', 'Balm', 'Tablet'];
+                            for (const prodType of productTypes) {
+                                if (fullText.includes(prodType) && strainType) {
+                                    // Find text between product type and strain type
+                                    const parts = fullText.split(prodType);
+                                    if (parts.length > 1) {
+                                        const afterType = parts[1];
+                                        // Find where strain type appears
+                                        const strainIndex = afterType.indexOf(strainType);
+                                        if (strainIndex > 0) {
+                                            let potentialBrand = afterType.substring(0, strainIndex).trim();
+                                            // Clean up - remove common non-brand words
+                                            potentialBrand = potentialBrand.replace(/\\d+\\.?\\d*mg?/gi, '');
+                                            potentialBrand = potentialBrand.replace(/\\s+/g, ' ').trim();
+                                            // Only use if it looks reasonable
+                                            if (potentialBrand.length > 1 && potentialBrand.length < 30 &&
+                                                potentialBrand.length > 2 &&
+                                                !nonBrandWords.includes(potentialBrand) &&
+                                                !/\\d/.test(potentialBrand)) {
+                                                brand = potentialBrand;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Pattern 2: Text before "Indica", "Sativa", or "Hybrid" might be brand
+                            if (!brand) {
+                                const strainPattern = /([A-Z][a-z]+)\\s*(Indica|Sativa|Hybrid)/i;
+                                const strainMatch = fullText.match(strainPattern);
+                                if (strainMatch) {
+                                    const potentialBrand = strainMatch[1].trim();
+                                    if (potentialBrand.length > 2 && potentialBrand.length < 30 &&
+                                        !nonBrandWords.includes(potentialBrand)) {
+                                        brand = potentialBrand;
+                                    }
+                                }
+                            }
+
+                            // Pattern 3: Text before "Whole Flower" might be brand
+                            if (!brand) {
+                                const flowerPattern = /([A-Z][A-Za-z]+)\\s+Whole Flower/i;
+                                const flowerMatch = fullText.match(flowerPattern);
+                                if (flowerMatch && flowerMatch[1].length > 2) {
+                                    const potentialBrand = flowerMatch[1].trim();
+                                    if (!nonBrandWords.includes(potentialBrand)) {
+                                        brand = potentialBrand;
+                                    }
+                                }
+                            }
+                        }
+
                         // Parse product name and brand
                         // Curaleaf format: "ProductNameBrandStrainTypeTHC: XX%$Price"
                         // We need to extract the actual product name
@@ -466,15 +567,11 @@ class CuraleafScraper(PlaywrightScraper):
                         name = name.replace(/Add to cart/gi, '');
                         name = name.replace(/BUY \\(\\d+\\)[^+]+/g, ' ');  // Remove promos like "BUY (4) SELECT..."
 
-                        // Remove known brands
-                        const brands = ['DGT', 'Select', 'Find.', 'Curaleaf', 'Grassroots', 'Jams'];
-                        let brand = null;
-                        for (const b of brands) {
-                            if (name.includes(b)) {
-                                brand = b;
-                                name = name.replace(b, ' ');
-                                break;
-                            }
+                        // Remove the brand we found from the name (if found)
+                        if (brand) {
+                            // Simple case-insensitive replace
+                            const brandRegex = new RegExp(brand, 'gi');
+                            name = name.replace(brandRegex, ' ');
                         }
 
                         // Clean up name

@@ -7,10 +7,21 @@ Works for:
 - HTML with complex interactions
 - Any site that needs a real browser context
 """
+import sys
+import asyncio
 import logging
 from typing import List, Optional, TYPE_CHECKING
 from .base_scraper import BaseScraper, ScrapedProduct, ScrapedPromotion
 from .registry import register_scraper
+
+# Fix for Python 3.13 + Playwright on Windows
+# Python 3.13 changed default event loop policy which breaks Playwright's async subprocess
+if sys.platform == "win32":
+    try:
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    except RuntimeError:
+        # Event loop is already running, skip
+        pass
 
 logger = logging.getLogger(__name__)
 

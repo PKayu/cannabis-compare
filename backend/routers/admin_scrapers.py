@@ -7,16 +7,21 @@ Provides endpoints for:
 - Scheduler status and control (pause, resume, trigger)
 - Data quality and dispensary freshness metrics
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+import asyncio
+import logging
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, case
 from typing import Optional, List
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 
-from database import get_db
+from database import get_db, SessionLocal
 from models import ScraperRun, Product, Price, Brand, Dispensary
 from services.scrapers.registry import ScraperRegistry
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/admin/scrapers", tags=["admin-scrapers"])
 
@@ -177,21 +182,48 @@ async def get_scheduler_status():
     )
 
 
+async def _run_scraper_in_background(scraper_id: str) -> None:
+    """Run a scraper with its own database session (for background execution)."""
+    from services.scraper_runner import ScraperRunner
+
+    db = SessionLocal()
+    try:
+        runner = ScraperRunner(db, triggered_by="admin-manual")
+        result = await runner.run_by_id(scraper_id)
+        logger.info(f"Background scraper run complete for '{scraper_id}': {result.get('status')}")
+    except Exception as e:
+        logger.error(f"Background scraper run failed for '{scraper_id}': {e}", exc_info=True)
+    finally:
+        db.close()
+
+
 @router.post("/run/{scraper_id}")
 async def trigger_scraper_run(
     scraper_id: str,
-    db: Session = Depends(get_db)
+    background_tasks: BackgroundTasks,
 ):
-    """Manually trigger a scraper run with full logging."""
-    from services.scraper_runner import ScraperRunner
+    """Manually trigger a scraper run in the background.
 
+    Returns immediately with status 'started'. The scraper runs
+    asynchronously -- poll /health or /runs to check progress.
+    """
     config = ScraperRegistry.get(scraper_id)
     if not config:
         raise HTTPException(status_code=404, detail=f"Scraper '{scraper_id}' not found")
 
-    runner = ScraperRunner(db, triggered_by="admin-manual")
-    result = await runner.run_by_id(scraper_id)
-    return result
+    if not config.enabled:
+        raise HTTPException(status_code=400, detail=f"Scraper '{scraper_id}' is disabled")
+
+    # Schedule the scraper to run in the background with its own DB session
+    loop = asyncio.get_event_loop()
+    loop.create_task(_run_scraper_in_background(scraper_id))
+
+    return {
+        "status": "started",
+        "scraper_id": scraper_id,
+        "scraper_name": config.name,
+        "message": f"Scraper '{config.name}' started. Poll /health or /runs to check progress."
+    }
 
 
 @router.post("/scheduler/pause/{scraper_id}")

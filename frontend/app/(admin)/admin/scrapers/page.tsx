@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { api } from '@/lib/api'
 
 interface ScraperHealth {
@@ -58,14 +58,45 @@ export default function ScrapersPage() {
     loadData()
   }, [loadData])
 
+  const pollIntervals = useRef<Record<string, NodeJS.Timeout>>({})
+
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(pollIntervals.current).forEach(clearInterval)
+    }
+  }, [])
+
   const triggerRun = async (scraperId: string) => {
     setRunningScrapers(prev => new Set(prev).add(scraperId))
     try {
       await api.post(`/api/admin/scrapers/run/${scraperId}`)
-      await loadData()
+
+      // Poll for completion every 5 seconds
+      const interval = setInterval(async () => {
+        try {
+          const runsRes = await api.get(`/api/admin/scrapers/runs?scraper_id=${scraperId}&limit=1`)
+          const latestRun = runsRes.data[0]
+
+          if (latestRun && latestRun.status !== 'running') {
+            // Scraper finished -- stop polling, refresh data, clear running state
+            clearInterval(interval)
+            delete pollIntervals.current[scraperId]
+            setRunningScrapers(prev => {
+              const next = new Set(prev)
+              next.delete(scraperId)
+              return next
+            })
+            await loadData()
+          }
+        } catch {
+          // If polling fails, keep trying
+        }
+      }, 5000)
+
+      pollIntervals.current[scraperId] = interval
     } catch (err) {
       console.error('Failed to trigger scraper:', err)
-    } finally {
       setRunningScrapers(prev => {
         const next = new Set(prev)
         next.delete(scraperId)

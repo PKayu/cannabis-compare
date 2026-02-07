@@ -189,10 +189,22 @@ Frontend Display Results
 - `GET /api/dispensaries` - List all dispensaries
 - `GET /api/dispensaries/{id}` - Get dispensary details
 
-### Admin Routes (Planned)
-- `POST /api/admin/scrape` - Trigger data scraping
-- `GET /api/admin/scrape-logs` - View scraping logs
-- `POST /api/admin/normalize` - Trigger data normalization
+### Admin Scraper Routes (Implemented)
+- `POST /api/admin/scrapers/run/{scraper_id}` - Trigger scraper run (async/background -- returns `{"status": "started"}` immediately; poll `/runs` for progress)
+- `GET /api/admin/scrapers/runs` - Paginated run history with scraper_id/status filters
+- `GET /api/admin/scrapers/health` - 7-day health metrics per scraper
+- `GET /api/admin/scrapers/scheduler/status` - Scheduler state and job list
+- `POST /api/admin/scrapers/scheduler/pause/{scraper_id}` - Pause scheduled scraper
+- `POST /api/admin/scrapers/scheduler/resume/{scraper_id}` - Resume scheduled scraper
+- `GET /api/admin/scrapers/quality/metrics` - Data completeness metrics
+- `GET /api/admin/scrapers/dispensaries/freshness` - Data freshness per dispensary
+
+### Admin Flag Routes (Implemented)
+- `GET /api/admin/flags/pending` - Get pending ScraperFlags for review
+- `GET /api/admin/flags/stats` - Flag statistics (pending/approved/rejected)
+- `GET /api/admin/flags/{flag_id}` - Get specific flag detail
+- `POST /api/admin/flags/approve/{flag_id}` - Approve merge of flagged product
+- `POST /api/admin/flags/reject/{flag_id}` - Reject flag and create new product
 
 ## Request/Response Format
 

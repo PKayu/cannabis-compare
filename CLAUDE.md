@@ -39,10 +39,10 @@ Utah Cannabis Aggregator is a full-stack web application for Utah Medical Cannab
 ### High-Level System Architecture
 
 ```
-Browser (React/Next.js) ←→ FastAPI Backend ←→ PostgreSQL (Supabase)
-  - Port 3000            - Port 8000         - Managed service
-  - Next.js App Router   - JWT Auth          - SQLAlchemy ORM
-  - Tailwind CSS         - Pydantic validation
+Browser (React/Next.js) ←→ FastAPI Backend ←→ PostgreSQL (Docker/Supabase)
+  - Port 4001            - Port 8000         - Docker container or
+  - Next.js App Router   - Internal only     - Supabase managed
+  - Tailwind CSS         - JWT Auth          - SQLAlchemy ORM
 ```
 
 ### Data Flow Pattern
@@ -126,13 +126,15 @@ Users configure notification preferences via `/profile/notifications`:
 
 Located at `/admin` (frontend) with corresponding backend API routers:
 
-- **Admin Scrapers** ([`routers/admin_scrapers.py`](backend/routers/admin_scrapers.py)) - View scraper status, trigger manual runs, view execution history
+- **Admin Scrapers** ([`routers/admin_scrapers.py`](backend/routers/admin_scrapers.py)) - View scraper status, trigger manual runs (async/background), view execution history
 - **Admin Flags** ([`routers/admin_flags.py`](backend/routers/admin_flags.py)) - Review and resolve data quality issues
 - **Admin Quality** ([`services/quality/outlier_detection.py`](backend/services/quality/outlier_detection.py)) - Statistical analysis to identify price outliers
 
+**Async Scraper Execution:** The `POST /api/admin/scrapers/run/{scraper_id}` endpoint uses fire-and-forget background execution via `asyncio.create_task()`. It returns immediately with `{"status": "started"}` instead of blocking until the scraper completes. The scraper runs in the background with its own database session (created via `SessionLocal()`) to avoid the request-scoped session being closed. The `ScraperRun` entry is committed immediately with status `"running"` so other sessions (e.g., frontend polling) can see it. The frontend polls `/api/admin/scrapers/runs?scraper_id=X&limit=1` every 5 seconds until the run status changes from `"running"` to a terminal state (`"success"`, `"error"`, or `"warning"`). Disabled scrapers are rejected with HTTP 400.
+
 Frontend uses Next.js App Router with route group `(admin)` for admin-specific pages:
 - [`/admin/page.tsx`](frontend/app/(admin)/admin/page.tsx) - Main dashboard
-- [`/admin/scrapers/page.tsx`](frontend/app/(admin)/admin/scrapers/page.tsx) - Scraper management
+- [`/admin/scrapers/page.tsx`](frontend/app/(admin)/admin/scrapers/page.tsx) - Scraper management with polling-based run status
 - [`/admin/quality/page.tsx`](frontend/app/(admin)/admin/quality/page.tsx) - Quality metrics
 - [`/admin/cleanup/page.tsx`](frontend/app/(admin)/admin/cleanup/page.tsx) - Flagged items
 
@@ -277,6 +279,104 @@ curl http://localhost:8000/health  # Should return {"status": "healthy"}
 # Swagger UI: http://localhost:8000/docs
 # ReDoc: http://localhost:8000/redoc
 ```
+
+## Docker Development (Recommended)
+
+The project includes Docker configuration for easy development setup without installing Python, Node.js, or PostgreSQL locally.
+
+### Quick Start with Docker
+
+```bash
+# Start all services (postgres, backend, frontend)
+docker-compose up --build
+
+# Services will be available at:
+# - Frontend: http://localhost:4001
+# - Backend API: http://localhost:8000
+# - API Docs: http://localhost:8000/docs
+# - Database: localhost:5433 (direct access if needed)
+```
+
+### Docker Scripts
+
+```batch
+# Start Docker environment
+scripts\start-docker.bat
+
+# Initialize database with migrations
+scripts\docker-init-db.bat
+
+# Seed test data
+scripts\docker-seed-data.bat
+
+# Stop all containers
+scripts\docker-cleanup.bat
+```
+
+### Docker Commands
+
+```bash
+# Start all services in background
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# View specific service logs
+docker-compose logs -f backend
+docker-compose logs -f frontend
+docker-compose logs -f postgres
+
+# Restart specific service
+docker-compose restart backend
+
+# Run backend command in container
+docker-compose exec backend alembic upgrade head
+docker-compose exec backend pytest
+
+# Stop all services
+docker-compose down
+
+# Stop and remove all data (including database)
+docker-compose down -v
+
+# Rebuild containers (after dependency changes)
+docker-compose up --build
+
+# Remove all Docker data (fresh start)
+docker-compose down -v
+docker system prune -a
+```
+
+### Database Initialization in Docker
+
+```bash
+# Run migrations
+docker-compose exec backend alembic upgrade head
+
+# Seed test data
+docker-compose exec backend python seed_test_data.py
+```
+
+### Docker Troubleshooting
+
+**Issue: Containers can't connect to database**
+- Ensure postgres container is healthy: `docker-compose ps`
+- Check DATABASE_URL in backend/.env uses "postgres" not "localhost"
+- Verify network: `docker network ls`
+
+**Issue: Hot reload not working**
+- Ensure volume mounts are correct in docker-compose.yml
+- Check file permissions on Linux/Mac
+- Restart container: `docker-compose restart backend`
+
+**Issue: Port already in use**
+- Change port mapping in docker-compose.yml (e.g., "4002:3000")
+- Stop other services using the port
+
+**Issue: Database lost after restart**
+- Data persists in postgres_data volume
+- Only lost if you run `docker-compose down -v`
 
 ## Code Style & Patterns
 
@@ -580,6 +680,8 @@ scripts\run-tests.bat
 - **Logging**: Use `self.logger` for all scraper-specific logging
 - **Data quality**: Products are automatically matched via fuzzy matching - check quality dashboard
 - **Testing**: Run scrapers manually via admin dashboard before relying on scheduler
+- **Async execution**: Admin-triggered scraper runs execute in the background via `asyncio.create_task()`. The API returns immediately with `{"status": "started"}` and the frontend polls for completion. The background task creates its own database session via `SessionLocal()` to avoid session lifecycle issues.
+- **Run visibility**: `ScraperRun` entries are committed (not just flushed) with status `"running"` so polling from other sessions can see them immediately
 
 ### Authentication Gotchas
 
@@ -639,7 +741,7 @@ asyncio.run(test())
 "
 
 # Check scheduler status
-# Visit admin dashboard: http://localhost:3000/admin/scrapers
+# Visit admin dashboard: http://localhost:4002/admin/scrapers
 ```
 
 ### Frontend Issues
@@ -744,11 +846,11 @@ Each workflow follows a consistent pattern:
 ### Important URL Locations
 
 **Local Development:**
-- Frontend: http://localhost:3000
+- Frontend: http://localhost:4002 (use ports 4001-4009 range)
 - Backend API: http://localhost:8000
 - API Docs: http://localhost:8000/docs (Swagger UI)
-- Admin Dashboard: http://localhost:3000/admin
-- Search: http://localhost:3000/products/search
+- Admin Dashboard: http://localhost:4002/admin
+- Search: http://localhost:4002/products/search
 
 **Admin Pages:**
 - Main Dashboard: `/admin`
@@ -766,7 +868,7 @@ Each workflow follows a consistent pattern:
 
 | Router | Prefix | Endpoints |
 |--------|--------|-----------|
-| `admin_scrapers.py` | `/api/admin/scrapers` | List, run, status, history |
+| `admin_scrapers.py` | `/api/admin/scrapers` | List, run (async/background), status, history, health, pause, resume |
 | `admin_flags.py` | `/api/admin/flags` | List, resolve, bulk resolve |
 | `auth.py` | `/api/auth` | Register, login, refresh, verify |
 | `users.py` | `/api/users` | Profile, reviews, public profile |

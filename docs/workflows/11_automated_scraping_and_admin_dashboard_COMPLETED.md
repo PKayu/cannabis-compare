@@ -21,14 +21,20 @@ Enable production-ready automated scraping with persistent scheduling, comprehen
 ### Step 1.2: ScraperRunner Integration
 - **File**: `backend/services/scraper_runner.py`
 - `run_by_id()` now creates a `ScraperRun` record at start of every execution
+- The `ScraperRun` entry with status `"running"` is committed immediately (not just flushed) so that other database sessions (e.g., admin dashboard polling) can see it
 - Updates run with results on success or error details on failure
 - Returns `run_id` in response dict
 - Constructor accepts `triggered_by` parameter (default: "manual")
 
 ### Verification
 ```bash
-# Run a scraper and check the scraper_runs table
-curl -X POST http://localhost:8000/scrapers/run/wholesomeco
+# Trigger a scraper run (returns immediately with {"status": "started"})
+curl -X POST http://localhost:8000/api/admin/scrapers/run/wholesomeco
+
+# Poll for completion (check latest run status)
+curl "http://localhost:8000/api/admin/scrapers/runs?scraper_id=wholesomeco&limit=1"
+# Wait until status changes from "running" to "success", "error", or "warning"
+
 # Query: SELECT * FROM scraper_runs ORDER BY started_at DESC LIMIT 5;
 ```
 
@@ -65,7 +71,7 @@ curl -X POST http://localhost:8000/scrapers/run/wholesomeco
 - `GET /api/admin/scrapers/runs` - Paginated run history with scraper_id/status filters
 - `GET /api/admin/scrapers/health` - 7-day health metrics per scraper
 - `GET /api/admin/scrapers/scheduler/status` - Scheduler state and job list
-- `POST /api/admin/scrapers/run/{scraper_id}` - Manual trigger with logging
+- `POST /api/admin/scrapers/run/{scraper_id}` - **Async** manual trigger (returns `{"status": "started"}` immediately; scraper runs in background via `asyncio.create_task()` with its own `SessionLocal()` database session; disabled scrapers return HTTP 400; poll `/runs` to check progress)
 - `POST /api/admin/scrapers/scheduler/pause/{scraper_id}` - Pause scraper
 - `POST /api/admin/scrapers/scheduler/resume/{scraper_id}` - Resume scraper
 - `GET /api/admin/scrapers/quality/metrics` - Data completeness metrics
@@ -98,7 +104,8 @@ curl http://localhost:8000/api/admin/scrapers/scheduler/status
 ### Step 4.3: Scraper Monitoring
 - **File**: `frontend/app/(admin)/admin/scrapers/page.tsx` (NEW)
 - Health cards per scraper with success rate badges (green/yellow/red)
-- "Run Now" button per scraper with loading state
+- "Run Now" button per scraper -- triggers async background run (POST returns `{"status": "started"}` immediately)
+- Frontend polls `/api/admin/scrapers/runs?scraper_id=X&limit=1` every 5 seconds after trigger; stops polling and refreshes data when run status changes from `"running"` to a terminal state; polling interval ref is cleaned up on unmount
 - "View Runs" filter per scraper
 - Full run history table with status, duration, product counts, errors
 

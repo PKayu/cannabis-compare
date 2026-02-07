@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/AuthContext'
 
 export default function Navigation() {
   const pathname = usePathname()
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const [watchlistCount, setWatchlistCount] = useState(0)
 
   const isLoggedIn = !!user
@@ -70,7 +70,7 @@ export default function Navigation() {
               Dispensaries
             </Link>
 
-            {isLoggedIn && (
+            {!authLoading && isLoggedIn && (
               <Link
                 href="/watchlist"
                 className={`${
@@ -88,7 +88,9 @@ export default function Navigation() {
               </Link>
             )}
 
-            {isLoggedIn ? (
+            {authLoading ? (
+              <div className="w-16 h-8 bg-gray-200 rounded animate-pulse" />
+            ) : isLoggedIn ? (
               <Link
                 href="/profile"
                 className={`${

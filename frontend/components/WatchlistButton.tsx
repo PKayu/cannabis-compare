@@ -68,9 +68,14 @@ export default function WatchlistButton({ productId, initialWatched = false }: W
       }
     } catch (error: any) {
       if (error.response?.status === 401) {
-        // Redirect to login using Next.js router
-        const returnUrl = encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '/products/search')
-        router.push(`/auth/login?returnUrl=${returnUrl}`)
+        if (user) {
+          // User is authenticated on frontend but backend rejected the token.
+          // Don't redirect to login (creates infinite loop) - show error instead.
+          showToast('Authentication error. Please try signing out and back in.', 'info')
+        } else {
+          const returnUrl = encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '/products/search')
+          router.push(`/auth/login?returnUrl=${returnUrl}`)
+        }
       } else {
         console.error('Failed to toggle watchlist:', error)
         showToast('Failed to update watchlist. Please try again.', 'info')

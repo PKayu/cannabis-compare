@@ -2,10 +2,10 @@
 
 import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 import { api } from '@/lib/api'
 import Link from 'next/link'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
+import { useAuth } from '@/lib/AuthContext'
 
 interface UserProfile {
   id: string
@@ -34,6 +34,7 @@ function ProfileContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const { signOut } = useAuth()
 
   useEffect(() => {
     loadProfile()
@@ -62,7 +63,7 @@ function ProfileContent() {
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut()
+      await signOut()
       router.push('/')
     } catch (err) {
       console.error('Logout failed:', err)

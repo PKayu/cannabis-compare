@@ -159,6 +159,108 @@ The app uses a dual authentication system:
 - Backend JWT enables stateless API authentication without depending on Supabase on every request
 - Frontend axios interceptor (`lib/api.ts`) automatically attaches tokens to requests
 
+### Supabase + Next.js Authentication Rules (CRITICAL)
+
+These rules were learned from debugging a session-destruction bug. **Follow them in ALL projects using Supabase Auth with Next.js/React.**
+
+#### Rule 1: NEVER call `signOut()` in API 401 interceptors
+
+```typescript
+// ❌ WRONG - Destroys valid sessions during establishment
+apiClient.interceptors.response.use(null, async (error) => {
+  if (error.response?.status === 401) {
+    await supabase.auth.signOut()  // KILLS THE SESSION
+  }
+})
+
+// ✅ CORRECT - Emit event, let components handle it
+apiClient.interceptors.response.use(null, async (error) => {
+  if (error.response?.status === 401) {
+    authEvents.emitAuthFailure()  // Components decide what to do
+  }
+})
+```
+
+**Why:** After OAuth/magic link login, there's a brief window where the session exists but the token isn't ready for API requests. A 401 during this window doesn't mean the session is invalid - calling `signOut()` destroys a valid session that was just established.
+
+#### Rule 2: Use `onAuthStateChange` as the SINGLE source of truth
+
+```typescript
+// ❌ WRONG - Race conditions between getSession() and onAuthStateChange
+useEffect(() => {
+  supabase.auth.getSession().then(...)  // Can overwrite valid state
+  supabase.auth.onAuthStateChange(...)  // Fires separately
+  setTimeout(...)                        // Adds more timing issues
+}, [])
+
+// ✅ CORRECT - Single source of truth
+useEffect(() => {
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    (event, session) => {
+      setSession(session)
+      setUser(session?.user ?? null)
+      setLoading(false)
+    }
+  )
+  return () => subscription.unsubscribe()
+}, [])
+```
+
+**Why:** In Supabase v2, `onAuthStateChange` fires `INITIAL_SESSION` immediately on subscribe. No need for `getSession()`. Multiple async sources setting the same state creates race conditions where a stale null overwrites a valid session.
+
+#### Rule 3: One AuthContext, zero independent auth state
+
+```typescript
+// ❌ WRONG - Component maintains its own auth state
+function UserNav() {
+  const [user, setUser] = useState(null)
+  useEffect(() => {
+    supabase.auth.getSession().then(...)
+    supabase.auth.onAuthStateChange(...)  // Second listener!
+  }, [])
+}
+
+// ✅ CORRECT - All components use the shared context
+function UserNav() {
+  const { user, loading, signOut } = useAuth()
+}
+```
+
+**Why:** Multiple components checking auth independently creates timing inconsistencies. One component may show "logged in" while another shows "logged out."
+
+#### Rule 4: Components MUST check `loading` before showing auth-dependent UI
+
+```typescript
+// ❌ WRONG - Shows "Login" during auth initialization
+const { user } = useAuth()
+return user ? <Profile /> : <LoginLink />
+
+// ✅ CORRECT - Shows placeholder while loading
+const { user, loading } = useAuth()
+if (loading) return <Skeleton />
+return user ? <Profile /> : <LoginLink />
+```
+
+#### Rule 5: Callback pages should use AuthContext, not direct Supabase calls
+
+The callback page just waits for `useAuth()` to report a user, then redirects. The Supabase client automatically processes URL tokens via `detectSessionInUrl`. No need to check `window.location.hash` or call `getSession()` directly.
+
+#### Rule 6: Always configure the Supabase client explicitly
+
+```typescript
+export const supabase = createClient(url, key, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+})
+```
+
+#### Rule 7: Use context `signOut()` everywhere, never call `supabase.auth.signOut()` directly
+
+Direct calls bypass the context, leaving it in a stale state where it still thinks the user is logged in.
+
 ### API Organization
 
 The app has 12 modular routers (all implemented):

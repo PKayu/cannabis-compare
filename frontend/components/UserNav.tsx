@@ -1,9 +1,9 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/lib/AuthContext'
 
 interface UserNavProps {
   className?: string
@@ -15,53 +15,17 @@ interface UserNavProps {
  * Displays different navigation options based on authentication state:
  * - If authenticated: Shows username and dropdown with profile/settings/logout
  * - If not authenticated: Shows "Sign In" button
+ *
+ * Uses the shared AuthContext to ensure consistent auth state across the app.
  */
 export default function UserNav({ className = '' }: UserNavProps) {
-  const [user, setUser] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+  const { user, loading, signOut } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
   const router = useRouter()
 
-  useEffect(() => {
-    checkAuth()
-
-    // Listen for auth state changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user) {
-        setUser(session.user)
-      } else {
-        setUser(null)
-      }
-      setLoading(false)
-    })
-
-    return () => {
-      subscription?.unsubscribe()
-    }
-  }, [])
-
-  const checkAuth = async () => {
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-
-      if (session?.user) {
-        setUser(session.user)
-      }
-    } catch (error) {
-      console.error('Auth check failed:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut()
-      setUser(null)
+      await signOut()
       setIsOpen(false)
       router.push('/')
     } catch (error) {

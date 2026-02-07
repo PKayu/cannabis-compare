@@ -101,10 +101,16 @@ export default function ReviewForm({ productId, onSubmit, onCancel }: ReviewForm
     } catch (err: any) {
       console.error('Failed to submit review:', err)
 
-      // Handle unauthorized error - redirect to login using Next.js router
+      // Handle unauthorized error
       if (err.response?.status === 401) {
-        const returnUrl = encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '/products/search')
-        router.push(`/auth/login?returnUrl=${returnUrl}`)
+        if (user) {
+          // User is authenticated on frontend but backend rejected the token.
+          // Don't redirect to login (creates infinite loop) - show error instead.
+          setError('Authentication error. Please try signing out and back in.')
+        } else {
+          const returnUrl = encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '/products/search')
+          router.push(`/auth/login?returnUrl=${returnUrl}`)
+        }
         return
       }
 

@@ -2,83 +2,51 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/lib/AuthContext'
 
 export default function CallbackPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [loading, setLoading] = useState(true)
+  const { user, loading } = useAuth()
   const [error, setError] = useState<string | null>(null)
+  const [hasTimedOut, setHasTimedOut] = useState(false)
 
+  // Timeout: if auth doesn't resolve in 10 seconds, show error
   useEffect(() => {
-    let mounted = true
-    let attempts = 0
-    const maxAttempts = 5
+    const timeout = setTimeout(() => {
+      setHasTimedOut(true)
+    }, 10000)
 
-    const checkSession = async () => {
-      try {
-        // Get the code from URL hash (Supabase auth redirect)
-        const hash = window.location.hash
-        if (!hash && attempts === 0) {
-          // No auth data in URL on first attempt
-          if (mounted) {
-            setError('No authentication data received. Please try signing in again.')
-            setLoading(false)
-          }
-          return
-        }
+    return () => clearTimeout(timeout)
+  }, [])
 
-        // Supabase automatically exchanges the code for a session
-        // Check if we have an active session
-        const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession()
+  // Main logic: when auth resolves with a user, redirect
+  useEffect(() => {
+    // Still loading auth state -- wait
+    if (loading) return
 
-        if (sessionError && mounted) {
-          throw sessionError
-        }
-
-        if (session && mounted) {
-          // Session established successfully
-          // Get returnUrl from query params or default to homepage
-          const returnUrl = searchParams.get('returnUrl') || '/'
-          router.push(returnUrl)
-        } else if (attempts < maxAttempts && mounted) {
-          // No session yet, retry with exponential backoff
-          attempts++
-          setTimeout(() => checkSession(), 300 * attempts)
-        } else if (mounted) {
-          // All retries exhausted
-          setError('Authentication failed. Please try signing in again.')
-          setLoading(false)
-        }
-      } catch (err: any) {
-        if (mounted) {
-          setError(err.message || 'An error occurred during authentication')
-          setLoading(false)
-        }
-      }
+    if (user) {
+      // Auth succeeded. Redirect to the return URL.
+      const returnUrl = searchParams.get('returnUrl') || '/'
+      console.log('[Callback] Auth confirmed, redirecting to:', returnUrl)
+      router.replace(returnUrl)
+    } else if (hasTimedOut) {
+      // Auth finished loading but no user, and we've waited long enough
+      setError('Authentication failed. Please try signing in again.')
     }
+  }, [user, loading, hasTimedOut, router, searchParams])
 
-    checkSession()
+  // Grace period: if auth finishes loading with no user before the timeout,
+  // wait 2 more seconds for the SIGNED_IN event to propagate (hash processing).
+  useEffect(() => {
+    if (!loading && !user && !hasTimedOut && !error) {
+      const grace = setTimeout(() => {
+        setError('Authentication failed. Please try signing in again.')
+      }, 2000)
 
-    return () => {
-      mounted = false
+      return () => clearTimeout(grace)
     }
-  }, [router, searchParams])
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-cannabis-50 to-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cannabis-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 font-medium">Verifying your credentials...</p>
-          <p className="text-sm text-gray-500 mt-2">Please wait</p>
-        </div>
-      </div>
-    )
-  }
+  }, [loading, user, hasTimedOut, error])
 
   if (error) {
     return (
@@ -110,5 +78,13 @@ export default function CallbackPage() {
     )
   }
 
-  return null
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-cannabis-50 to-gray-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cannabis-600 mx-auto mb-4"></div>
+        <p className="text-gray-600 font-medium">Verifying your credentials...</p>
+        <p className="text-sm text-gray-500 mt-2">Please wait</p>
+      </div>
+    </div>
+  )
 }

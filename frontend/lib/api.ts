@@ -52,24 +52,17 @@ apiClient.interceptors.request.use(async (config) => {
 
 /**
  * Add response interceptor for error handling
- * Handles 401 Unauthorized responses by clearing auth state and emitting event
- * NOTE: Does NOT redirect - emits event for ProtectedRoute to handle consistently
+ * Handles 401 Unauthorized responses by emitting an auth failure event.
+ * IMPORTANT: Does NOT call signOut() -- a 401 may be a timing issue during
+ * session establishment, and signOut() would destroy a valid session.
+ * ProtectedRoute and individual components handle the redirect.
  */
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    // Handle 401 Unauthorized - clear auth state and emit event
     if (error.response?.status === 401) {
-      try {
-        // Clear auth state using shared Supabase client
-        await supabase.auth.signOut()
-        // Emit event so ProtectedRoute can handle redirect consistently
-        authEvents.emitAuthFailure()
-      } catch (signOutError) {
-        console.error('Failed to sign out:', signOutError)
-      }
-
-      // NO REDIRECT - ProtectedRoute component will handle the redirect
+      console.warn('[API] 401 Unauthorized response received')
+      authEvents.emitAuthFailure()
     }
 
     return Promise.reject(error)

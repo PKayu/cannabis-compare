@@ -43,8 +43,18 @@ from services.scrapers.curaleaf_scraper import (  # noqa: F401
 
 from services.scrapers.registry import ScraperRegistry
 
+from config import settings
+
 import logging
 logger = logging.getLogger(__name__)
+
+# Warn if Supabase credentials are missing (auth will silently fail without them)
+if not settings.supabase_url or not settings.supabase_service_key:
+    logger.warning(
+        "SUPABASE_URL and/or SUPABASE_SERVICE_KEY not configured. "
+        "Supabase OAuth token verification will fail. "
+        "Set these in backend/.env"
+    )
 
 
 @asynccontextmanager

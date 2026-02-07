@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 import { authEvents } from '@/lib/api'
+import { useAuth } from '@/lib/AuthContext'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -15,79 +15,40 @@ interface ProtectedRouteProps {
  * Ensures only authenticated users can access wrapped content.
  * Redirects to /auth/login if user is not authenticated.
  *
- * Usage:
- * ```tsx
- * <ProtectedRoute>
- *   <YourProtectedComponent />
- * </ProtectedRoute>
- * ```
+ * Uses the shared AuthContext as the single source of truth for auth state.
  */
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const [isAuthed, setIsAuthed] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
+  const { user, loading } = useAuth()
+  const [isRedirecting, setIsRedirecting] = useState(false)
   const router = useRouter()
   const pathname = usePathname()
-  const isRedirecting = useRef(false)
 
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const { data, error } = await supabase.auth.getSession()
-
-        if (error) {
-          throw error
-        }
-
-        if (data.session) {
-          setIsAuthed(true)
-        } else {
-          // Store the current path so we can redirect back after login
-          const returnUrl = encodeURIComponent(pathname)
-          isRedirecting.current = true
-          router.push(`/auth/login?returnUrl=${returnUrl}`)
-        }
-      } catch (err) {
-        console.error('Auth check failed:', err)
-        isRedirecting.current = true
-        router.push('/auth/login')
-      } finally {
-        setIsLoading(false)
-      }
+    if (!loading && !user && !isRedirecting) {
+      console.log('[ProtectedRoute] No user, redirecting to login')
+      setIsRedirecting(true)
+      const returnUrl = encodeURIComponent(pathname)
+      router.push(`/auth/login?returnUrl=${returnUrl}`)
     }
+  }, [user, loading, pathname, router, isRedirecting])
 
-    checkAuth()
-
-    // Set up listener for auth state changes from Supabase
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      // Only redirect if we're not already redirecting and auth was truly lost
-      if (!isRedirecting.current && event === 'SIGNED_OUT' && !session) {
-        isRedirecting.current = true
-        const returnUrl = encodeURIComponent(pathname)
-        router.push(`/auth/login?returnUrl=${returnUrl}`)
-      } else if (event === 'SIGNED_IN' && session) {
-        setIsAuthed(true)
-        isRedirecting.current = false
-      }
-    })
-
-    // Set up listener for API auth failures (401 responses)
+  // Listen for API auth failures (401 responses)
+  useEffect(() => {
     const cleanupAuthEvents = authEvents.onAuthFailure(() => {
-      if (!isRedirecting.current) {
-        isRedirecting.current = true
+      if (!isRedirecting) {
+        console.log('[ProtectedRoute] API auth failure, redirecting to login')
+        setIsRedirecting(true)
         const returnUrl = encodeURIComponent(pathname)
         router.push(`/auth/login?returnUrl=${returnUrl}`)
       }
     })
 
     return () => {
-      subscription?.unsubscribe()
       cleanupAuthEvents()
     }
-  }, [router, pathname])
+  }, [pathname, router, isRedirecting])
 
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -98,5 +59,5 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     )
   }
 
-  return isAuthed ? <>{children}</> : null
+  return user ? <>{children}</> : null
 }

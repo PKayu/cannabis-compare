@@ -1,7 +1,7 @@
 'use client'
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import { User, Session } from '@supabase/supabase-js'
+import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
+import { User, Session, AuthChangeEvent } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 
 interface AuthContextType {
@@ -19,28 +19,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
-
-    // Listen for auth changes
+    // onAuthStateChange is the SINGLE source of truth.
+    // In Supabase v2, it fires INITIAL_SESSION immediately on subscribe,
+    // so we do NOT need a separate getSession() call.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session)
-        setUser(session?.user ?? null)
+      (event: AuthChangeEvent, currentSession: Session | null) => {
+        console.log('[AuthContext] Auth event:', event, 'User:', currentSession?.user?.email || 'none')
+
+        setSession(currentSession)
+        setUser(currentSession?.user ?? null)
         setLoading(false)
       }
     )
 
-    return () => subscription.unsubscribe()
+    return () => {
+      subscription.unsubscribe()
+    }
   }, [])
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     await supabase.auth.signOut()
-  }
+    // State will be updated by onAuthStateChange firing SIGNED_OUT
+  }, [])
 
   return (
     <AuthContext.Provider value={{ user, session, loading, signOut }}>

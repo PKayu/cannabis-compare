@@ -1,9 +1,12 @@
 """
 Supabase client for backend authentication operations
 """
+import logging
 from typing import Optional
 from supabase import create_client
 from config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class SupabaseClient:
@@ -53,7 +56,11 @@ class SupabaseClient:
             # Verify token by attempting to get user
             user = client.auth.get_user(access_token)
             return user.user.model_dump() if user.user else None
-        except Exception:
+        except ValueError as e:
+            logger.error(f"[SupabaseClient] Configuration error: {e}")
+            return None
+        except Exception as e:
+            logger.warning(f"[SupabaseClient] Token verification failed: {e}")
             return None
 
     @staticmethod

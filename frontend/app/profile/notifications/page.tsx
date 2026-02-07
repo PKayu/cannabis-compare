@@ -1,7 +1,9 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { api } from '@/lib/api'
+import { ProtectedRoute } from '@/components/ProtectedRoute'
 
 interface NotificationPreferences {
   user_id: string
@@ -11,7 +13,8 @@ interface NotificationPreferences {
   app_notifications: boolean
 }
 
-export default function NotificationPreferencesPage() {
+function NotificationContent() {
+  const router = useRouter()
   const [prefs, setPrefs] = useState<NotificationPreferences | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -25,12 +28,9 @@ export default function NotificationPreferencesPage() {
     try {
       const response = await api.notifications.getPreferences()
       setPrefs(response.data)
-    } catch (error: any) {
-      if (error.response?.status === 401) {
-        window.location.href = `/auth/login?returnUrl=${encodeURIComponent('/profile/notifications')}`
-      } else {
-        console.error('Failed to load preferences:', error)
-      }
+    } catch (error) {
+      console.error('Failed to load preferences:', error)
+      // ProtectedRoute will handle 401 redirects
     } finally {
       setLoading(false)
     }
@@ -40,6 +40,7 @@ export default function NotificationPreferencesPage() {
     if (!prefs) return
 
     setSaving(true)
+    setSaved(false)
     try {
       await api.notifications.updatePreferences(prefs)
       setSaved(true)
@@ -145,7 +146,7 @@ export default function NotificationPreferencesPage() {
                 </span>
               </label>
 
-              <label className="flex items-center">
+              <label className="flex items-center opacity-60">
                 <input
                   type="radio"
                   name="frequency"
@@ -159,12 +160,12 @@ export default function NotificationPreferencesPage() {
                     Daily Digest
                   </span>
                   <span className="block text-sm text-gray-500">
-                    Receive one email per day with all alerts (coming soon)
+                    Receive one email per day with all alerts <span className="text-cannabis-600 font-medium">(Planned feature)</span>
                   </span>
                 </span>
               </label>
 
-              <label className="flex items-center">
+              <label className="flex items-center opacity-60">
                 <input
                   type="radio"
                   name="frequency"
@@ -178,7 +179,7 @@ export default function NotificationPreferencesPage() {
                     Weekly Summary
                   </span>
                   <span className="block text-sm text-gray-500">
-                    Receive one email per week with all alerts (coming soon)
+                    Receive one email per week with all alerts <span className="text-cannabis-600 font-medium">(Planned feature)</span>
                   </span>
                 </span>
               </label>
@@ -186,26 +187,22 @@ export default function NotificationPreferencesPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-bold mb-4">In-App Notifications</h2>
-
-          <label className="flex items-start">
-            <input
-              type="checkbox"
-              checked={prefs.app_notifications}
-              onChange={(e) => setPrefs({ ...prefs, app_notifications: e.target.checked })}
-              className="mt-1 h-4 w-4 text-cannabis-600 focus:ring-cannabis-500 border-gray-300 rounded"
-              disabled
-            />
-            <span className="ml-3">
-              <span className="block text-sm font-medium text-gray-700">
-                Enable push notifications (Coming soon)
-              </span>
-              <span className="block text-sm text-gray-500">
-                Get browser notifications for real-time alerts
-              </span>
-            </span>
-          </label>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-blue-800">About Email Alerts</h3>
+              <div className="mt-2 text-sm text-blue-700">
+                <p>
+                  Currently, only "Immediate" email delivery is available. Daily and weekly digests are planned for a future update.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="mt-8 flex items-center justify-between">
@@ -232,5 +229,13 @@ export default function NotificationPreferencesPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function NotificationPreferencesPage() {
+  return (
+    <ProtectedRoute>
+      <NotificationContent />
+    </ProtectedRoute>
   )
 }

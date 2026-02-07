@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/AuthContext'
 import { useToast } from '@/components/Toast'
@@ -12,6 +13,7 @@ interface WatchlistButtonProps {
 
 export default function WatchlistButton({ productId, initialWatched = false }: WatchlistButtonProps) {
   const { user } = useAuth()
+  const router = useRouter()
   const { showToast } = useToast()
   const [watched, setWatched] = useState(initialWatched)
   const [loading, setLoading] = useState(false)
@@ -36,8 +38,8 @@ export default function WatchlistButton({ productId, initialWatched = false }: W
         setThreshold(response.data.alert_settings.price_drop_threshold)
       }
     } catch (error) {
-      // User might not be logged in, that's okay
-      console.log('Not logged in or error checking watchlist')
+      // Silently fail - user might not be logged in
+      // ProtectedRoute will handle auth redirects
     }
   }
 
@@ -66,8 +68,9 @@ export default function WatchlistButton({ productId, initialWatched = false }: W
       }
     } catch (error: any) {
       if (error.response?.status === 401) {
-        // Redirect to login
-        window.location.href = `/auth/login?returnUrl=${encodeURIComponent(window.location.pathname)}`
+        // Redirect to login using Next.js router
+        const returnUrl = encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '/products/search')
+        router.push(`/auth/login?returnUrl=${returnUrl}`)
       } else {
         console.error('Failed to toggle watchlist:', error)
         showToast('Failed to update watchlist. Please try again.', 'info')

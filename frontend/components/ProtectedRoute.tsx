@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { authEvents } from '@/lib/api'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -26,6 +27,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
   const pathname = usePathname()
+  const isRedirecting = useRef(false)
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -41,10 +43,12 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
         } else {
           // Store the current path so we can redirect back after login
           const returnUrl = encodeURIComponent(pathname)
+          isRedirecting.current = true
           router.push(`/auth/login?returnUrl=${returnUrl}`)
         }
       } catch (err) {
         console.error('Auth check failed:', err)
+        isRedirecting.current = true
         router.push('/auth/login')
       } finally {
         setIsLoading(false)
@@ -53,20 +57,33 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
     checkAuth()
 
-    // Set up listener for auth state changes
+    // Set up listener for auth state changes from Supabase
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) {
+      // Only redirect if we're not already redirecting and auth was truly lost
+      if (!isRedirecting.current && event === 'SIGNED_OUT' && !session) {
+        isRedirecting.current = true
+        const returnUrl = encodeURIComponent(pathname)
+        router.push(`/auth/login?returnUrl=${returnUrl}`)
+      } else if (event === 'SIGNED_IN' && session) {
         setIsAuthed(true)
-      } else {
-        setIsAuthed(false)
-        router.push('/auth/login')
+        isRedirecting.current = false
+      }
+    })
+
+    // Set up listener for API auth failures (401 responses)
+    const cleanupAuthEvents = authEvents.onAuthFailure(() => {
+      if (!isRedirecting.current) {
+        isRedirecting.current = true
+        const returnUrl = encodeURIComponent(pathname)
+        router.push(`/auth/login?returnUrl=${returnUrl}`)
       }
     })
 
     return () => {
       subscription?.unsubscribe()
+      cleanupAuthEvents()
     }
   }, [router, pathname])
 

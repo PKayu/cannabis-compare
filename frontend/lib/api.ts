@@ -3,6 +3,25 @@ import { supabase } from './supabase'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+// Auth event bus for consistent auth failure handling across the app
+export const authEvents = {
+  // Trigger an auth failure event (called by API interceptor on 401)
+  emitAuthFailure: () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('auth:failed'))
+    }
+  },
+  // Listen for auth failure events
+  onAuthFailure: (callback: () => void) => {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('auth:failed', callback)
+      // Return cleanup function
+      return () => window.removeEventListener('auth:failed', callback)
+    }
+    return () => {}
+  }
+}
+
 export const apiClient = axios.create({
   baseURL: API_URL,
   headers: {
@@ -33,24 +52,24 @@ apiClient.interceptors.request.use(async (config) => {
 
 /**
  * Add response interceptor for error handling
- * Handles 401 Unauthorized responses by clearing auth state
- * NOTE: Does NOT redirect - let components handle auth errors gracefully
+ * Handles 401 Unauthorized responses by clearing auth state and emitting event
+ * NOTE: Does NOT redirect - emits event for ProtectedRoute to handle consistently
  */
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    // Handle 401 Unauthorized - clear auth state but don't redirect
-    // Redirecting here causes infinite loops when Navigation checks auth
+    // Handle 401 Unauthorized - clear auth state and emit event
     if (error.response?.status === 401) {
       try {
         // Clear auth state using shared Supabase client
         await supabase.auth.signOut()
+        // Emit event so ProtectedRoute can handle redirect consistently
+        authEvents.emitAuthFailure()
       } catch (signOutError) {
         console.error('Failed to sign out:', signOutError)
       }
 
-      // NO REDIRECT - let the calling component decide what to do
-      // Components like ProtectedRoute or WatchlistButton will handle redirects
+      // NO REDIRECT - ProtectedRoute component will handle the redirect
     }
 
     return Promise.reject(error)
@@ -83,10 +102,11 @@ export const api = {
 
   // Reviews
   reviews: {
-    list: (productId: string) => apiClient.get(`/api/products/${productId}/reviews`),
+    list: (productId: string, params?: any) => apiClient.get(`/api/reviews/product/${productId}`, { params }),
     create: (data: any) => apiClient.post('/api/reviews', data),
     update: (id: string, data: any) => apiClient.put(`/api/reviews/${id}`, data),
     delete: (id: string) => apiClient.delete(`/api/reviews/${id}`),
+    upvote: (id: string) => apiClient.post(`/api/reviews/${id}/upvote`),
   },
 
   // Dispensaries

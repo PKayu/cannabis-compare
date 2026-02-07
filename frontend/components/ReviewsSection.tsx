@@ -42,7 +42,7 @@ export default function ReviewsSection({ productId }: ReviewsSectionProps) {
         params.intention_tag = filterIntention
       }
 
-      const response = await api.get(`/api/reviews/product/${productId}`, { params })
+      const response = await api.reviews.list(productId, params)
       setReviews(response.data)
     } catch (error) {
       console.error('Failed to load reviews:', error)
@@ -189,7 +189,7 @@ function ReviewCard({ review, onUpvote }: ReviewCardProps) {
   const handleUpvote = async () => {
     try {
       setUpvoting(true)
-      await api.post(`/api/reviews/${review.id}/upvote`)
+      await api.reviews.upvote(review.id)
       onUpvote()
     } catch (error) {
       console.error('Failed to upvote:', error)

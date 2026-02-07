@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/AuthContext'
 import { useToast } from '@/components/Toast'
@@ -29,6 +30,7 @@ const moodIntentions = [
 
 export default function ReviewForm({ productId, onSubmit, onCancel }: ReviewFormProps) {
   const { user, loading: authLoading } = useAuth()
+  const router = useRouter()
   const { showToast } = useToast()
   const [formData, setFormData] = useState({
     effects_rating: 3,
@@ -99,10 +101,10 @@ export default function ReviewForm({ productId, onSubmit, onCancel }: ReviewForm
     } catch (err: any) {
       console.error('Failed to submit review:', err)
 
-      // Handle unauthorized error - redirect to login
+      // Handle unauthorized error - redirect to login using Next.js router
       if (err.response?.status === 401) {
-        const returnUrl = encodeURIComponent(window.location.pathname)
-        window.location.href = `/auth/login?returnUrl=${returnUrl}`
+        const returnUrl = encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '/products/search')
+        router.push(`/auth/login?returnUrl=${returnUrl}`)
         return
       }
 

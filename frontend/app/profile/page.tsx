@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { api } from '@/lib/api'
 import Link from 'next/link'
+import { ProtectedRoute } from '@/components/ProtectedRoute'
 
 interface UserProfile {
   id: string
@@ -27,7 +28,7 @@ interface Review {
   created_at: string
 }
 
-export default function ProfilePage() {
+function ProfileContent() {
   const [user, setUser] = useState<UserProfile | null>(null)
   const [reviews, setReviews] = useState<Review[]>([])
   const [loading, setLoading] = useState(true)
@@ -43,7 +44,7 @@ export default function ProfilePage() {
       setLoading(true)
       setError(null)
 
-      // Get user profile from backend (let API interceptor handle auth)
+      // Get user profile from backend (ProtectedRoute handles auth)
       const userRes = await api.get('/api/users/me')
       setUser(userRes.data)
 
@@ -53,7 +54,6 @@ export default function ProfilePage() {
     } catch (err: any) {
       const message = err.response?.data?.detail || err.message || 'Failed to load profile'
       setError(message)
-      // API interceptor will handle 401 redirect automatically
       console.error('Failed to load profile:', err)
     } finally {
       setLoading(false)
@@ -274,18 +274,15 @@ export default function ProfilePage() {
             </div>
           )}
         </div>
-
-        {/* Coming Soon Features */}
-        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <h3 className="font-semibold text-blue-900 mb-3">Coming Soon</h3>
-          <ul className="text-sm text-blue-800 space-y-2">
-            <li>✓ Product Watchlist</li>
-            <li>✓ Price Drop Alerts</li>
-            <li>✓ Stock Availability Notifications</li>
-            <li>✓ Profile Preferences</li>
-          </ul>
-        </div>
       </div>
     </div>
+  )
+}
+
+export default function ProfilePage() {
+  return (
+    <ProtectedRoute>
+      <ProfileContent />
+    </ProtectedRoute>
   )
 }

@@ -1,8 +1,10 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { api } from '@/lib/api'
 import Link from 'next/link'
+import { ProtectedRoute } from '@/components/ProtectedRoute'
 
 interface WatchlistItem {
   id: string
@@ -15,9 +17,10 @@ interface WatchlistItem {
   created_at: string
 }
 
-export default function WatchlistPage() {
+function WatchlistContent() {
   const [items, setItems] = useState<WatchlistItem[]>([])
   const [loading, setLoading] = useState(true)
+  const router = useRouter()
 
   useEffect(() => {
     loadWatchlist()
@@ -27,13 +30,8 @@ export default function WatchlistPage() {
     try {
       const response = await api.watchlist.list()
       setItems(response.data)
-    } catch (error: any) {
-      if (error.response?.status === 401) {
-        // Redirect to login
-        window.location.href = `/auth/login?returnUrl=${encodeURIComponent('/watchlist')}`
-      } else {
-        console.error('Failed to load watchlist:', error)
-      }
+    } catch (error) {
+      console.error('Failed to load watchlist:', error)
     } finally {
       setLoading(false)
     }
@@ -185,5 +183,13 @@ export default function WatchlistPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function WatchlistPage() {
+  return (
+    <ProtectedRoute>
+      <WatchlistContent />
+    </ProtectedRoute>
   )
 }

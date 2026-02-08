@@ -147,10 +147,20 @@ export const api = {
     flags: {
       pending: (params?: any) => apiClient.get('/api/admin/flags/pending', { params }),
       stats: () => apiClient.get('/api/admin/flags/stats'),
-      approve: (flagId: string, notes?: string) =>
-        apiClient.post(`/api/admin/flags/approve/${flagId}`, { notes }),
-      reject: (flagId: string, notes?: string) =>
-        apiClient.post(`/api/admin/flags/reject/${flagId}`, { notes }),
+      approve: (flagId: string, data?: {
+        notes?: string; name?: string; brand_name?: string; product_type?: string;
+        thc_percentage?: number | null; cbd_percentage?: number | null;
+        weight?: string; price?: number | null;
+      }) => apiClient.post(`/api/admin/flags/approve/${flagId}`, data || {}),
+      reject: (flagId: string, data?: {
+        notes?: string; name?: string; brand_name?: string; product_type?: string;
+        thc_percentage?: number | null; cbd_percentage?: number | null;
+        weight?: string; price?: number | null;
+      }) => apiClient.post(`/api/admin/flags/reject/${flagId}`, data || {}),
+      dismiss: (flagId: string, notes?: string) =>
+        apiClient.post(`/api/admin/flags/dismiss/${flagId}`, { notes }),
+      analytics: (days?: number) =>
+        apiClient.get('/api/admin/flags/analytics', { params: { days } }),
     },
     scrapers: {
       health: () => apiClient.get('/api/admin/scrapers/health'),

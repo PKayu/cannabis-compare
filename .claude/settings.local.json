@@ -118,7 +118,9 @@
       "Bash(if [ -f \"nul\" ])",
       "Bash(then rm nul)",
       "Bash(backend/venv/Scripts/python.exe:*)",
-      "Bash(pytest:*)"
+      "Bash(pytest:*)",
+      "Bash(npx tsc:*)",
+      "Bash(git clean:*)"
     ]
   },
   "mcpServers": {

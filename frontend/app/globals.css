@@ -211,3 +211,43 @@ code {
     animation: none;
   }
 }
+
+/* Cleanup queue: Counter pop animation on stat increment */
+@keyframes count-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+
+.animate-count-pop {
+  animation: count-pop 0.3s ease-out;
+}
+
+/* Cleanup queue: Progress bar completion glow */
+@keyframes progress-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(82, 201, 82, 0.4); }
+  50% { box-shadow: 0 0 8px 4px rgba(82, 201, 82, 0.3); }
+}
+
+.animate-progress-glow {
+  animation: progress-glow 1s ease-in-out 2;
+}
+
+/* Cleanup queue: Checkmark burst on approve */
+@keyframes check-burst {
+  0% { transform: scale(0); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.8; }
+  100% { transform: scale(2); opacity: 0; }
+}
+
+.animate-check-burst {
+  animation: check-burst 0.4s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-count-pop,
+  .animate-progress-glow,
+  .animate-check-burst {
+    animation: none;
+  }
+}

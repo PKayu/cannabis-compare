@@ -13,7 +13,7 @@ Tables:
 - Promotion: Recurring and one-time promotional offers
 - ScraperRun: Log of every scraper execution for monitoring
 """
-from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, Text, UniqueConstraint
+from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, Text, JSON, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
@@ -219,11 +219,12 @@ class ScraperFlag(Base):
     confidence_score = Column(Float, nullable=False)  # 0.0 to 1.0
 
     # Status workflow
-    status = Column(String, default="pending", index=True)  # pending, approved, rejected, merged
+    status = Column(String, default="pending", index=True)  # pending, approved, rejected, dismissed, merged
     merge_reason = Column(String, nullable=True)  # Why flagged for review
 
     # Admin action
     admin_notes = Column(String, nullable=True)
+    corrections = Column(JSON, nullable=True)  # Field corrections applied by admin, e.g. {"brand_name": {"from": "N/A", "to": "Beehive"}}
     resolved_at = Column(DateTime, nullable=True)
     resolved_by = Column(String, nullable=True)  # Future: admin user_id
 

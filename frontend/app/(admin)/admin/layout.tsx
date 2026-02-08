@@ -9,6 +9,7 @@ const tabs = [
   { href: '/admin/cleanup', label: 'Cleanup Queue' },
   { href: '/admin/scrapers', label: 'Scrapers' },
   { href: '/admin/quality', label: 'Data Quality' },
+  { href: '/admin/scraper-insights', label: 'Scraper Insights' },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

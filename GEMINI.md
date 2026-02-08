@@ -1,15 +1,16 @@
+# GEMINI.md
+
+This file provides guidance to Gemini Code Assist when working with code in this repository.
+
 ### Starting Large Tasks
 
-When exiting plan mode with an accepted plan: 1.**Create Task Directory**:
-mkdir -p ~/git/project/dev/active/[task-name]/
-
-2.**Create Documents**:
-
-- `[task-name]-plan.md` - The accepted plan
-- `[task-name]-context.md` - Key files, decisions
-- `[task-name]-tasks.md` - Checklist of work
-
-3.**Update Regularly**: Mark tasks complete immediately
+When exiting plan mode with an accepted plan:
+1. **Create Task Directory**: `mkdir -p dev/active/[task-name]/`
+2. **Create Documents**:
+   - `[task-name]-plan.md` - The accepted plan
+   - `[task-name]-context.md` - Key files, decisions
+   - `[task-name]-tasks.md` - Checklist of work
+3. **Update Regularly**: Mark tasks complete immediately
 
 ### Continuing Tasks
 
@@ -17,11 +18,34 @@ mkdir -p ~/git/project/dev/active/[task-name]/
 - Read all three files before proceeding
 - Update "Last Updated" timestamps
 
+### Commit Helper
+
+When invoked with `/commit-helper`:
+1. **Analyze Changes**: Review the current git diff or file modifications.
+2. **Generate Message**: Create a commit message following Conventional Commits standards:
+   - `feat:` New features
+   - `fix:` Bug fixes
+   - `docs:` Documentation changes
+   - `style:` Formatting, missing semi-colons, etc.
+   - `refactor:` Code change that neither fixes a bug nor adds a feature
+   - `test:` Adding missing tests
+   - `chore:` Maintenance tasks
+3. **Output**: Provide the git commit command or just the message block.
+
+### Code Exploration & Context
+
+- **Leverage MCP Serena**: When browsing or trying to understand code, explicitly use MCP Serena tools to search and gather context
+- **Search Strategy**: Prioritize searching over guessing file paths. If Serena errors occur, retry with different parameters
+
 ## Project Overview
 
 Utah Cannabis Aggregator is a full-stack web application for Utah Medical Cannabis patients to compare prices across dispensaries and access community-driven reviews. It's a monorepo with separate frontend (Next.js) and backend (FastAPI) applications.
 
-**Current Status**: MVP Phase 1 (Data Aggregation setup)
+**Current Status**: All 10 MVP Workflows Complete ✅ (January 2026)
+- Phase 1: Foundation ✅
+- Phase 2: Frontend Portal ✅
+- Phase 3: Community Features ✅
+
 **Compliance**: All pages must display a disclaimer that this is informational only and does not sell controlled substances.
 
 ## Architecture & Design Decisions

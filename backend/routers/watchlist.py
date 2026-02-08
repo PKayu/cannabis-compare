@@ -41,6 +41,13 @@ async def add_to_watchlist(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
+    # Resolve variant to parent - watchlist always tracks parent products
+    if not product.is_master and product.master_product_id:
+        parent = db.query(Product).filter(Product.id == product.master_product_id).first()
+        if parent:
+            product = parent
+            data.product_id = product.id
+
     # Check if already in watchlist
     existing = db.query(Watchlist).filter(
         Watchlist.user_id == current_user.id,

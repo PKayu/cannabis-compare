@@ -205,13 +205,25 @@ async def get_dispensary_inventory(
         if not product:
             continue
 
+        # Resolve to parent product for display name/brand
+        display_product = product
+        parent_id = str(product.id)
+        if not product.is_master and product.master_product_id:
+            parent = db.query(Product).filter(Product.id == product.master_product_id).first()
+            if parent:
+                display_product = parent
+                parent_id = str(parent.id)
+
         results.append({
-            "product_id": str(product.id),
-            "product_name": product.name,
-            "brand": product.brand.name if product.brand else None,
-            "product_type": product.product_type,
-            "thc_percentage": product.thc_percentage,
-            "cbd_percentage": product.cbd_percentage,
+            "product_id": parent_id,
+            "variant_id": str(product.id),
+            "product_name": display_product.name,
+            "brand": display_product.brand.name if display_product.brand else None,
+            "product_type": display_product.product_type,
+            "thc_percentage": display_product.thc_percentage,
+            "cbd_percentage": display_product.cbd_percentage,
+            "weight": product.weight,
+            "weight_grams": product.weight_grams,
             "price": float(price.amount),
             "in_stock": price.in_stock,
             "last_updated": price.last_updated.isoformat() if price.last_updated else None

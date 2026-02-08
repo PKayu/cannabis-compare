@@ -16,6 +16,9 @@ interface ScraperFlag {
   original_name: string
   original_thc: number | null
   original_cbd: number | null
+  original_weight: string | null
+  original_price: number | null
+  original_category: string | null
   brand_name: string
   dispensary_id: string
   dispensary_name: string | null
@@ -196,6 +199,15 @@ function FlagCard({ flag, onApprove, onReject }: FlagCardProps) {
             )}
             {flag.original_cbd && (
               <p className="text-sm text-gray-600">CBD: {flag.original_cbd}%</p>
+            )}
+            {flag.original_weight && (
+              <p className="text-sm text-gray-600">Weight: {flag.original_weight}</p>
+            )}
+            {flag.original_price != null && (
+              <p className="text-sm text-gray-600">Price: ${flag.original_price.toFixed(2)}</p>
+            )}
+            {flag.original_category && (
+              <p className="text-sm text-gray-600">Category: {flag.original_category}</p>
             )}
           </div>
 

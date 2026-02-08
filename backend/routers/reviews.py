@@ -114,6 +114,13 @@ async def create_review(
             detail="Product not found"
         )
 
+    # Resolve variant to parent - reviews always attach to parent product
+    if not product.is_master and product.master_product_id:
+        parent = db.query(Product).filter(Product.id == product.master_product_id).first()
+        if parent:
+            product = parent
+            review_data.product_id = product.id
+
     # Check if user already reviewed this product
     existing_review = db.query(Review).filter(
         Review.user_id == current_user.id,
@@ -198,6 +205,11 @@ async def get_product_reviews(
     Returns:
         List of reviews with user information
     """
+    # Resolve variant to parent for review lookup
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if product and not product.is_master and product.master_product_id:
+        product_id = product.master_product_id
+
     # Build base query
     query = db.query(Review).filter(Review.product_id == product_id)
 

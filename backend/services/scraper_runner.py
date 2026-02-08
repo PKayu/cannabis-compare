@@ -4,7 +4,7 @@ Scraper Runner - Executes scrapers and saves results to database.
 This service coordinates scraping operations:
 1. Instantiates the scraper from the registry
 2. Executes the scrape
-3. Processes products through ProductMatcher
+3. Processes products through ConfidenceScorer (fuzzy matching + variants)
 4. Updates prices in the database
 
 Usage:
@@ -20,7 +20,7 @@ import logging
 from sqlalchemy.orm import Session
 
 from models import Product, Price, Dispensary, ScraperRun
-from services.product_matcher import ProductMatcher
+from services.normalization.scorer import ConfidenceScorer
 from services.scrapers.registry import ScraperRegistry
 
 logger = logging.getLogger(__name__)
@@ -129,20 +129,51 @@ class ScraperRunner:
             # Link run log to dispensary now that we have it
             run_log.dispensary_id = dispensary.id
 
-            # 3. Process each product through ProductMatcher
-            matcher = ProductMatcher(self.db)
+            # 3. Pre-load master product candidates for fuzzy matching
+            master_products = (
+                self.db.query(Product)
+                .filter(Product.is_master == True)
+                .all()
+            )
+            candidates = [
+                {
+                    "id": m.id,
+                    "name": m.name,
+                    "brand": m.brand.name if m.brand else "",
+                    "thc_percentage": m.thc_percentage
+                }
+                for m in master_products
+            ]
+
+            # 4. Process each product through ConfidenceScorer
             processed_count = 0
+            flags_created = 0
 
             for scraped in products:
                 try:
-                    product = matcher.match_or_create(scraped)
-                    self._update_price(
-                        product,
-                        dispensary,
-                        scraped.price,
-                        scraped.in_stock
+                    product_id, action = ConfidenceScorer.process_scraped_product(
+                        db=self.db,
+                        scraped_product=scraped,
+                        dispensary_id=dispensary.id,
+                        candidates=candidates
                     )
-                    processed_count += 1
+
+                    if action == "flagged_review":
+                        flags_created += 1
+                        continue  # Don't create price for flagged products
+
+                    if product_id:
+                        product = self.db.query(Product).filter(
+                            Product.id == product_id
+                        ).first()
+                        if product:
+                            self._update_price(
+                                product,
+                                dispensary,
+                                scraped.price,
+                                scraped.in_stock
+                            )
+                            processed_count += 1
                 except Exception as e:
                     logger.warning(
                         f"Failed to process product '{scraped.name}': {e}"
@@ -151,11 +182,12 @@ class ScraperRunner:
                     self.db.rollback()
                     continue
 
-            # 4. Complete run log and commit all changes
+            # 5. Complete run log and commit all changes
             run_log.complete(
                 status="success",
                 products_found=len(products),
-                products_processed=processed_count
+                products_processed=processed_count,
+                flags_created=flags_created
             )
             self.db.commit()
             logger.info(f"Database import complete for {config.name}!")

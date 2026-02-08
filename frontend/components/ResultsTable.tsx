@@ -12,6 +12,7 @@ interface Product {
   min_price: number
   max_price: number
   dispensary_count: number
+  available_weights?: string[]
   relevance_score: number
 }
 
@@ -50,6 +51,16 @@ export default function ResultsTable({ products }: ResultsTableProps) {
             </div>
           )}
         </div>
+
+        {product.available_weights && product.available_weights.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-3">
+            {product.available_weights.map((w) => (
+              <span key={w} className="px-2 py-0.5 bg-cannabis-50 text-cannabis-700 text-xs rounded-full border border-cannabis-200">
+                {w}
+              </span>
+            ))}
+          </div>
+        )}
 
         <div className="flex justify-between items-center pt-3 border-t border-gray-100">
           <div>
@@ -119,6 +130,15 @@ export default function ResultsTable({ products }: ResultsTableProps) {
                     </div>
                     {product.brand && (
                       <div className="text-sm text-gray-500">{product.brand}</div>
+                    )}
+                    {product.available_weights && product.available_weights.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {product.available_weights.map((w) => (
+                          <span key={w} className="px-1.5 py-0.5 bg-cannabis-50 text-cannabis-700 text-xs rounded border border-cannabis-200">
+                            {w}
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </Link>
                 </td>

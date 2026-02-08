@@ -1,6 +1,6 @@
 """Detect stock availability changes for watched products"""
 from sqlalchemy.orm import Session
-from models import Watchlist, Price, PriceAlert
+from models import Watchlist, Price, PriceAlert, Product
 from datetime import datetime, timedelta
 from typing import List
 
@@ -24,9 +24,18 @@ class StockDetector:
         ).all()
 
         for item in watchlist_items:
+            # Watchlist tracks parent products; prices are on variants
+            variant_ids = [
+                v.id for v in
+                db.query(Product.id).filter(
+                    Product.master_product_id == item.product_id
+                ).all()
+            ]
+            price_product_ids = variant_ids if variant_ids else [item.product_id]
+
             # Check if product is in stock at any dispensary
             in_stock_prices = db.query(Price).filter(
-                Price.product_id == item.product_id,
+                Price.product_id.in_(price_product_ids),
                 Price.in_stock == True
             ).all()
 

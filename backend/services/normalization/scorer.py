@@ -2,18 +2,99 @@
 Confidence scoring and product normalization service.
 
 Handles the decision logic for scraped products:
-- >90% confidence: Auto-merge to existing product
+- >90% confidence: Auto-merge to existing product (create variant)
 - 60-90% confidence: Create ScraperFlag for admin review
-- <60% confidence: Create new product entry
+- <60% confidence: Create new product entry (parent + variant)
+
+Products use a parent/variant hierarchy:
+- Parent (is_master=True): canonical product, holds reviews
+- Variant (is_master=False): quantity-specific, holds prices
 """
 from sqlalchemy.orm import Session
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 import logging
 
 from services.normalization.matcher import ProductMatcher
+from services.normalization.weight_parser import parse_weight, extract_weight_from_name
 from services.scrapers.base_scraper import ScrapedProduct
 
 logger = logging.getLogger(__name__)
+
+
+def find_or_create_variant(
+    db: Session,
+    parent_id: str,
+    raw_weight: Optional[str],
+    scraped: ScrapedProduct
+) -> "Product":
+    """
+    Find existing variant by parent_id + weight_grams, or create a new one.
+
+    Args:
+        db: Database session
+        parent_id: ID of the parent product
+        raw_weight: Raw weight string from scraper (e.g., "3.5g")
+        scraped: Original scraped product data
+
+    Returns:
+        The variant Product record
+    """
+    from models import Product
+
+    weight_label, weight_g = parse_weight(raw_weight)
+
+    # Look for existing variant with same weight under this parent
+    if weight_g is not None:
+        existing = (
+            db.query(Product)
+            .filter(
+                Product.master_product_id == parent_id,
+                Product.is_master == False,
+                Product.weight_grams == weight_g
+            )
+            .first()
+        )
+        if existing:
+            return existing
+    else:
+        # Look for a weightless variant
+        existing = (
+            db.query(Product)
+            .filter(
+                Product.master_product_id == parent_id,
+                Product.is_master == False,
+                Product.weight_grams == None
+            )
+            .first()
+        )
+        if existing:
+            return existing
+
+    # Create new variant
+    parent = db.query(Product).filter(Product.id == parent_id).first()
+    if not parent:
+        raise ValueError(f"Parent product not found: {parent_id}")
+
+    variant = Product(
+        name=parent.name,
+        product_type=parent.product_type,
+        brand_id=parent.brand_id,
+        thc_percentage=scraped.thc_percentage or parent.thc_percentage,
+        cbd_percentage=scraped.cbd_percentage or parent.cbd_percentage,
+        is_master=False,
+        master_product_id=parent_id,
+        weight=weight_label,
+        weight_grams=weight_g,
+        normalization_confidence=1.0
+    )
+    db.add(variant)
+    db.flush()
+
+    logger.info(
+        f"Created variant for '{parent.name}' "
+        f"(weight={weight_label}, parent={parent_id})"
+    )
+    return variant
 
 
 class ConfidenceScorer:
@@ -23,7 +104,8 @@ class ConfidenceScorer:
     def process_scraped_product(
         db: Session,
         scraped_product: ScrapedProduct,
-        dispensary_id: str
+        dispensary_id: str,
+        candidates: Optional[List[dict]] = None
     ) -> Tuple[Optional[str], str]:
         """
         Process a scraped product and determine how to handle it.
@@ -32,57 +114,70 @@ class ConfidenceScorer:
             db: Database session
             scraped_product: Product data from scraper
             dispensary_id: ID of the dispensary being scraped
+            candidates: Pre-computed list of master products for matching
+                        (avoids re-querying on every call). Each dict has:
+                        id, name, brand, thc_percentage.
+                        List is mutated (new products appended) for cache freshness.
 
         Returns:
             Tuple of (product_id, action_taken)
-            - product_id: ID of matched/created product, None if flagged
+            - product_id: ID of the variant product, None if flagged
             - action_taken: "auto_merge" | "flagged_review" | "new_product"
         """
-        # Import models here to avoid circular imports
-        from models import Product, Brand, ScraperFlag
+        from models import Product, ScraperFlag
 
-        # Find all master products to compare against
-        master_products = (
-            db.query(Product)
-            .filter(Product.is_master == True)
-            .all()
+        # Build candidate list if not provided
+        if candidates is None:
+            master_products = (
+                db.query(Product)
+                .filter(Product.is_master == True)
+                .all()
+            )
+            candidates = []
+            for master in master_products:
+                candidates.append({
+                    "id": master.id,
+                    "name": master.name,
+                    "brand": master.brand.name if master.brand else "",
+                    "thc_percentage": master.thc_percentage
+                })
+
+        # Extract weight from name and get clean name for better matching
+        clean_name, extracted_weight_label, extracted_weight_g = extract_weight_from_name(
+            scraped_product.name
         )
+        name_for_matching = clean_name or scraped_product.name
 
-        # Build candidate list for matching
-        candidates = []
-        for master in master_products:
-            candidates.append({
-                "id": master.id,
-                "name": master.name,
-                "brand": master.brand.name if master.brand else "",
-                "thc_percentage": master.thc_percentage
-            })
-
-        # Find best match
+        # Find best match using clean name
         best_match, confidence, match_type = ProductMatcher.find_best_match(
-            scraped_name=scraped_product.name,
+            scraped_name=name_for_matching,
             scraped_brand=scraped_product.brand,
             candidates=candidates,
             scraped_thc=scraped_product.thc_percentage
         )
 
         if match_type == "auto_merge" and best_match:
-            # AUTO-MERGE: Link directly to existing product
+            # AUTO-MERGE: Create/find variant under the matched parent
             logger.info(
-                f"Auto-merging '{scraped_product.name}' to '{best_match['name']}' "
+                f"Auto-merging '{name_for_matching}' to '{best_match['name']}' "
                 f"(confidence: {confidence:.0%})"
             )
-            return best_match["id"], "auto_merge"
+            # Use extracted weight if scraper didn't provide one
+            weight_to_use = scraped_product.weight or extracted_weight_label
+            variant = find_or_create_variant(
+                db, best_match["id"], weight_to_use, scraped_product
+            )
+            return variant.id, "auto_merge"
 
         elif match_type == "flagged_review":
             # FLAGGED FOR REVIEW: Create ScraperFlag for admin approval
             logger.info(
-                f"Flagging '{scraped_product.name}' for review "
+                f"Flagging '{name_for_matching}' for review "
                 f"(confidence: {confidence:.0%})"
             )
 
             flag = ScraperFlag(
-                original_name=scraped_product.name,
+                original_name=name_for_matching,  # Store clean name in flag
                 original_thc=scraped_product.thc_percentage,
                 original_cbd=scraped_product.cbd_percentage,
                 brand_name=scraped_product.brand,
@@ -90,16 +185,19 @@ class ConfidenceScorer:
                 matched_product_id=best_match["id"] if best_match else None,
                 confidence_score=confidence,
                 status="pending",
-                merge_reason=f"Confidence {confidence:.0%} requires manual review"
+                merge_reason=f"Confidence {confidence:.0%} requires manual review",
+                original_weight=scraped_product.weight,
+                original_price=scraped_product.price,
+                original_category=scraped_product.category
             )
             db.add(flag)
-            db.commit()
+            db.flush()
             return None, "flagged_review"
 
         else:
-            # NEW PRODUCT: Create master product entry
+            # NEW PRODUCT: Create parent + variant
             logger.info(
-                f"Creating new product for '{scraped_product.name}' "
+                f"Creating new product for '{name_for_matching}' "
                 f"(confidence: {confidence:.0%})"
             )
 
@@ -108,8 +206,9 @@ class ConfidenceScorer:
                 db, scraped_product.brand
             )
 
-            new_product = Product(
-                name=scraped_product.name,
+            # Create parent product (is_master=True, no weight in name)
+            parent = Product(
+                name=name_for_matching,  # Use clean name without weight
                 product_type=scraped_product.category,
                 brand_id=brand_id,
                 thc_percentage=scraped_product.thc_percentage,
@@ -117,27 +216,31 @@ class ConfidenceScorer:
                 is_master=True,
                 normalization_confidence=1.0
             )
-            db.add(new_product)
-            db.commit()
-            db.refresh(new_product)
+            db.add(parent)
+            db.flush()
 
-            return new_product.id, "new_product"
+            # Create variant product (is_master=False, with weight)
+            # Use extracted weight if scraper didn't provide one
+            weight_to_use = scraped_product.weight or extracted_weight_label
+            variant = find_or_create_variant(
+                db, parent.id, weight_to_use, scraped_product
+            )
+
+            # Add parent to candidates cache so subsequent products can match
+            candidates.append({
+                "id": parent.id,
+                "name": parent.name,  # Clean name for future matching
+                "brand": scraped_product.brand,
+                "thc_percentage": scraped_product.thc_percentage
+            })
+
+            return variant.id, "new_product"
 
     @staticmethod
     def _get_or_create_brand(db: Session, brand_name: str) -> str:
-        """
-        Get existing brand or create new one.
-
-        Args:
-            db: Database session
-            brand_name: Name of the brand
-
-        Returns:
-            Brand ID
-        """
+        """Get existing brand or create new one."""
         from models import Brand
 
-        # Try to find existing brand (case-insensitive)
         brand = (
             db.query(Brand)
             .filter(Brand.name.ilike(brand_name))
@@ -145,11 +248,9 @@ class ConfidenceScorer:
         )
 
         if not brand:
-            # Create new brand
             brand = Brand(name=brand_name)
             db.add(brand)
-            db.commit()
-            db.refresh(brand)
+            db.flush()
             logger.info(f"Created new brand: {brand_name}")
 
         return brand.id
@@ -162,22 +263,9 @@ class ConfidenceScorer:
         price: float,
         in_stock: bool = True
     ) -> str:
-        """
-        Update existing price or create new price entry.
-
-        Args:
-            db: Database session
-            product_id: Product ID
-            dispensary_id: Dispensary ID
-            price: New price amount
-            in_stock: Stock status
-
-        Returns:
-            Price ID
-        """
+        """Update existing price or create new price entry."""
         from models import Price
 
-        # Check for existing price entry
         existing_price = (
             db.query(Price)
             .filter(
@@ -188,13 +276,11 @@ class ConfidenceScorer:
         )
 
         if existing_price:
-            # Update existing price with history tracking
             existing_price.update_price(price)
             existing_price.in_stock = in_stock
-            db.commit()
+            db.flush()
             return existing_price.id
         else:
-            # Create new price entry
             new_price = Price(
                 product_id=product_id,
                 dispensary_id=dispensary_id,
@@ -202,20 +288,13 @@ class ConfidenceScorer:
                 in_stock=in_stock
             )
             db.add(new_price)
-            db.commit()
-            db.refresh(new_price)
+            db.flush()
             return new_price.id
 
     @staticmethod
     def get_normalization_stats(db: Session) -> dict:
-        """
-        Get statistics about product normalization.
-
-        Returns:
-            Dict with counts for auto-merged, flagged, and new products
-        """
+        """Get statistics about product normalization."""
         from models import ScraperFlag, Product
-        from sqlalchemy import func
 
         total_flags = db.query(ScraperFlag).count()
         pending_flags = (
@@ -240,8 +319,12 @@ class ConfidenceScorer:
             .count()
         )
 
-        # Calculate auto-merge rate (if we have data)
-        # This is simplified - in production would track this separately
+        variant_products = (
+            db.query(Product)
+            .filter(Product.is_master == False)
+            .count()
+        )
+
         total_processed = total_flags + master_products
         auto_merge_rate = (
             (master_products - rejected_flags) / total_processed * 100
@@ -254,5 +337,6 @@ class ConfidenceScorer:
             "approved": approved_flags,
             "rejected": rejected_flags,
             "master_products": master_products,
+            "variant_products": variant_products,
             "estimated_auto_merge_rate": f"{auto_merge_rate:.1f}%"
         }

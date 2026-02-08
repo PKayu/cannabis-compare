@@ -14,12 +14,18 @@ This document provides test cases for all Phase 1 API endpoints with specific pa
 |--------|-------|---------|
 | Dispensaries | 3 | `disp-001`, `disp-002`, `disp-003` |
 | Brands | 4 | `brand-001` through `brand-004` |
-| Products | 6 | `prod-001` through `prod-006` |
-| Prices | 13 | `price-001` through `price-013` |
-| ScraperFlags | 5 | `flag-001` through `flag-005` (4 pending, 1 approved) |
+| Products (parents) | 6 | `prod-001` through `prod-006` (all have `is_master=True`) |
+| Product Variants | varies | e.g., `prod-001-3.5g`, `prod-001-7g` (have `is_master=False`, `master_product_id=prod-001`) |
+| Prices | 13 | `price-001` through `price-013` (attached to variant products, not parents) |
+| ScraperFlags | 5 | `flag-001` through `flag-005` (4 pending, 1 approved); flags include `original_weight`, `original_price`, `original_category` |
 | Users | 2 | `user-001`, `user-002` |
-| Reviews | 3 | `review-001` through `review-003` |
+| Reviews | 3 | `review-001` through `review-003` (attached to parent products) |
 | Promotions | 3 | `promo-001` through `promo-003` |
+
+### Parent/Variant Structure
+- `prod-001` (Blue Dream, parent) has variants like `prod-001-3.5g` (weight="3.5g", weight_grams=3.5)
+- Prices are on variant IDs, not parent IDs
+- Reviews are on parent IDs, not variant IDs
 
 ### Outlier Prices (for testing detection)
 - `price-003`: Blue Dream at Beehive Farmacy - $120 (vs ~$46 average) - HIGH severity
@@ -404,3 +410,130 @@ python seed_test_data.py
 | Flag | `flag-005` | Already approved |
 | Price | `price-003` | $120 outlier (Blue Dream) |
 | Price | `price-010` | $5 outlier (OG Kush Vape) |
+
+---
+
+## 11. Product Variant Test Cases
+
+### Test 11.1: Grouped Price Response by Weight
+
+Fetch prices for a parent product. Prices should be grouped by variant weight.
+
+```bash
+curl http://localhost:8000/api/products/prod-001/prices
+```
+
+**Expected Response:** Prices grouped by weight, with each group containing dispensary prices for that weight variant:
+```json
+{
+  "product_id": "prod-001",
+  "product_name": "Blue Dream",
+  "prices_by_weight": {
+    "3.5g": [
+      {"dispensary": "WholesomeCo", "price": 45.00, "in_stock": true},
+      {"dispensary": "Dragonfly Wellness", "price": 42.00, "in_stock": true}
+    ],
+    "7g": [
+      {"dispensary": "WholesomeCo", "price": 80.00, "in_stock": true}
+    ]
+  }
+}
+```
+
+### Test 11.2: Variant-Aware Review Creation
+
+Post a review using a variant product ID. The backend should resolve to the parent product.
+
+```bash
+curl -X POST http://localhost:8000/api/reviews \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{
+    "product_id": "prod-001-3.5g",
+    "rating": 5,
+    "comment": "Great flower"
+  }'
+```
+
+**Expected Behavior:** Review is created with `product_id` set to `prod-001` (the parent), not the variant ID.
+
+### Test 11.3: Search Results with Available Weights
+
+Search results should include `available_weights` for each product.
+
+```bash
+curl "http://localhost:8000/api/products/search?q=blue+dream"
+```
+
+**Expected Response:** Each result includes aggregated prices across variants and an `available_weights` field:
+```json
+{
+  "results": [
+    {
+      "id": "prod-001",
+      "name": "Blue Dream",
+      "available_weights": ["3.5g", "7g", "14g"],
+      "lowest_price": 42.00
+    }
+  ]
+}
+```
+
+### Test 11.4: Admin Flag Resolution with Variants
+
+Approve a flag. The flag card should show `original_weight`, `original_price`, and `original_category`.
+
+```bash
+curl http://localhost:8000/api/admin/flags/flag-001
+```
+
+**Expected Response:** Flag detail includes variant context fields:
+```json
+{
+  "id": "flag-001",
+  "original_name": "Blu Dream",
+  "original_weight": "3.5g",
+  "original_price": 45.00,
+  "original_category": "flower",
+  "confidence_score": 0.75,
+  "matched_product": {
+    "id": "prod-001",
+    "name": "Blue Dream"
+  }
+}
+```
+
+### Test 11.5: Watchlist Variant-to-Parent Resolution
+
+Add a variant to the watchlist. The backend should resolve to the parent product.
+
+```bash
+curl -X POST http://localhost:8000/api/watchlist \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"product_id": "prod-001-3.5g"}'
+```
+
+**Expected Behavior:** Watchlist entry is created for `prod-001` (the parent product).
+
+### Test 11.6: Dispensary Inventory with Weight Info
+
+Dispensary inventory endpoint should include weight information for products.
+
+```bash
+curl http://localhost:8000/api/dispensaries/disp-001/inventory
+```
+
+**Expected Response:** Each inventory item includes weight details from the variant:
+```json
+{
+  "inventory": [
+    {
+      "product_name": "Blue Dream",
+      "weight": "3.5g",
+      "price": 45.00,
+      "in_stock": true
+    }
+  ]
+}
+```

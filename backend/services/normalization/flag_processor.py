@@ -27,19 +27,15 @@ class ScraperFlagProcessor:
         """
         Approve merge of flagged product to matched product.
 
-        Args:
-            db: Database session
-            flag_id: ID of the ScraperFlag
-            admin_id: ID of the admin user approving
-            notes: Optional admin notes
+        Creates a variant under the matched parent product with the
+        original weight/price data stored on the flag.
 
         Returns:
-            ID of the matched product
-
-        Raises:
-            ValueError: If flag not found or no matched product
+            ID of the created/found variant product
         """
         from models import ScraperFlag
+        from services.normalization.scorer import find_or_create_variant, ConfidenceScorer
+        from services.scrapers.base_scraper import ScrapedProduct
 
         flag = db.query(ScraperFlag).filter(ScraperFlag.id == flag_id).first()
 
@@ -56,6 +52,28 @@ class ScraperFlagProcessor:
                 f"Flag already resolved with status: {flag.status}"
             )
 
+        # Build ScrapedProduct from flag data for the variant helper
+        scraped = ScrapedProduct(
+            name=flag.original_name,
+            brand=flag.brand_name,
+            category=flag.original_category or "Unknown",
+            price=flag.original_price or 0.0,
+            thc_percentage=flag.original_thc,
+            cbd_percentage=flag.original_cbd,
+            weight=flag.original_weight
+        )
+
+        # Create/find variant under the matched parent
+        variant = find_or_create_variant(
+            db, flag.matched_product_id, flag.original_weight, scraped
+        )
+
+        # Create price record if we have price data
+        if flag.original_price and flag.original_price > 0:
+            ConfidenceScorer.update_or_create_price(
+                db, variant.id, flag.dispensary_id, flag.original_price
+            )
+
         # Update flag status
         flag.status = "approved"
         flag.resolved_by = admin_id
@@ -66,10 +84,10 @@ class ScraperFlagProcessor:
 
         logger.info(
             f"Approved merge for '{flag.original_name}' to product "
-            f"{flag.matched_product_id} by admin {admin_id}"
+            f"{flag.matched_product_id} (variant {variant.id}) by admin {admin_id}"
         )
 
-        return flag.matched_product_id
+        return variant.id
 
     @staticmethod
     def reject_flag(
@@ -80,22 +98,14 @@ class ScraperFlagProcessor:
         notes: str = ""
     ) -> str:
         """
-        Reject merge and create new product from flagged entry.
-
-        Args:
-            db: Database session
-            flag_id: ID of the ScraperFlag
-            admin_id: ID of the admin user rejecting
-            product_type: Product type for the new product
-            notes: Optional admin notes
+        Reject merge and create new parent + variant from flagged entry.
 
         Returns:
-            ID of the newly created product
-
-        Raises:
-            ValueError: If flag not found
+            ID of the newly created parent product
         """
         from models import ScraperFlag, Product, Brand
+        from services.normalization.scorer import find_or_create_variant, ConfidenceScorer
+        from services.scrapers.base_scraper import ScrapedProduct
 
         flag = db.query(ScraperFlag).filter(ScraperFlag.id == flag_id).first()
 
@@ -117,20 +127,43 @@ class ScraperFlagProcessor:
         if not brand:
             brand = Brand(name=flag.brand_name)
             db.add(brand)
-            db.commit()
-            db.refresh(brand)
+            db.flush()
 
-        # Create new master product from flag data
-        new_product = Product(
+        # Use provided product_type, fall back to flag's category
+        resolved_type = product_type if product_type != "Unknown" else (flag.original_category or "Unknown")
+
+        # Create new parent product (is_master=True, no weight)
+        parent = Product(
             name=flag.original_name,
-            product_type=product_type,
+            product_type=resolved_type,
             brand_id=brand.id,
             thc_percentage=flag.original_thc,
             cbd_percentage=flag.original_cbd,
             is_master=True,
             normalization_confidence=1.0  # Admin-verified
         )
-        db.add(new_product)
+        db.add(parent)
+        db.flush()
+
+        # Create variant with weight
+        scraped = ScrapedProduct(
+            name=flag.original_name,
+            brand=flag.brand_name,
+            category=resolved_type,
+            price=flag.original_price or 0.0,
+            thc_percentage=flag.original_thc,
+            cbd_percentage=flag.original_cbd,
+            weight=flag.original_weight
+        )
+        variant = find_or_create_variant(
+            db, parent.id, flag.original_weight, scraped
+        )
+
+        # Create price record if we have price data
+        if flag.original_price and flag.original_price > 0:
+            ConfidenceScorer.update_or_create_price(
+                db, variant.id, flag.dispensary_id, flag.original_price
+            )
 
         # Update flag status
         flag.status = "rejected"
@@ -139,14 +172,13 @@ class ScraperFlagProcessor:
         flag.admin_notes = notes
 
         db.commit()
-        db.refresh(new_product)
 
         logger.info(
             f"Rejected merge for '{flag.original_name}', created new product "
-            f"{new_product.id} by admin {admin_id}"
+            f"{parent.id} (variant {variant.id}) by admin {admin_id}"
         )
 
-        return new_product.id
+        return parent.id
 
     @staticmethod
     def get_pending_flags(
@@ -215,6 +247,9 @@ class ScraperFlagProcessor:
                 "original_name": flag.original_name,
                 "original_thc": flag.original_thc,
                 "original_cbd": flag.original_cbd,
+                "original_weight": flag.original_weight,
+                "original_price": flag.original_price,
+                "original_category": flag.original_category,
                 "brand_name": flag.brand_name,
                 "dispensary_id": flag.dispensary_id,
                 "dispensary_name": dispensary.name if dispensary else None,

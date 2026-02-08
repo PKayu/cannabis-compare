@@ -92,8 +92,16 @@ async def search_products(
         if max_cbd is not None and (product.cbd_percentage is None or product.cbd_percentage > max_cbd):
             continue
 
-        # Get all prices for this product
-        prices = db.query(Price).filter(Price.product_id == product.id, Price.in_stock == True).all()
+        # Get prices across all variants for this parent product
+        variant_ids = [
+            v.id for v in
+            db.query(Product.id).filter(Product.master_product_id == product.id).all()
+        ]
+        price_product_ids = variant_ids if variant_ids else [product.id]
+        prices = db.query(Price).filter(
+            Price.product_id.in_(price_product_ids),
+            Price.in_stock == True
+        ).all()
 
         # Skip products with no prices
         if not prices:
@@ -132,6 +140,15 @@ async def search_products(
         min_price_val = min(p.amount for p in prices)
         max_price_val = max(p.amount for p in prices)
 
+        # Collect available weights from variants
+        variants = db.query(Product).filter(
+            Product.master_product_id == product.id,
+            Product.is_master == False
+        ).all()
+        available_weights = sorted(set(
+            v.weight for v in variants if v.weight
+        ))
+
         results.append({
             "id": str(product.id),
             "name": product.name,
@@ -143,6 +160,7 @@ async def search_products(
             "min_price": float(min_price_val),
             "max_price": float(max_price_val),
             "dispensary_count": len(set(p.dispensary_id for p in prices)),
+            "available_weights": available_weights,
             "relevance_score": round(score, 2)
         })
 

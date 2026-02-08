@@ -49,7 +49,7 @@ Browser (React/Next.js) ←→ FastAPI Backend ←→ PostgreSQL (Docker/Supabas
 
 The app follows three main data flows:
 
-1. **Price Aggregation**: Web scrapers → Data normalization → Database → API → Frontend
+1. **Price Aggregation**: Web scrapers → Data normalization (fuzzy match + weight parsing) → Variant creation → Price storage on variants → API (grouped by weight) → Frontend
 2. **Reviews**: User form → Backend validation → Database → API queries → Display
 3. **Search**: Frontend input → `/api/products/search` → Database → Results with filters
 
@@ -58,6 +58,7 @@ The app follows three main data flows:
 Eleven interconnected models with these critical relationships:
 
 - **Product** ↔ **Dispensary** (M:M junction via **Price** table)
+- **Product** → **Product** (self-referential parent/variant hierarchy, see below)
 - **Product** → **Review** (1:M, user-generated content with dual-track intention tags)
 - **Product** → **Brand** (M:1, cultivators)
 - **User** → **Review** (1:M, tracks who posted reviews)
@@ -65,10 +66,23 @@ Eleven interconnected models with these critical relationships:
 - **User** → **PriceAlert** (1:M, price drop thresholds)
 - **User** → **NotificationPreference** (1:1, email frequency settings)
 - **Dispensary** → **Promotion** (1:M, weekly deals)
-- **ScraperFlag** → Data quality issues (orphaned products, outliers)
+- **ScraperFlag** → Data quality issues (orphaned products, outliers); includes `original_weight`, `original_price`, `original_category` fields for variant context
 - **ScraperRun** → Execution history and monitoring
 
 All models use UUID primary keys. Foreign key constraints cascade on delete.
+
+#### Product Parent/Variant Hierarchy
+
+Products follow a parent/variant model for representing the same strain at different weights:
+
+- **Parent products** (`is_master=True`): Represent the canonical strain/product. Have no `weight` or `weight_grams`. Reviews and watchlist entries attach to parent products.
+- **Variant products** (`is_master=False`): Represent a specific weight of a parent product. Have `master_product_id` pointing to the parent, plus `weight` (display string like "3.5g") and `weight_grams` (normalized float like 3.5). Prices always attach to variant products.
+
+Self-referential relationship fields on the Product model:
+- `Product.variants` - List of variant products (from parent)
+- `Product.master_product` - Parent product reference (from variant)
+
+**Critical rule**: Prices are always stored on variant products, never on parents. Reviews are always stored on parent products, never on variants. The API layer handles resolution automatically (e.g., posting a review on a variant ID resolves to the parent).
 
 ### Scraper Architecture (Self-Registration Pattern)
 
@@ -109,6 +123,27 @@ from services.scrapers.beehive_scraper import BeehiveScraper  # noqa: F401
 ```
 
 The scheduler automatically discovers and schedules all registered scrapers at startup.
+
+### Fuzzy Matching & Product Normalization
+
+The scraper pipeline uses `ConfidenceScorer` (from `services/normalization/scorer.py`) for intelligent product matching. This replaced the earlier exact-match `ProductMatcher` approach.
+
+**How it works:**
+1. When a scraper run begins, all master (parent) products are pre-loaded into a candidate cache for the duration of the run
+2. Each scraped product is scored against cached candidates using fuzzy string matching (rapidfuzz)
+3. Based on the confidence score, one of three actions is taken:
+   - **>90% match**: Auto-merge -- the scraped product is linked to the existing product and a price/variant is created or updated
+   - **60-90% match**: A `ScraperFlag` is created for admin review in the cleanup queue, with the match candidate and confidence score attached
+   - **<60% match**: A new parent product is created automatically
+4. Weight parsing (`services/normalization/weight_parser.py`) extracts weight from product names (e.g., "Blue Dream - 3.5g" produces `weight="3.5g"`, `weight_grams=3.5`) and creates appropriate variant products
+5. The scorer uses `db.flush()` instead of `db.commit()` for transaction control, allowing the caller (`ScraperRunner`) to commit the entire batch atomically
+
+**Key files:**
+- `services/normalization/scorer.py` - `ConfidenceScorer` with `find_or_create_variant()` for variant-aware product creation
+- `services/normalization/weight_parser.py` - Parses weight strings ("3.5g", "1oz", "1/8 oz") to normalized labels and gram values
+- `services/normalization/matcher.py` - Legacy `ProductMatcher` (retained for reference)
+- `services/normalization/flag_processor.py` - Variant-aware flag approve/reject logic
+- `services/scraper_runner.py` - Orchestrates scraper execution, imports `ConfidenceScorer`
 
 ### Alert & Notification System
 
@@ -594,9 +629,10 @@ backend/
     scraper_runner.py       → Executes scrapers and saves to DB
     scheduler.py            → APScheduler integration + alert scheduler
     normalization/
-      matcher.py            → ProductMatcher with fuzzy matching
-      scorer.py             → Similarity scoring algorithm
-      flag_processor.py     → Processes scraper flags
+      matcher.py            → Legacy ProductMatcher (retained for reference)
+      scorer.py             → ConfidenceScorer with variant-aware product creation
+      flag_processor.py     → Variant-aware flag approve/reject processing
+      weight_parser.py      → Parses weight strings to normalized labels and gram values
     quality/
       outlier_detection.py  → Statistical outlier detection (z-score)
     alerts/
@@ -606,9 +642,13 @@ backend/
       email_service.py      → SendGrid email templates
     auth_service.py         → JWT token generation/validation
     supabase_client.py      → Supabase admin client
+  scripts/
+    migrate_to_variants.py  → Three-phase data migration (create variants, deduplicate, parse weights)
   tests/                 → pytest test files
     test_matcher.py
     test_scraper.py
+    test_weight_parser.py   → Weight parser unit tests
+    test_variant_creation.py → Variant creation logic tests
 
 frontend/
   app/
@@ -657,9 +697,11 @@ frontend/
 
 1. Create scraper class inheriting from `BaseScraper` in `backend/services/scrapers/`
 2. Implement `scrape_products()` and `scrape_promotions()` async methods
-3. Add `@register_scraper` decorator with metadata (id, name, schedule_minutes, etc.)
-4. Import in `main.py` to trigger self-registration
-5. Scheduler automatically discovers and schedules it at startup
+3. Populate `weight` field on `ScrapedProduct` for proper variant creation (e.g., "3.5g", "1oz")
+4. Add `@register_scraper` decorator with metadata (id, name, schedule_minutes, etc.)
+5. Import in `main.py` to trigger self-registration
+6. Scheduler automatically discovers and schedules it at startup
+7. The `ConfidenceScorer` handles matching, variant creation, and flagging automatically
 
 Example:
 ```python
@@ -773,14 +815,16 @@ scripts\run-tests.bat
 - **Mobile responsiveness**: 80% of users are mobile - test with DevTools
 - **Environment variables**: Update both `.env.example` files if adding new vars
 - **TypeScript**: Frontend components must have explicit types for props
-- **Data normalization**: Different dispensaries use different naming - use `ProductMatcher` for fuzzy matching
+- **Data normalization**: Different dispensaries use different naming - the `ConfidenceScorer` handles fuzzy matching automatically during scraper runs
+- **Product variants**: When creating products manually or in seed data, follow the parent/variant pattern. Prices must link to variant products (with `weight` and `weight_grams`), reviews must link to parent products (`is_master=True`). The API handles variant-to-parent resolution for reviews and watchlist operations
 
 ### Scraper Considerations
 
 - **Rate limiting**: Be respectful - use the configured `schedule_minutes` (default: 120 per PRD)
 - **Error handling**: Scrapers should use `run_with_retries()` for resilience
 - **Logging**: Use `self.logger` for all scraper-specific logging
-- **Data quality**: Products are automatically matched via fuzzy matching - check quality dashboard
+- **Data quality**: Products are automatically matched via `ConfidenceScorer` fuzzy matching (>90% auto-merge, 60-90% flagged for review, <60% new product) - check quality dashboard
+- **Weight field**: Scrapers should populate the `weight` field on `ScrapedProduct` for proper variant creation. The weight parser handles formats like "3.5g", "1oz", "1/8 oz", "1000mg"
 - **Testing**: Run scrapers manually via admin dashboard before relying on scheduler
 - **Async execution**: Admin-triggered scraper runs execute in the background via `asyncio.create_task()`. The API returns immediately with `{"status": "started"}` and the frontend polls for completion. The background task creates its own database session via `SessionLocal()` to avoid session lifecycle issues.
 - **Run visibility**: `ScraperRun` entries are committed (not just flushed) with status `"running"` so polling from other sessions can see them immediately
@@ -846,6 +890,60 @@ asyncio.run(test())
 # Visit admin dashboard: http://localhost:4002/admin/scrapers
 ```
 
+### Product Variant Issues
+
+```bash
+# Check for prices incorrectly attached to parent products (should be on variants)
+cd backend
+python -c "
+from database import SessionLocal
+from models import Product, Price
+db = SessionLocal()
+bad = db.query(Price).join(Product).filter(Product.is_master == True).count()
+print(f'Prices on parent products (should be 0): {bad}')
+db.close()
+"
+
+# Count variants per parent product
+python -c "
+from database import SessionLocal
+from models import Product
+from sqlalchemy import func
+db = SessionLocal()
+results = db.query(Product.name, func.count(Product.id)).filter(
+    Product.is_master == False
+).group_by(Product.master_product_id, Product.name).all()
+for name, count in results[:10]:
+    print(f'{name}: {count} variants')
+db.close()
+"
+
+# Find orphaned variants (no parent)
+python -c "
+from database import SessionLocal
+from models import Product
+db = SessionLocal()
+orphans = db.query(Product).filter(
+    Product.is_master == False,
+    Product.master_product_id == None
+).count()
+print(f'Orphaned variants (should be 0): {orphans}')
+db.close()
+"
+
+# List all parent products and their variant weights
+python -c "
+from database import SessionLocal
+from models import Product
+db = SessionLocal()
+parents = db.query(Product).filter(Product.is_master == True).all()
+for p in parents[:10]:
+    weights = [v.weight for v in p.variants if v.weight]
+    print(f'{p.name}: {weights or \"no variants\"}')
+db.close()
+"
+```
+
 ### Frontend Issues
 
 ```bash
@@ -876,7 +974,7 @@ npm run type-check  # List all type errors
 |---------|--------------|----------|
 | 401 on API requests | Expired JWT token | Axios interceptor auto-refreshes - check network tab |
 | Scraper not running | Not registered | Check import in `main.py` and decorator |
-| Products not matching | Low similarity score | Adjust matcher threshold in `ProductMatcher` |
+| Products not matching | Low similarity score | Check `ConfidenceScorer` thresholds (>90% auto-merge, 60-90% flag, <60% new product) |
 | Scheduler not running | Database URL issue | Check `settings.database_url` in scheduler config |
 | Age gate loop | Age not stored in localStorage | Check browser localStorage for `ageVerified` |
 | SendGrid emails failing | Missing API key | Add `SENDGRID_API_KEY` to backend `.env` |

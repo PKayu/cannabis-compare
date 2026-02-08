@@ -9,6 +9,12 @@ import PricingChart from '@/components/PricingChart'
 import ReviewsSection from '@/components/ReviewsSection'
 import WatchlistButton from '@/components/WatchlistButton'
 
+interface Variant {
+  id: string
+  weight: string | null
+  weight_grams: number | null
+}
+
 interface Product {
   id: string
   name: string
@@ -19,6 +25,7 @@ interface Product {
   cbd_percentage: number | null
   is_master: boolean
   normalization_confidence: number | null
+  variants: Variant[]
   created_at: string | null
   updated_at: string | null
 }
@@ -44,11 +51,18 @@ interface PriceData {
   last_updated: string | null
 }
 
+interface WeightGroup {
+  variant_id: string
+  weight: string | null
+  weight_grams: number | null
+  prices: PriceData[]
+}
+
 export default function ProductDetailPage() {
   const params = useParams()
   const productId = params.id as string
   const [product, setProduct] = useState<Product | null>(null)
-  const [prices, setPrices] = useState<PriceData[]>([])
+  const [weightGroups, setWeightGroups] = useState<WeightGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -69,7 +83,7 @@ export default function ProductDetailPage() {
       ])
 
       setProduct(productRes.data)
-      setPrices(pricesRes.data)
+      setWeightGroups(pricesRes.data)
     } catch (err: any) {
       console.error('Failed to load product:', err)
       setError(err.response?.status === 404 ? 'Product not found' : 'Failed to load product data')
@@ -105,8 +119,17 @@ export default function ProductDetailPage() {
     )
   }
 
-  const bestPrice = prices.length > 0 ? prices[0] : null
-  const inStockCount = prices.filter(p => p.in_stock).length
+  // Flatten all prices across weight groups for summary stats
+  const allPrices = weightGroups.flatMap(g => g.prices)
+  const bestPrice = allPrices.length > 0
+    ? allPrices.reduce((best, p) => {
+        const bestVal = best.deal_price ?? best.msrp
+        const pVal = p.deal_price ?? p.msrp
+        return pVal < bestVal ? p : best
+      })
+    : null
+  const inStockCount = allPrices.filter(p => p.in_stock).length
+  const hasMultipleWeights = weightGroups.length > 1 || (weightGroups.length === 1 && weightGroups[0].weight != null)
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -183,7 +206,7 @@ export default function ProductDetailPage() {
             )}
             <div className="bg-gray-50 p-4 rounded-lg">
               <p className="text-gray-600 text-sm">Dispensaries</p>
-              <p className="text-2xl font-bold text-gray-700">{prices.length}</p>
+              <p className="text-2xl font-bold text-gray-700">{new Set(allPrices.map(p => p.dispensary_id)).size}</p>
             </div>
             <div className="bg-gray-50 p-4 rounded-lg">
               <p className="text-gray-600 text-sm">In Stock</p>
@@ -198,8 +221,23 @@ export default function ProductDetailPage() {
         {/* Price Comparison */}
         <section className="mb-12">
           <h2 className="text-2xl font-bold mb-4 text-gray-800">Prices Across Dispensaries</h2>
-          {prices.length > 0 ? (
-            <PriceComparisonTable prices={prices} productId={productId} productName={product.name} />
+          {weightGroups.length > 0 ? (
+            <div className="space-y-6">
+              {weightGroups.map((group) => (
+                <div key={group.variant_id}>
+                  {hasMultipleWeights && group.weight && (
+                    <h3 className="text-lg font-semibold text-gray-700 mb-2 px-1">
+                      {group.weight}
+                    </h3>
+                  )}
+                  <PriceComparisonTable
+                    prices={group.prices}
+                    productId={productId}
+                    productName={product.name}
+                  />
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="bg-white rounded-lg shadow p-6 text-center text-gray-600">
               No pricing data available for this product.

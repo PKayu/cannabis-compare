@@ -76,7 +76,13 @@ class Brand(Base):
 
 
 class Product(Base):
-    """Product model for strains and cannabis products (Master Product entries)"""
+    """
+    Product model for strains and cannabis products.
+
+    Uses a parent/variant hierarchy:
+    - Parent products (is_master=True): canonical entries, hold reviews
+    - Variant products (is_master=False): quantity-specific, hold prices
+    """
     __tablename__ = "products"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -86,10 +92,16 @@ class Product(Base):
     cbd_percentage = Column(Float, nullable=True)  # CBD content
     brand_id = Column(String, ForeignKey("brands.id"), nullable=False)
 
-    # Normalization tracking (PRD section 4.1)
-    master_product_id = Column(String, ForeignKey("products.id"), nullable=True)  # Links duplicates to master
+    # Weight/quantity (for variant products)
+    weight = Column(String, nullable=True)  # e.g., "3.5g", "1oz", "100mg"
+    weight_grams = Column(Float, nullable=True, index=True)  # Normalized to grams: 3.5, 28.0, 0.1
+
+    # Parent/variant hierarchy (PRD section 4.1)
+    # Parent: is_master=True, weight=None — reviews attach here
+    # Variant: is_master=False, master_product_id set, weight set — prices attach here
+    master_product_id = Column(String, ForeignKey("products.id"), nullable=True, index=True)
     normalization_confidence = Column(Float, default=1.0)  # 0.0-1.0 confidence score
-    is_master = Column(Boolean, default=True)  # True if this is canonical entry
+    is_master = Column(Boolean, default=True, index=True)  # True if this is parent entry
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -100,11 +112,13 @@ class Product(Base):
     reviews = relationship("Review", back_populates="product", cascade="all, delete-orphan")
     promotions = relationship("Promotion", back_populates="product")
 
-    # Self-referential relationship for product normalization
-    master_product = relationship("Product", remote_side=[id], foreign_keys=[master_product_id], backref="duplicate_products")
+    # Self-referential relationship for parent/variant hierarchy
+    variants = relationship("Product", foreign_keys=[master_product_id], back_populates="master_product")
+    master_product = relationship("Product", remote_side=[id], foreign_keys=[master_product_id], back_populates="variants")
 
     def __repr__(self):
-        return f"<Product {self.name}>"
+        weight_str = f" ({self.weight})" if self.weight else ""
+        return f"<Product {self.name}{weight_str}>"
 
 
 class Price(Base):
@@ -196,6 +210,9 @@ class ScraperFlag(Base):
     original_cbd = Column(Float, nullable=True)
     brand_name = Column(String, nullable=False)
     dispensary_id = Column(String, ForeignKey("dispensaries.id"), nullable=False)
+    original_weight = Column(String, nullable=True)  # Raw weight string from scraper
+    original_price = Column(Float, nullable=True)  # Price from scraper (for creating price on resolution)
+    original_category = Column(String, nullable=True)  # Product category from scraper
 
     # Potential match
     matched_product_id = Column(String, ForeignKey("products.id"), nullable=True)

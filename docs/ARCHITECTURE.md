@@ -57,15 +57,24 @@ Utah Cannabis Aggregator is a full-stack web application designed to help Utah M
 ```
 Dispensary Website/API
         ↓
-   Scraper Service
+   Scraper Service (ScrapedProduct with weight field)
         ↓
-Data Normalization
+ConfidenceScorer (fuzzy match against cached master products)
         ↓
-Database (prices table)
+   ┌────┴────┐────────────┐
+   │ >90%    │ 60-90%     │ <60%
+   │ merge   │ flag       │ new product
+   └────┬────┘────────────┘
         ↓
-API Endpoint
+Weight Parser (extract weight/grams from product name)
         ↓
-Frontend (Price Comparison)
+Variant Creation (find_or_create_variant)
+        ↓
+Database (prices on variant products)
+        ↓
+API Endpoint (prices grouped by weight)
+        ↓
+Frontend (Price Comparison with weight tabs)
         ↓
 User Browser
 ```
@@ -124,8 +133,14 @@ Frontend Display Results
 - thc_percentage (Float) - Optional
 - cbd_percentage (Float) - Optional
 - brand_id (UUID, Foreign Key)
+- is_master (Boolean, Default: True) - True for parent products, False for variants
+- master_product_id (UUID, Foreign Key, Optional) - Self-referential FK to parent product (only set on variants)
+- weight (String, Optional) - Display weight label (e.g., "3.5g", "1oz") -- only on variants
+- weight_grams (Float, Optional) - Normalized weight in grams (e.g., 3.5, 28.0) -- only on variants
 
 **Product Type Standards**: All product types must use lowercase values to ensure consistency between scrapers, seed data, and frontend filters. Valid types: `flower`, `vaporizer`, `tincture`, `edible`, `topical`, `concentrate`.
+
+**Parent/Variant Hierarchy**: Products use a self-referential parent/variant model. Parent products (`is_master=True`) represent the canonical strain and have no weight fields. Variant products (`is_master=False`) represent a specific weight of that strain and point to their parent via `master_product_id`. Reviews attach to parents; prices attach to variants. The self-referential relationship is defined as `Product.variants` (backref from parent to children) and `Product.master_product` (from variant to parent).
 
 **Brand**
 - id (UUID, Primary Key)
@@ -142,7 +157,7 @@ Frontend Display Results
 - amount (Float) - Price in USD
 - in_stock (Boolean)
 - last_updated (DateTime)
-- product_id (UUID, Foreign Key)
+- product_id (UUID, Foreign Key) - **Always references a variant product** (is_master=False), never a parent
 - dispensary_id (UUID, Foreign Key)
 - **Unique Constraint**: (product_id, dispensary_id)
 
@@ -272,7 +287,10 @@ The application uses Supabase Auth for user authentication with a centralized Re
 - Scheduled jobs to refresh prices daily
 
 ### Data Normalization
-- Duplicate product detection (e.g., "GG#4" vs "Gorilla Glue 4")
+- **Fuzzy matching (ACTIVE)**: `ConfidenceScorer` uses rapidfuzz to match scraped products against existing master products with confidence thresholds (>90% auto-merge, 60-90% flag for review, <60% new product)
+- **Product name cleaning**: Before creating parent products, weights are automatically extracted and removed from product names. This ensures parent products have clean names like "Blue Dream" instead of "Blue Dream 3.5g", preventing redundant weight storage.
+- **Weight parsing**: `weight_parser.py` extracts weight from product names (e.g., "Blue Dream - 3.5g") and normalizes to grams. Supports formats: "3.5g", "1oz", "1/8 oz", "1000mg". The `extract_weight_from_name()` function returns both the clean name and the extracted weight.
+- **Variant creation**: Products with different weights are stored as variants under a single parent product, enabling grouped price comparison. Weights are stored exclusively in `weight` and `weight_grams` fields, never in the product name.
 - Brand name standardization
 - Price format normalization (handle discounts, bulk pricing)
 

@@ -50,6 +50,23 @@ Focus: Enabling user engagement and community features
   - [x] Navigation with watchlist link and badge
   - [x] Product page integration
 
+### Post-MVP Enhancements - Workflows 11-12
+
+- **Workflow 11**: Automated Daily Scraping & Enhanced Admin Dashboard (COMPLETED) ✅
+- **Workflow 12**: Product Variants & Fuzzy Matcher Wiring (COMPLETED) ✅
+  - [x] Parent/variant product hierarchy (is_master, master_product_id, weight, weight_grams)
+  - [x] Weight parser for "3.5g", "1oz", "1/8 oz", "1000mg" formats
+  - [x] ConfidenceScorer wired into ScraperRunner with candidate caching
+  - [x] Confidence thresholds: >90% auto-merge, 60-90% flag, <60% new product
+  - [x] Variant creation during scraper runs
+  - [x] Prices on variants, reviews on parents (with variant-to-parent resolution)
+  - [x] Grouped-by-weight price comparison on product detail pages
+  - [x] Search results with available_weights
+  - [x] Variant-aware flag approve/reject in admin cleanup
+  - [x] Alert detectors query through variants
+  - [x] Data migration script for existing data
+  - [x] Updated seed data with parent/variant structure
+
 ## How to Use These Workflows
 
 ### 1. Start with Workflow 01
@@ -144,7 +161,9 @@ Approximate time per workflow (experienced developer):
 | 08 | Authentication | 2-3 days |
 | 09 | Review System | 3-4 days |
 | 10 | Alerts/Notifications | 1-2 days |
-| **Total** | **All Phases** | **16-25 days** |
+| 11 | Automated Scraping & Admin | 2-3 days |
+| 12 | Product Variants & Fuzzy Matcher | 2-3 days |
+| **Total** | **All Phases** | **20-31 days** |
 
 ## Important Notes
 
@@ -215,6 +234,6 @@ Refer to the appropriate workflow document or the main architecture documentatio
 
 ---
 
-**Current Status**: ALL PHASES COMPLETE ✅ - All 10 Workflows DONE! 🎉
-**Last Updated**: January 25, 2026
-**Version**: 2.0 (MVP Complete)
+**Current Status**: ALL PHASES COMPLETE + POST-MVP ENHANCEMENTS -- All 12 Workflows DONE
+**Last Updated**: February 7, 2026
+**Version**: 2.2 (MVP + Variants & Fuzzy Matcher)

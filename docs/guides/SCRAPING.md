@@ -6,13 +6,13 @@
 
 ## Phase Overview
 
-You are here ↓
-
 ```
 ✅ Phase 1: Foundation (Workflows 01-04) - Database, scrapers infrastructure
 ✅ Phase 2: Portal (Workflows 05-07) - Product search, detail pages
-⚠️ Phase 3: Community (Workflows 08-10) - Auth (done), Reviews (pending)
-👉 YOU CAN START SCRAPING NOW
+✅ Phase 3: Community (Workflows 08-10) - Auth, Reviews, Alerts
+✅ Workflow 11: Automated Scraping & Admin Dashboard
+✅ Workflow 12: Product Variants & Fuzzy Matcher Wiring
+👉 FUZZY MATCHING IS NOW ACTIVE - scrapers auto-match, create variants, and flag ambiguous products
 ```
 
 ---
@@ -65,6 +65,48 @@ Many Utah dispensaries use iHeartJane's platform:
 2. **Well-structured API**: They have a JSON API (easier than HTML scraping)
 3. **Consistent data**: Product names, prices, THC % formatted consistently
 4. **High success rate**: 90%+ auto-merge rate expected
+
+---
+
+## Fuzzy Matching System (ACTIVE)
+
+The fuzzy matching pipeline is fully active and wired into every scraper run. You do not need to configure it manually.
+
+### How It Works
+
+When a scraper returns a list of `ScrapedProduct` objects, the `ScraperRunner` passes them through the `ConfidenceScorer`:
+
+1. **Candidate caching**: At the start of each scraper run, all master (parent) products are pre-loaded into memory for fast comparison
+2. **Fuzzy scoring**: Each scraped product name is compared against cached candidates using rapidfuzz string similarity
+3. **Confidence thresholds**:
+   - **>90%**: Auto-merge -- links the scraped product to the matched existing product
+   - **60-90%**: Creates a `ScraperFlag` for admin review in the cleanup queue
+   - **<60%**: Creates a brand-new parent product automatically
+4. **Weight parsing**: The `weight_parser` extracts weight from product names (e.g., "Blue Dream - 3.5g" yields `weight="3.5g"`, `weight_grams=3.5`)
+5. **Variant creation**: `find_or_create_variant()` creates or updates a variant product under the matched/new parent, then attaches the price to the variant
+
+### Scraper Weight Field
+
+Scrapers should populate the `weight` field on `ScrapedProduct` when the weight is available. The weight parser handles common formats:
+
+| Input | Parsed Weight | Grams |
+|-------|--------------|-------|
+| "3.5g" | "3.5g" | 3.5 |
+| "1oz" | "1oz" | 28.0 |
+| "1/8 oz" | "1/8oz" | 3.5 |
+| "1000mg" | "1000mg" | 1.0 |
+| "1g Pre-Roll" | "1g" | 1.0 |
+
+If no weight field is provided, the system attempts to extract weight from the product name.
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `services/normalization/scorer.py` | `ConfidenceScorer` with `find_or_create_variant()` |
+| `services/normalization/weight_parser.py` | Weight string parsing and normalization |
+| `services/normalization/flag_processor.py` | Variant-aware flag approve/reject |
+| `services/scraper_runner.py` | Orchestrates scraper execution with `ConfidenceScorer` |
 
 ---
 
@@ -547,9 +589,9 @@ if not success:
    - Add Dragonfly Wellness
 
 3. **Improve Matching**:
-   - Tune ProductMatcher thresholds
-   - Add manual merge tools
-   - Handle variants (different sizes)
+   - Review flagged products in the admin cleanup queue (60-90% confidence matches)
+   - Tune `ConfidenceScorer` thresholds if auto-merge rate is too high or low
+   - Product variants (different sizes/weights) are handled automatically by the weight parser
 
 4. **Scale Up**:
    - Run all scrapers nightly
@@ -571,9 +613,10 @@ if not success:
 ### Products Not Matching
 
 **Solution**:
-- Lower confidence threshold in ProductMatcher
-- Check brand names match database
-- Add fuzzy matching for name variations
+- Check the admin cleanup queue for flagged products (60-90% confidence range)
+- Review `ConfidenceScorer` thresholds in `services/normalization/scorer.py`
+- Verify brand names are consistent across scrapers
+- The fuzzy matcher uses rapidfuzz for name similarity -- check scored candidates in logs
 
 ### Scraper Times Out
 
@@ -581,6 +624,125 @@ if not success:
 - Increase `TIMEOUT` value
 - Add retry logic
 - Check internet connection
+
+---
+
+## Weight Handling Best Practices
+
+### How Weights Are Processed
+
+The system automatically handles product weights through a multi-step pipeline:
+
+1. **Scraper Populates Weight**: Your scraper should populate the `weight` field on `ScrapedProduct`
+2. **Name Cleaning**: The `ConfidenceScorer` automatically extracts and removes weights from product names
+3. **Parent Creation**: Parent products are created with clean names (e.g., "Blue Dream", not "Blue Dream 3.5g")
+4. **Variant Creation**: Variant products store weights in dedicated `weight` and `weight_grams` fields
+
+### Best Practice: Extract Weight Separately
+
+**Recommended Approach**:
+```python
+def scrape_products(self):
+    products = []
+    for item in api_response:
+        products.append(ScrapedProduct(
+            name="Blue Dream",           # Clean name (no weight)
+            weight="3.5g",                # Weight extracted separately
+            category="flower",
+            brand="Tryke",
+            price=45.00,
+            # ...
+        ))
+    return products
+```
+
+**Why This Works**:
+- The scraper explicitly separates name and weight
+- No redundant weight information
+- Better data quality from the start
+
+### Alternative: Let the Parser Handle It
+
+If your scraper can't easily extract weight, you can include it in the name:
+
+```python
+products.append(ScrapedProduct(
+    name="Blue Dream 3.5g",   # Weight included
+    weight=None,              # Parser will extract it
+    category="flower",
+    brand="Tryke",
+    price=45.00,
+))
+```
+
+The `ConfidenceScorer` will automatically:
+- Extract "3.5g" from the name
+- Create parent product with name "Blue Dream"
+- Create variant with `weight="3.5g"` and `weight_grams=3.5`
+
+### Supported Weight Formats
+
+The `weight_parser.py` handles these formats:
+- Grams: "3.5g", "7 grams", "14g"
+- Ounces: "1oz", "1/8 oz", "1/4oz", "half ounce"
+- Milligrams: "100mg", "1000 mg"
+- Milliliters: "30ml" (for tinctures/liquids)
+
+### Common Patterns
+
+**Extract from product name**:
+```python
+def _extract_unit_size(self, name: str) -> Optional[str]:
+    """Extract unit size from product name"""
+    match = re.search(r'(\d+\.?\d*)\s*(g|oz|mg|ml)', name, re.IGNORECASE)
+    if match:
+        return f"{match.group(1)}{match.group(2)}"
+    return None
+```
+
+**Extract from API field**:
+```python
+# If API provides weight in a dedicated field
+weight = item.get("variant") or item.get("size") or item.get("weight")
+```
+
+**Extract from dropdown/option**:
+```python
+# If weight is in a product variant/option field
+weight = item.get("selectedVariant", {}).get("size")
+```
+
+### What NOT to Do
+
+❌ **Don't store weight in the name field**:
+```python
+# BAD
+ScrapedProduct(name="Blue Dream 3.5g", weight="3.5g")
+# Weight is redundant in both places
+```
+
+❌ **Don't include unit in brand/category**:
+```python
+# BAD
+ScrapedProduct(name="Blue Dream", brand="Tryke 3.5g")
+# Weight doesn't belong in brand
+```
+
+### Verifying Your Scraper
+
+After running your scraper, check the database:
+
+```bash
+# Audit product names
+python scripts/audit_product_names.py
+
+# Should show:
+# ✓ No parent products with weights in names
+```
+
+If you see weights in parent names, either:
+1. Fix your scraper to populate `weight` separately
+2. Let the name cleaning pipeline handle it (no action needed)
 
 ---
 

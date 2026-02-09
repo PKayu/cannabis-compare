@@ -131,6 +131,9 @@ class Price(Base):
     product_id = Column(String, ForeignKey("products.id"), nullable=False)
     dispensary_id = Column(String, ForeignKey("dispensaries.id"), nullable=False)
 
+    # Direct link to product page at dispensary
+    product_url = Column(String, nullable=True)
+
     # Price history tracking
     previous_price = Column(Float, nullable=True)
     price_change_date = Column(DateTime, nullable=True)
@@ -213,6 +216,7 @@ class ScraperFlag(Base):
     original_weight = Column(String, nullable=True)  # Raw weight string from scraper
     original_price = Column(Float, nullable=True)  # Price from scraper (for creating price on resolution)
     original_category = Column(String, nullable=True)  # Product category from scraper
+    original_url = Column(String, nullable=True)  # Direct link to product page at dispensary
 
     # Potential match
     matched_product_id = Column(String, ForeignKey("products.id"), nullable=True)
@@ -225,6 +229,7 @@ class ScraperFlag(Base):
     # Admin action
     admin_notes = Column(String, nullable=True)
     corrections = Column(JSON, nullable=True)  # Field corrections applied by admin, e.g. {"brand_name": {"from": "N/A", "to": "Beehive"}}
+    issue_tags = Column(JSON, nullable=True)  # Admin-applied issue tags, e.g. ["weight_in_name", "garbage_in_name"]
     resolved_at = Column(DateTime, nullable=True)
     resolved_by = Column(String, nullable=True)  # Future: admin user_id
 

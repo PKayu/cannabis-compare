@@ -38,6 +38,7 @@ class ScrapedProduct:
     batch_number: Optional[str] = None
     cultivation_date: Optional[datetime] = None
     weight: Optional[str] = None  # e.g., "1g", "3.5g", "1oz"
+    url: Optional[str] = None  # Direct link to product page at dispensary
     raw_data: Dict[str, Any] = field(default_factory=dict)  # Original scraped data
 
 

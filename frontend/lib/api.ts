@@ -150,15 +150,15 @@ export const api = {
       approve: (flagId: string, data?: {
         notes?: string; name?: string; brand_name?: string; product_type?: string;
         thc_percentage?: number | null; cbd_percentage?: number | null;
-        weight?: string; price?: number | null;
+        weight?: string; price?: number | null; issue_tags?: string[];
       }) => apiClient.post(`/api/admin/flags/approve/${flagId}`, data || {}),
       reject: (flagId: string, data?: {
         notes?: string; name?: string; brand_name?: string; product_type?: string;
         thc_percentage?: number | null; cbd_percentage?: number | null;
-        weight?: string; price?: number | null;
+        weight?: string; price?: number | null; issue_tags?: string[];
       }) => apiClient.post(`/api/admin/flags/reject/${flagId}`, data || {}),
-      dismiss: (flagId: string, notes?: string) =>
-        apiClient.post(`/api/admin/flags/dismiss/${flagId}`, { notes }),
+      dismiss: (flagId: string, data?: { notes?: string; issue_tags?: string[] }) =>
+        apiClient.post(`/api/admin/flags/dismiss/${flagId}`, data || {}),
       analytics: (days?: number) =>
         apiClient.get('/api/admin/flags/analytics', { params: { days } }),
     },

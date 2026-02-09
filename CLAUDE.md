@@ -49,7 +49,7 @@ Browser (React/Next.js) ←→ FastAPI Backend ←→ PostgreSQL (Docker/Supabas
 
 The app follows three main data flows:
 
-1. **Price Aggregation**: Web scrapers → Data normalization (fuzzy match + weight parsing) → Variant creation → Price storage on variants → API (grouped by weight) → Frontend
+1. **Price Aggregation**: Web scrapers (capture product URL) → Data normalization (fuzzy match + weight parsing) → Variant creation → Price storage on variants (with product_url) → API (grouped by weight with URLs) → Frontend (direct product links)
 2. **Reviews**: User form → Backend validation → Database → API queries → Display
 3. **Search**: Frontend input → `/api/products/search` → Database → Results with filters
 
@@ -66,7 +66,7 @@ Eleven interconnected models with these critical relationships:
 - **User** → **PriceAlert** (1:M, price drop thresholds)
 - **User** → **NotificationPreference** (1:1, email frequency settings)
 - **Dispensary** → **Promotion** (1:M, weekly deals)
-- **ScraperFlag** → Data quality issues (orphaned products, outliers); includes `original_weight`, `original_price`, `original_category` fields for variant context
+- **ScraperFlag** → Data quality issues (orphaned products, outliers); includes `original_weight`, `original_price`, `original_category`, and `original_url` fields for variant context and source verification
 - **ScraperRun** → Execution history and monitoring
 
 All models use UUID primary keys. Foreign key constraints cascade on delete.
@@ -83,6 +83,26 @@ Self-referential relationship fields on the Product model:
 - `Product.master_product` - Parent product reference (from variant)
 
 **Critical rule**: Prices are always stored on variant products, never on parents. Reviews are always stored on parent products, never on variants. The API layer handles resolution automatically (e.g., posting a review on a variant ID resolves to the parent).
+
+#### Product URLs on Price Records
+
+The `Price` model includes a `product_url` field for direct links to product pages at dispensaries:
+
+- **Storage**: URLs are stored on `Price` records (product-dispensary junction) since the same product has different URLs at different dispensaries
+- **Capture**: Scrapers extract product page URLs during scraping and pass them to `ScraperRunner._update_price()`
+- **Frontend Usage**:
+  - Product detail pages use `product_url` for "Buy Now" buttons (direct to product page instead of search)
+- **Fallback**: If `product_url` is null, frontend falls back to dispensary homepage or search patterns
+- **Format**: Should be absolute URLs (e.g., `https://wholesomeco.com/products/blue-dream-3-5g`)
+
+#### URL Preservation for Flagged Products
+
+When the `ConfidenceScorer` flags a product (60-90% confidence), no Price record is created, so the product URL would be lost. To prevent this, the URL is captured on the `ScraperFlag` itself:
+
+- **Flow**: Scraper -> `ScrapedProduct.url` -> `ConfidenceScorer` -> `ScraperFlag.original_url` -> API response -> Frontend "View Source Product Page" link
+- **On resolution**: When a flag is approved or rejected, `ScraperFlagProcessor` passes `flag.original_url` through to `update_or_create_price()`, ensuring the URL reaches the resulting Price record
+- **Frontend**: The cleanup queue FlagCard component reads `flag.original_url` directly (no async fetching from Price records needed)
+- **Key insight**: Previously URLs were lost for flagged items because the scraper pipeline skips Price creation for 60-90% matches. The `original_url` field on ScraperFlag bridges that gap
 
 ### Scraper Architecture (Self-Registration Pattern)
 
@@ -133,7 +153,7 @@ The scraper pipeline uses `ConfidenceScorer` (from `services/normalization/score
 2. Each scraped product is scored against cached candidates using fuzzy string matching (rapidfuzz)
 3. Based on the confidence score, one of three actions is taken:
    - **>90% match**: Auto-merge -- the scraped product is linked to the existing product and a price/variant is created or updated
-   - **60-90% match**: A `ScraperFlag` is created for admin review in the cleanup queue, with the match candidate and confidence score attached
+   - **60-90% match**: A `ScraperFlag` is created for admin review in the cleanup queue, with the match candidate, confidence score, and `original_url` (from `ScrapedProduct.url`) attached for source verification
    - **<60% match**: A new parent product is created automatically
 4. Weight parsing (`services/normalization/weight_parser.py`) extracts weight from product names (e.g., "Blue Dream - 3.5g" produces `weight="3.5g"`, `weight_grams=3.5`) and creates appropriate variant products
 5. The scorer uses `db.flush()` instead of `db.commit()` for transaction control, allowing the caller (`ScraperRunner`) to commit the entire batch atomically
@@ -142,7 +162,7 @@ The scraper pipeline uses `ConfidenceScorer` (from `services/normalization/score
 - `services/normalization/scorer.py` - `ConfidenceScorer` with `find_or_create_variant()` for variant-aware product creation
 - `services/normalization/weight_parser.py` - Parses weight strings ("3.5g", "1oz", "1/8 oz") to normalized labels and gram values
 - `services/normalization/matcher.py` - Legacy `ProductMatcher` (retained for reference)
-- `services/normalization/flag_processor.py` - Variant-aware flag approve/reject logic
+- `services/normalization/flag_processor.py` - Variant-aware flag approve/reject logic; passes `original_url` through to Price records on resolution
 - `services/scraper_runner.py` - Orchestrates scraper execution, imports `ConfidenceScorer`
 
 ### Alert & Notification System
@@ -162,7 +182,7 @@ Users configure notification preferences via `/profile/notifications`:
 Located at `/admin` (frontend) with corresponding backend API routers:
 
 - **Admin Scrapers** ([`routers/admin_scrapers.py`](backend/routers/admin_scrapers.py)) - View scraper status, trigger manual runs (async/background), view execution history
-- **Admin Flags** ([`routers/admin_flags.py`](backend/routers/admin_flags.py)) - Review and resolve data quality issues
+- **Admin Flags** ([`routers/admin_flags.py`](backend/routers/admin_flags.py)) - Review and resolve data quality issues; returns `original_url` on flag responses for "View Source" links to dispensary product pages
 - **Admin Quality** ([`services/quality/outlier_detection.py`](backend/services/quality/outlier_detection.py)) - Statistical analysis to identify price outliers
 
 **Async Scraper Execution:** The `POST /api/admin/scrapers/run/{scraper_id}` endpoint uses fire-and-forget background execution via `asyncio.create_task()`. It returns immediately with `{"status": "started"}` instead of blocking until the scraper completes. The scraper runs in the background with its own database session (created via `SessionLocal()`) to avoid the request-scoped session being closed. The `ScraperRun` entry is committed immediately with status `"running"` so other sessions (e.g., frontend polling) can see it. The frontend polls `/api/admin/scrapers/runs?scraper_id=X&limit=1` every 5 seconds until the run status changes from `"running"` to a terminal state (`"success"`, `"error"`, or `"warning"`). Disabled scrapers are rejected with HTTP 400.
@@ -171,7 +191,7 @@ Frontend uses Next.js App Router with route group `(admin)` for admin-specific p
 - [`/admin/page.tsx`](frontend/app/(admin)/admin/page.tsx) - Main dashboard
 - [`/admin/scrapers/page.tsx`](frontend/app/(admin)/admin/scrapers/page.tsx) - Scraper management with polling-based run status
 - [`/admin/quality/page.tsx`](frontend/app/(admin)/admin/quality/page.tsx) - Quality metrics
-- [`/admin/cleanup/page.tsx`](frontend/app/(admin)/admin/cleanup/page.tsx) - Flagged items
+- [`/admin/cleanup/page.tsx`](frontend/app/(admin)/admin/cleanup/page.tsx) - Flagged items with "View Source Product Page" links using `flag.original_url` directly
 
 ### Authentication Architecture (Dual-System)
 
@@ -686,6 +706,7 @@ frontend/
     SearchBar.tsx         → Search input with autocomplete
     ReviewForm.tsx        → Review submission with dual-track tags
     WatchlistButton.tsx   → Add/remove from watchlist
+    PriceComparisonTable.tsx → Price display with direct product links (uses product_url)
     Toast.tsx             → Toast notifications
     ... (additional UI components)
   tailwind.config.ts     → Custom cannabis color palette
@@ -697,7 +718,9 @@ frontend/
 
 1. Create scraper class inheriting from `BaseScraper` in `backend/services/scrapers/`
 2. Implement `scrape_products()` and `scrape_promotions()` async methods
-3. Populate `weight` field on `ScrapedProduct` for proper variant creation (e.g., "3.5g", "1oz")
+3. Populate `weight` and `url` fields on `ScrapedProduct`:
+   - `weight`: For proper variant creation (e.g., "3.5g", "1oz")
+   - `url`: Direct link to product page for user purchases and admin verification
 4. Add `@register_scraper` decorator with metadata (id, name, schedule_minutes, etc.)
 5. Import in `main.py` to trigger self-registration
 6. Scheduler automatically discovers and schedules it at startup
@@ -825,6 +848,7 @@ scripts\run-tests.bat
 - **Logging**: Use `self.logger` for all scraper-specific logging
 - **Data quality**: Products are automatically matched via `ConfidenceScorer` fuzzy matching (>90% auto-merge, 60-90% flagged for review, <60% new product) - check quality dashboard
 - **Weight field**: Scrapers should populate the `weight` field on `ScrapedProduct` for proper variant creation. The weight parser handles formats like "3.5g", "1oz", "1/8 oz", "1000mg"
+- **URL field**: Scrapers should capture the `url` field (direct link to product page) for user purchases and admin verification. For auto-merged products (>90%), URLs are stored on Price records. For flagged products (60-90%), URLs are preserved on `ScraperFlag.original_url` and flow to Price records when the flag is resolved
 - **Testing**: Run scrapers manually via admin dashboard before relying on scheduler
 - **Async execution**: Admin-triggered scraper runs execute in the background via `asyncio.create_task()`. The API returns immediately with `{"status": "started"}` and the frontend polls for completion. The background task creates its own database session via `SessionLocal()` to avoid session lifecycle issues.
 - **Run visibility**: `ScraperRun` entries are committed (not just flushed) with status `"running"` so polling from other sessions can see them immediately
@@ -1072,7 +1096,7 @@ Each workflow follows a consistent pattern:
 | `admin_flags.py` | `/api/admin/flags` | List, resolve, bulk resolve |
 | `auth.py` | `/api/auth` | Register, login, refresh, verify |
 | `users.py` | `/api/users` | Profile, reviews, public profile |
-| `products.py` | `/api/products` | List, get, search, prices, history |
+| `products.py` | `/api/products` | List, get, search, prices (with product_url), history |
 | `dispensaries.py` | `/api/dispensaries` | List, get, inventory |
 | `search.py` | `/api/products/search` | Fuzzy search with filters |
 | `reviews.py` | `/api/reviews` | CRUD, upvote, product filtering |

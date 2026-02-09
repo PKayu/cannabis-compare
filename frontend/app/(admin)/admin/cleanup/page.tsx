@@ -42,7 +42,7 @@ export default function CleanupQueuePage() {
     }
   }
 
-  const handleListApprove = async (flagId: string, edits?: Partial<EditableFields>, notes?: string) => {
+  const handleListApprove = async (flagId: string, edits?: Partial<EditableFields>, notes?: string, issueTags?: string[]) => {
     try {
       const data: Record<string, unknown> = { notes: notes || '' }
       if (edits) {
@@ -54,6 +54,7 @@ export default function CleanupQueuePage() {
         if (edits.weight) data.weight = edits.weight
         if (edits.price) data.price = parseFloat(edits.price)
       }
+      if (issueTags && issueTags.length > 0) data.issue_tags = issueTags
       await api.admin.flags.approve(flagId, data)
       setListFlags(prev => prev.filter(f => f.id !== flagId))
       loadListStats()
@@ -63,7 +64,7 @@ export default function CleanupQueuePage() {
     }
   }
 
-  const handleListReject = async (flagId: string, edits?: Partial<EditableFields>, notes?: string) => {
+  const handleListReject = async (flagId: string, edits?: Partial<EditableFields>, notes?: string, issueTags?: string[]) => {
     try {
       const data: Record<string, unknown> = { notes: notes || '' }
       if (edits) {
@@ -75,6 +76,7 @@ export default function CleanupQueuePage() {
         if (edits.weight) data.weight = edits.weight
         if (edits.price) data.price = parseFloat(edits.price)
       }
+      if (issueTags && issueTags.length > 0) data.issue_tags = issueTags
       await api.admin.flags.reject(flagId, data)
       setListFlags(prev => prev.filter(f => f.id !== flagId))
       loadListStats()
@@ -84,9 +86,11 @@ export default function CleanupQueuePage() {
     }
   }
 
-  const handleListDismiss = async (flagId: string, notes?: string) => {
+  const handleListDismiss = async (flagId: string, notes?: string, issueTags?: string[]) => {
     try {
-      await api.admin.flags.dismiss(flagId, notes)
+      const data: Record<string, unknown> = { notes: notes || '' }
+      if (issueTags && issueTags.length > 0) data.issue_tags = issueTags
+      await api.admin.flags.dismiss(flagId, data)
       setListFlags(prev => prev.filter(f => f.id !== flagId))
       loadListStats()
     } catch (err) {

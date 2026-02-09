@@ -6,6 +6,7 @@ interface PriceData {
   dispensary_location: string
   dispensary_hours: string | null
   dispensary_website: string | null
+  product_url: string | null
   msrp: number
   deal_price: number | null
   savings: number | null
@@ -35,20 +36,31 @@ const DISPENSARY_LINKS: Record<string, string> = {
   'beehive': 'https://beehivefarmacy.com/search?q=',
 }
 
-function generateOrderLink(dispensaryId: string, dispensaryWebsite: string | null, productName?: string): string {
-  // Prioritize dispensary website if available
+function generateOrderLink(
+  dispensaryId: string,
+  dispensaryWebsite: string | null,
+  productUrl: string | null,
+  productName?: string
+): string {
+  // 1. PRIORITY: Use product-specific URL if available
+  if (productUrl && productUrl.trim() !== '') {
+    const url = productUrl.trim()
+    return url.startsWith('http') ? url : `https://${url}`
+  }
+
+  // 2. FALLBACK: Dispensary website (homepage)
   if (dispensaryWebsite && dispensaryWebsite.trim() !== '') {
     const url = dispensaryWebsite.trim()
     return url.startsWith('http') ? url : `https://${url}`
   }
 
-  // Check if we have a known pattern for this dispensary
+  // 3. Check if we have a known search pattern for this dispensary
   const pattern = DISPENSARY_LINKS[dispensaryId.toLowerCase()]
   if (pattern && productName) {
     return pattern + encodeURIComponent(productName)
   }
 
-  // Last resort: return empty href to prevent navigation
+  // 4. Last resort: return empty href to prevent navigation
   return '#'
 }
 
@@ -123,7 +135,7 @@ export default function PriceComparisonTable({ prices, productId, productName }:
                 </td>
                 <td className="text-center px-4 py-4">
                   <a
-                    href={generateOrderLink(price.dispensary_id, price.dispensary_website, productName)}
+                    href={generateOrderLink(price.dispensary_id, price.dispensary_website, price.product_url, productName)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className={`inline-block px-4 py-2 rounded text-sm font-medium transition-colors ${
@@ -187,7 +199,7 @@ export default function PriceComparisonTable({ prices, productId, productName }:
                 )}
               </div>
               <a
-                href={generateOrderLink(price.dispensary_id, price.dispensary_website)}
+                href={generateOrderLink(price.dispensary_id, price.dispensary_website, price.product_url, productName)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className={`px-4 py-2 rounded text-sm font-medium ${

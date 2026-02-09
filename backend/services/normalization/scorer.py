@@ -188,7 +188,8 @@ class ConfidenceScorer:
                 merge_reason=f"Confidence {confidence:.0%} requires manual review",
                 original_weight=scraped_product.weight,
                 original_price=scraped_product.price,
-                original_category=scraped_product.category
+                original_category=scraped_product.category,
+                original_url=scraped_product.url
             )
             db.add(flag)
             db.flush()
@@ -261,7 +262,8 @@ class ConfidenceScorer:
         product_id: str,
         dispensary_id: str,
         price: float,
-        in_stock: bool = True
+        in_stock: bool = True,
+        product_url: Optional[str] = None
     ) -> str:
         """Update existing price or create new price entry."""
         from models import Price
@@ -278,6 +280,8 @@ class ConfidenceScorer:
         if existing_price:
             existing_price.update_price(price)
             existing_price.in_stock = in_stock
+            if product_url is not None:
+                existing_price.product_url = product_url
             db.flush()
             return existing_price.id
         else:
@@ -285,7 +289,8 @@ class ConfidenceScorer:
                 product_id=product_id,
                 dispensary_id=dispensary_id,
                 amount=price,
-                in_stock=in_stock
+                in_stock=in_stock,
+                product_url=product_url
             )
             db.add(new_price)
             db.flush()

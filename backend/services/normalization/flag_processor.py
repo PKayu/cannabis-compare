@@ -57,6 +57,7 @@ class ScraperFlagProcessor:
         cbd_percentage: Optional[float] = None,
         weight: Optional[str] = None,
         price: Optional[float] = None,
+        issue_tags: Optional[List[str]] = None,
     ) -> str:
         """
         Approve merge of flagged product to matched product.
@@ -139,7 +140,8 @@ class ScraperFlagProcessor:
             price=final_price or 0.0,
             thc_percentage=final_thc,
             cbd_percentage=final_cbd,
-            weight=final_weight
+            weight=final_weight,
+            url=flag.original_url
         )
 
         # Create/find variant under the matched parent
@@ -150,7 +152,8 @@ class ScraperFlagProcessor:
         # Create price record if we have price data
         if final_price and final_price > 0:
             ConfidenceScorer.update_or_create_price(
-                db, variant.id, flag.dispensary_id, final_price
+                db, variant.id, flag.dispensary_id, final_price,
+                product_url=flag.original_url
             )
 
         # Update flag status
@@ -158,6 +161,8 @@ class ScraperFlagProcessor:
         flag.resolved_by = admin_id
         flag.resolved_at = datetime.utcnow()
         flag.admin_notes = notes
+        if issue_tags:
+            flag.issue_tags = issue_tags
 
         db.commit()
 
@@ -183,6 +188,7 @@ class ScraperFlagProcessor:
         cbd_percentage: Optional[float] = None,
         weight: Optional[str] = None,
         price: Optional[float] = None,
+        issue_tags: Optional[List[str]] = None,
     ) -> str:
         """
         Reject merge and create new parent + variant from flagged entry.
@@ -265,7 +271,8 @@ class ScraperFlagProcessor:
             price=final_price or 0.0,
             thc_percentage=final_thc,
             cbd_percentage=final_cbd,
-            weight=final_weight
+            weight=final_weight,
+            url=flag.original_url
         )
         variant = find_or_create_variant(
             db, parent.id, final_weight, scraped
@@ -274,7 +281,8 @@ class ScraperFlagProcessor:
         # Create price record if we have price data
         if final_price and final_price > 0:
             ConfidenceScorer.update_or_create_price(
-                db, variant.id, flag.dispensary_id, final_price
+                db, variant.id, flag.dispensary_id, final_price,
+                product_url=flag.original_url
             )
 
         # Update flag status
@@ -282,6 +290,8 @@ class ScraperFlagProcessor:
         flag.resolved_by = admin_id
         flag.resolved_at = datetime.utcnow()
         flag.admin_notes = notes
+        if issue_tags:
+            flag.issue_tags = issue_tags
 
         db.commit()
 
@@ -298,7 +308,8 @@ class ScraperFlagProcessor:
         db: Session,
         flag_id: str,
         admin_id: str,
-        notes: str = ""
+        notes: str = "",
+        issue_tags: Optional[List[str]] = None,
     ) -> None:
         """
         Dismiss a flagged product without creating any product.
@@ -322,6 +333,8 @@ class ScraperFlagProcessor:
         flag.resolved_by = admin_id
         flag.resolved_at = datetime.utcnow()
         flag.admin_notes = notes
+        if issue_tags:
+            flag.issue_tags = issue_tags
 
         db.commit()
 
@@ -402,6 +415,7 @@ class ScraperFlagProcessor:
                 "original_weight": flag.original_weight,
                 "original_price": flag.original_price,
                 "original_category": flag.original_category,
+                "original_url": flag.original_url,
                 "brand_name": flag.brand_name,
                 "dispensary_id": flag.dispensary_id,
                 "dispensary_name": dispensary.name if dispensary else None,
@@ -409,6 +423,7 @@ class ScraperFlagProcessor:
                 "confidence_percent": f"{flag.confidence_score:.0%}",
                 "matched_product": matched_product,
                 "merge_reason": flag.merge_reason,
+                "issue_tags": flag.issue_tags,
                 "created_at": flag.created_at.isoformat()
             })
 

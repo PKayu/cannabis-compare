@@ -187,6 +187,15 @@ class PlaywrightScraper(BaseScraper):
                 }
 
                 elements.forEach(element => {
+                    // Extract product URL from link elements
+                    const linkElement = element.querySelector('a[href*="product"], a[href*="/p/"], a[href*="item"]');
+                    let url = linkElement?.href || null;
+
+                    // Make URL absolute if it's relative
+                    if (url && !url.startsWith('http')) {
+                        url = new URL(url, window.location.origin).href;
+                    }
+
                     const product = {
                         name: element.querySelector('h2, h3, .name, [data-name]')?.textContent?.trim(),
                         price: element.querySelector('[data-price], .price, [class*="price"]')?.textContent?.match(/\\d+\\.?\\d*/)?.[0],
@@ -194,6 +203,7 @@ class PlaywrightScraper(BaseScraper):
                         brand: element.querySelector('.brand, [data-brand], [class*="brand"]')?.textContent?.trim(),
                         category: element.querySelector('.category, [data-category]')?.textContent?.trim(),
                         inStock: !element.querySelector('[data-sold-out], .sold-out, [class*="unavailable"]'),
+                        url: url,
                         html: element.outerHTML
                     };
 
@@ -218,6 +228,7 @@ class PlaywrightScraper(BaseScraper):
                     thc_percentage=self._parse_float(item.get("thc")),
                     price=self._parse_float(item.get("price")) or 0,
                     in_stock=item.get("inStock", True),
+                    url=item.get("url"),
                     raw_data=item  # Preserve original for debugging
                 )
 
@@ -454,6 +465,16 @@ class WholesomeCoScraper(PlaywrightScraper):
                         // Get all text for parsing
                         const fullText = el.textContent || '';
 
+                        // Extract product URL
+                        const linkEl = el.querySelector('a[href]');
+                        let url = null;
+                        if (linkEl) {
+                            url = linkEl.href;
+                            if (url && !url.startsWith('http')) {
+                                url = new URL(url, window.location.origin).href;
+                            }
+                        }
+
                         // Extract name - usually the main heading
                         const nameEl = el.querySelector('h2, h3, h4, .product-name, [class*="name"]');
                         let name = nameEl?.textContent?.trim() || '';
@@ -564,6 +585,7 @@ class WholesomeCoScraper(PlaywrightScraper):
                                 strainType: strainType,
                                 weight: weight,
                                 inStock: !outOfStock,
+                                url: url,
                                 html: el.outerHTML.substring(0, 1000)
                             });
                         }
@@ -590,6 +612,7 @@ class WholesomeCoScraper(PlaywrightScraper):
                     cbd_percentage=float(item["cbd"]) if item.get("cbd") else None,
                     weight=item.get("weight"),
                     in_stock=item.get("inStock", True),
+                    url=item.get("url"),
                     raw_data=item
                 )
                 products.append(product)

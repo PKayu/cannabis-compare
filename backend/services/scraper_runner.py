@@ -171,7 +171,8 @@ class ScraperRunner:
                                 product,
                                 dispensary,
                                 scraped.price,
-                                scraped.in_stock
+                                scraped.in_stock,
+                                scraped.url
                             )
                             processed_count += 1
                 except Exception as e:
@@ -278,7 +279,8 @@ class ScraperRunner:
         product: Product,
         dispensary: Dispensary,
         amount: float,
-        in_stock: bool
+        in_stock: bool,
+        product_url: Optional[str] = None
     ) -> None:
         """
         Update or create price record for a product at a dispensary.
@@ -288,15 +290,17 @@ class ScraperRunner:
             dispensary: Dispensary database record
             amount: Price amount
             in_stock: Whether the product is in stock
+            product_url: Direct link to product page at dispensary
         """
         # First check in session (for newly added but uncommitted prices)
         for obj in self.db.new:
             if isinstance(obj, Price):
                 if obj.product_id == product.id and obj.dispensary_id == dispensary.id:
                     # Price already added to session, update it
-                    if obj.amount != amount or obj.in_stock != in_stock:
+                    if obj.amount != amount or obj.in_stock != in_stock or obj.product_url != product_url:
                         obj.amount = amount
                         obj.in_stock = in_stock
+                        obj.product_url = product_url
                         obj.last_updated = datetime.utcnow()
                     return
 
@@ -308,9 +312,10 @@ class ScraperRunner:
 
         if price:
             # Update existing price if changed
-            if price.amount != amount or price.in_stock != in_stock:
+            if price.amount != amount or price.in_stock != in_stock or price.product_url != product_url:
                 price.update_price(amount)
                 price.in_stock = in_stock
+                price.product_url = product_url
                 price.last_updated = datetime.utcnow()
         else:
             # Create new price record
@@ -318,6 +323,7 @@ class ScraperRunner:
                 product_id=product.id,
                 dispensary_id=dispensary.id,
                 amount=amount,
-                in_stock=in_stock
+                in_stock=in_stock,
+                product_url=product_url
             )
             self.db.add(new_price)

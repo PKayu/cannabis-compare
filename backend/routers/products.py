@@ -202,6 +202,7 @@ async def get_price_comparison(
                 "dispensary_location": price.dispensary.location,
                 "dispensary_hours": price.dispensary.hours,
                 "dispensary_website": price.dispensary.website,
+                "product_url": price.product_url,
                 "msrp": float(price.amount),
                 "deal_price": float(deal_price) if deal_price < price.amount else None,
                 "savings": float(savings) if savings > 0 else None,

@@ -43,6 +43,8 @@ class ApproveWithEditsRequest(BaseModel):
     cbd_percentage: Optional[float] = None
     weight: Optional[str] = None
     price: Optional[float] = None
+    # Issue tags for analytics
+    issue_tags: Optional[List[str]] = None
 
 
 class RejectWithEditsRequest(BaseModel):
@@ -55,11 +57,13 @@ class RejectWithEditsRequest(BaseModel):
     cbd_percentage: Optional[float] = None
     weight: Optional[str] = None
     price: Optional[float] = None
+    issue_tags: Optional[List[str]] = None
 
 
 class DismissRequest(BaseModel):
     """Request body for dismissing a flag without creating any product."""
     notes: Optional[str] = ""
+    issue_tags: Optional[List[str]] = None
 
 
 class MergeRequest(BaseModel):
@@ -172,6 +176,7 @@ async def get_flag_detail(
         "original_name": flag.original_name,
         "original_thc": flag.original_thc,
         "original_cbd": flag.original_cbd,
+        "original_url": flag.original_url,
         "brand_name": flag.brand_name,
         "dispensary_id": flag.dispensary_id,
         "dispensary_name": dispensary.name if dispensary else None,
@@ -203,6 +208,7 @@ async def approve_flag(
             cbd_percentage=request.cbd_percentage,
             weight=request.weight,
             price=request.price,
+            issue_tags=request.issue_tags,
         )
         return {"status": "approved", "product_id": product_id}
     except ValueError as e:
@@ -230,6 +236,7 @@ async def reject_flag(
             cbd_percentage=request.cbd_percentage,
             weight=request.weight,
             price=request.price,
+            issue_tags=request.issue_tags,
         )
         return {"status": "rejected", "new_product_id": new_product_id}
     except ValueError as e:
@@ -249,7 +256,8 @@ async def dismiss_flag(
             db=db,
             flag_id=flag_id,
             admin_id=admin_id,
-            notes=request.notes or ""
+            notes=request.notes or "",
+            issue_tags=request.issue_tags,
         )
         return {"status": "dismissed"}
     except ValueError as e:

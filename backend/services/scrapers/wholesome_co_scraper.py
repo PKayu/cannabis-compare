@@ -76,6 +76,12 @@ class WholesomeCoScraper(BaseScraper):
                     if 'product_id' not in data or 'name' not in data:
                         continue
 
+                    # Extract or construct product URL
+                    product_url = data.get("url")
+                    if not product_url and data.get("product_id"):
+                        # Construct URL from product ID if not provided
+                        product_url = f"https://www.wholesome.co/product/{data.get('product_id')}"
+
                     # Map to our schema
                     product = ScrapedProduct(
                         name=data.get("name"),
@@ -84,8 +90,9 @@ class WholesomeCoScraper(BaseScraper):
                         price=float(data.get("price", 0)),
                         # THC/CBD is not in this JSON, so we try to extract from name
                         thc_percentage=self._extract_percentage(data.get("name")),
-                        cbd_percentage=None, 
+                        cbd_percentage=None,
                         weight=data.get("variant") or self._extract_unit_size(data.get("name")),
+                        url=product_url,
                         raw_data=data
                     )
                     products.append(product)

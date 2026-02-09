@@ -161,6 +161,15 @@ class IHeartJaneScraper(BaseScraper):
         if "inventory" in item:
             in_stock = item["inventory"] > 0
 
+        # Extract or construct product URL
+        product_url = item.get("url") or item.get("link") or item.get("product_url")
+        if not product_url and item.get("id") and item.get("slug"):
+            # Construct URL from product ID and slug (common iHeartJane pattern)
+            product_url = f"https://www.iheartjane.com/products/{item['id']}/{item['slug']}"
+        elif not product_url and self.store_id and item.get("id"):
+            # Fallback: construct URL with store and product ID
+            product_url = f"https://www.iheartjane.com/stores/{self.store_id}/products/{item['id']}"
+
         return ScrapedProduct(
             name=name,
             brand=brand,
@@ -170,6 +179,7 @@ class IHeartJaneScraper(BaseScraper):
             price=float(price),
             in_stock=in_stock,
             weight=self._extract_unit_size(name),
+            url=product_url,
             raw_data=item  # Preserve original for debugging
         )
 

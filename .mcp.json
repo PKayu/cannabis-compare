@@ -1,0 +1,25 @@
+{
+  "context7": {
+    "command": "npx",
+    "args": [
+      "-y",
+      "@upstash/context7-mcp"
+    ]
+  },
+  "greptile": {
+    "type": "http",
+    "url": "https://api.greptile.com/mcp",
+    "headers": {
+      "Authorization": "Bearer ${GREPTILE_API_KEY}"
+    }
+  },
+  "serena": {
+    "command": "uvx",
+    "args": [
+      "--from",
+      "git+https://github.com/oraios/serena",
+      "serena",
+      "start-mcp-server"
+    ]
+  }
+}

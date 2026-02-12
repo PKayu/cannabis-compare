@@ -120,7 +120,11 @@
       "Bash(backend/venv/Scripts/python.exe:*)",
       "Bash(pytest:*)",
       "Bash(npx tsc:*)",
-      "Bash(git clean:*)"
+      "Bash(git clean:*)",
+      "Bash(alembic heads:*)",
+      "Bash(alembic stamp:*)",
+      "Bash(if exist backendnul del backendnul)",
+      "Bash(if exist nul del nul)"
     ]
   },
   "mcpServers": {

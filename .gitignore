@@ -35,6 +35,9 @@ ENV/
 out/
 *.pyc
 .pytest_cache/
+*.tsbuildinfo
+.openpackage/
+pattern
 
 # Logs
 *.log

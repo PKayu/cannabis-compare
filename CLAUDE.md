@@ -1051,6 +1051,12 @@ Each workflow follows a consistent pattern:
 - Each workflow is self-contained but builds on previous workflows
 - Success criteria must be fully met before moving to next workflow
 - Workflows reference ARCHITECTURE.md for design context
+### notes from insights
+Add as a top-level section: ## Platform & Environment\n\nThis project runs on Windows. Avoid Unix-specific commands (e.g., `kill`, `lsof`), watch for reserved filenames (e.g., `nul`, `con`, `aux`), and use `taskkill` or PowerShell equivalents for process management. For Python asyncio, prefer `asyncio.WindowsSelectorEventLoopPolicy()` or test subprocess approaches carefully on Windows/Python 3.13+.
+Add under a new section: ## Git & Version Control\n\nWhen committing changes, do NOT use interactive commit helper scripts. Instead, manually stage and commit files using `git add` and `git commit` commands directly. Organize commits into logical groups (e.g., backend, frontend, tests, docs).
+Add under a new section: ## Debugging Guidelines\n\nWhen debugging connection or configuration issues, check .env files and actual service availability FIRST before attempting code-level fixes. For Supabase, verify the service role key, anon key, and URL are correct and the service is reachable.
+Add as a top-level section: ## Project Architecture\n\nThis project uses: Python (backend/scrapers), TypeScript (frontend), Supabase (database/auth). The scraper pipeline writes to Supabase. Products have weight variants with fuzzy matching. Always check existing database schema and migrations before making data model assumptions.
+Add under a new section: ## Working Style Preferences\n\nWhen the user references specific files or plans, focus on those FIRST before doing broad searches across the codebase. Ask for clarification rather than scanning everything.
 
 ## References
 

@@ -90,6 +90,7 @@ class Product(Base):
     product_type = Column(String, nullable=False)  # e.g., "Flower", "Vape", "Edible"
     thc_percentage = Column(Float, nullable=True)  # THC content
     cbd_percentage = Column(Float, nullable=True)  # CBD content
+    cbg_percentage = Column(Float, nullable=True)  # CBG content
     brand_id = Column(String, ForeignKey("brands.id"), nullable=False)
 
     # Weight/quantity (for variant products)

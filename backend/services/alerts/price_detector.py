@@ -20,7 +20,7 @@ class PriceDetector:
 
         # Get all watched products with price drop alerts enabled
         watchlist_items = db.query(Watchlist).filter(
-            Watchlist.alert_on_price_drop == True
+            Watchlist.alert_on_price_drop.is_(True)
         ).all()
 
         for item in watchlist_items:
@@ -36,7 +36,7 @@ class PriceDetector:
             # Get current prices for this product (across all variants)
             current_prices = db.query(Price).filter(
                 Price.product_id.in_(price_product_ids),
-                Price.in_stock == True
+                Price.in_stock.is_(True)
             ).all()
 
             for current_price in current_prices:

@@ -132,7 +132,7 @@ class ScraperRunner:
             # 3. Pre-load master product candidates for fuzzy matching
             master_products = (
                 self.db.query(Product)
-                .filter(Product.is_master == True)
+                .filter(Product.is_master.is_(True))
                 .all()
             )
             candidates = [
@@ -176,11 +176,13 @@ class ScraperRunner:
                             )
                             processed_count += 1
                 except Exception as e:
-                    logger.warning(
-                        f"Failed to process product '{scraped.name}': {e}"
+                    logger.error(
+                        f"Failed to process product '{scraped.name}': {e}",
+                        exc_info=True
                     )
-                    # Rollback to clear the failed transaction state
-                    self.db.rollback()
+                    # Don't rollback - ConfidenceScorer uses flush() not commit()
+                    # Rolling back would lose ALL previous work in this scraper run
+                    # Just skip this product and continue with the next one
                     continue
 
             # 5. Complete run log and commit all changes

@@ -124,7 +124,10 @@
       "Bash(alembic heads:*)",
       "Bash(alembic stamp:*)",
       "Bash(if exist backendnul del backendnul)",
-      "Bash(if exist nul del nul)"
+      "Bash(if exist nul del nul)",
+      "Bash(test:*)",
+      "WebFetch(domain:docs.firecrawl.dev)",
+      "Bash(git checkout:*)"
     ]
   },
   "mcpServers": {
@@ -132,6 +135,53 @@
       "command": "scrapegraphai-mcp",
       "args": [],
       "env": {}
+    },
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp",
+        "--api-key",
+        "${CONTEXT7_API_KEY}"
+      ],
+      "description": "Version-specific documentation for libraries and frameworks"
+    },
+    "firecrawl": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx -y firecrawl-mcp"
+      ],
+      "env": {
+        "FIRECRAWL_API_KEY": "${FIRECRAWL_API_KEY}",
+        "FIRECRAWL_RETRY_MAX_ATTEMPTS": "5",
+        "FIRECRAWL_RETRY_INITIAL_DELAY": "2000"
+      },
+      "description": "Advanced web scraping with JavaScript rendering and structured extraction"
+    },
+    "figma": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@nvanexan/figma-mcp"
+      ],
+      "env": {
+        "FIGMA_API_KEY": "${FIGMA_API_KEY}"
+      },
+      "description": "Access Figma design files, components, and assets"
+    },
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--read-only",
+        "--project-ref=${SUPABASE_PROJECT_REF}"
+      ],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}"
+      },
+      "description": "Supabase project access for querying, logs, and migrations"
     }
   }
 }

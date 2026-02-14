@@ -49,7 +49,7 @@ def find_or_create_variant(
             db.query(Product)
             .filter(
                 Product.master_product_id == parent_id,
-                Product.is_master == False,
+                Product.is_master.is_(False),
                 Product.weight_grams == weight_g
             )
             .first()
@@ -62,8 +62,8 @@ def find_or_create_variant(
             db.query(Product)
             .filter(
                 Product.master_product_id == parent_id,
-                Product.is_master == False,
-                Product.weight_grams == None
+                Product.is_master.is_(False),
+                Product.weight_grams.is_(None)
             )
             .first()
         )
@@ -81,6 +81,7 @@ def find_or_create_variant(
         brand_id=parent.brand_id,
         thc_percentage=scraped.thc_percentage or parent.thc_percentage,
         cbd_percentage=scraped.cbd_percentage or parent.cbd_percentage,
+        cbg_percentage=scraped.cbg_percentage or parent.cbg_percentage,
         is_master=False,
         master_product_id=parent_id,
         weight=weight_label,
@@ -130,7 +131,7 @@ class ConfidenceScorer:
         if candidates is None:
             master_products = (
                 db.query(Product)
-                .filter(Product.is_master == True)
+                .filter(Product.is_master.is_(True))
                 .all()
             )
             candidates = []
@@ -214,6 +215,7 @@ class ConfidenceScorer:
                 brand_id=brand_id,
                 thc_percentage=scraped_product.thc_percentage,
                 cbd_percentage=scraped_product.cbd_percentage,
+                cbg_percentage=scraped_product.cbg_percentage,
                 is_master=True,
                 normalization_confidence=1.0
             )
@@ -241,6 +243,10 @@ class ConfidenceScorer:
     def _get_or_create_brand(db: Session, brand_name: str) -> str:
         """Get existing brand or create new one."""
         from models import Brand
+
+        # Handle None or empty brand name
+        if not brand_name:
+            brand_name = "Unknown"
 
         brand = (
             db.query(Brand)
@@ -320,13 +326,13 @@ class ConfidenceScorer:
 
         master_products = (
             db.query(Product)
-            .filter(Product.is_master == True)
+            .filter(Product.is_master.is_(True))
             .count()
         )
 
         variant_products = (
             db.query(Product)
-            .filter(Product.is_master == False)
+            .filter(Product.is_master.is_(False))
             .count()
         )
 

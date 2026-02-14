@@ -23,6 +23,29 @@ When exiting plan mode with an accepted plan:
 - **Leverage MCP Serena**: When browsing or trying to understand code, explicitly use MCP Serena tools to search and gather context
 - **Search Strategy**: Prioritize searching over guessing file paths. If Serena errors occur, retry with different parameters
 
+### MCP Servers Configured
+
+This project has the following MCP (Model Context Protocol) servers configured for enhanced Claude Code capabilities:
+
+- **Context7** - Version-specific documentation injection for frameworks and libraries (React, Next.js, FastAPI, etc.)
+- **Firecrawl** - Advanced web scraping with JavaScript rendering and structured extraction
+- **Figma** - Design file access, component retrieval, and asset management
+- **Supabase** - Direct database querying, project logs, and migration access (read-only mode)
+- **Serena** - Codebase search and context gathering (already mentioned above)
+
+**Configuration Files:**
+- MCP servers: [`.claude/settings.local.json`](.claude/settings.local.json)
+- Credentials: `.env.mcp` (gitignored, see `.env.mcp.example` for template)
+- Setup guide: [`docs/guides/MCP_SETUP_GUIDE.md`](docs/guides/MCP_SETUP_GUIDE.md)
+
+**Usage:**
+- Context7 automatically injects current documentation when you ask about frameworks
+- Firecrawl enables advanced web scraping for scraper development and testing
+- Figma allows inspection of design files for UI implementation
+- Supabase MCP provides direct database access without switching to SQL clients
+
+See the [MCP Setup Guide](docs/guides/MCP_SETUP_GUIDE.md) for credential acquisition and testing instructions.
+
 ## Project Overview
 
 Utah Cannabis Aggregator is a full-stack web application for Utah Medical Cannabis patients to compare prices across dispensaries and access community-driven reviews. It's a monorepo with separate frontend (Next.js) and backend (FastAPI) applications.
@@ -34,13 +57,38 @@ Utah Cannabis Aggregator is a full-stack web application for Utah Medical Cannab
 
 **Compliance**: All pages must display a disclaimer that this is informational only and does not sell controlled substances.
 
+## Environment
+
+**Operating System:** Windows 10 Pro
+
+This project runs on **Windows**. Keep these platform considerations in mind:
+
+- **Commands**: Avoid Unix-specific commands (e.g., `kill`, `lsof`). Use `taskkill` or PowerShell equivalents for process management.
+- **Reserved filenames**: Watch for Windows reserved names (`CON`, `NUL`, `PRN`, `AUX`, `COM1-9`, `LPT1-9`) - these cause failures in git operations and file creation.
+- **Python asyncio**: On Windows with Python 3.13+, prefer `asyncio.WindowsSelectorEventLoopPolicy()` or test subprocess approaches carefully.
+- **Path separators**: Use forward slashes in code for cross-platform compatibility; scripts use backslashes for Windows batch files.
+
+## Stack
+
+- **Backend**: Python 3.13, FastAPI, SQLAlchemy ORM
+- **Frontend**: TypeScript, Next.js 14 (App Router), React, Tailwind CSS
+- **Database**: Supabase (PostgreSQL managed)
+- **Auth**: Supabase Auth (frontend) + JWT (backend API) — backend requires `SUPABASE_SERVICE_ROLE_KEY` in `.env`
+- **Scrapers**: Playwright, BeautifulSoup4, requests
+- **Job Scheduling**: APScheduler
+- **Testing**: pytest (backend), Jest + React Testing Library (frontend)
+
+**Critical environment variables:**
+- Always check that `.env` contains both `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` before debugging auth issues
+- Missing or incorrect credentials are the #1 cause of connection failures
+
 ## Architecture & Design Decisions
 
 ### High-Level System Architecture
 
 ```
 Browser (React/Next.js) ←→ FastAPI Backend ←→ PostgreSQL (Docker/Supabase)
-  - Port 4001            - Port 8000         - Docker container or
+  - Port 4002            - Port 8000         - Docker container or
   - Next.js App Router   - Internal only     - Supabase managed
   - Tailwind CSS         - JWT Auth          - SQLAlchemy ORM
 ```
@@ -143,6 +191,16 @@ from services.scrapers.beehive_scraper import BeehiveScraper  # noqa: F401
 ```
 
 The scheduler automatically discovers and schedules all registered scrapers at startup.
+
+**Critical**: When adding new cannabinoid fields (CBG, CBN, etc.) or modifying scraper code, avoid common pitfalls:
+- Use `.is_(None)`, `.is_(True)`, `.is_(False)` in SQLAlchemy filter clauses (never `== None/True/False`)
+- Populate new fields through entire pipeline: ScrapedProduct → variant creation → parent creation → database
+- Handle None brand names before ilike() operations
+- Never rollback inside product processing loop (use continue instead)
+- Extract strain type from aria-labels for full names ("Sativa" not "S")
+- Support dual cannabinoid formats (percentage "19% THC" and milligrams "100 MG THC")
+
+See [Common Pitfalls & Lessons Learned](docs/guides/ADDING_NEW_SCRAPERS.md#common-pitfalls--lessons-learned) for detailed examples and solutions.
 
 ### Fuzzy Matching & Product Normalization
 
@@ -448,7 +506,7 @@ The project includes Docker configuration for easy development setup without ins
 docker-compose up --build
 
 # Services will be available at:
-# - Frontend: http://localhost:4001
+# - Frontend: http://localhost:4002
 # - Backend API: http://localhost:8000
 # - API Docs: http://localhost:8000/docs
 # - Database: localhost:5433 (direct access if needed)
@@ -534,6 +592,31 @@ docker-compose exec backend python seed_test_data.py
 **Issue: Database lost after restart**
 - Data persists in postgres_data volume
 - Only lost if you run `docker-compose down -v`
+
+## Git Commits
+
+**Commit Best Practices:**
+
+- **Do NOT use interactive commit helper scripts** - They fail in this environment due to Windows constraints and non-interactive terminal limitations
+- **Manual staging required**: Use `git add <files>` and `git commit -m "<message>"` directly
+- **Organize logically**: Group commits by area (backend, frontend, tests, docs, config)
+- **Use conventional commits**: Prefix with `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`
+- **Atomic commits**: Each commit should represent one logical change
+
+**Example workflow:**
+```bash
+git status                           # See all changes
+git add backend/services/*.py        # Stage backend changes
+git commit -m "feat: add price alert detection service"
+git add frontend/components/*.tsx    # Stage frontend changes
+git commit -m "feat: add price alert UI components"
+git log --oneline -10                # Verify commits
+git push origin master               # Push to remote
+```
+
+**Common issues:**
+- Reserved filenames (`CON`, `NUL`, `PRN`, `AUX`) will cause commit failures on Windows
+- Always verify file names before staging if git operations fail unexpectedly
 
 ## Code Style & Patterns
 
@@ -716,6 +799,16 @@ frontend/
 
 ### Adding a New Scraper
 
+**IMPORTANT**: Use the **Hybrid LLM-Assisted Discovery Workflow** for new scrapers. See [`docs/guides/LLM_ASSISTED_SCRAPER_DISCOVERY.md`](docs/guides/LLM_ASSISTED_SCRAPER_DISCOVERY.md) for the complete process.
+
+**Quick Summary**:
+1. Run discovery framework to capture page structure and get LLM insights
+2. **Manually verify** all CSS selectors using browser DevTools (LLMs hallucinate selectors!)
+3. Use LLM regex patterns and edge case insights (these are reliable)
+4. Implement scraper with verified selectors + LLM patterns
+5. Test and validate extraction rates
+
+**Traditional Manual Process**:
 1. Create scraper class inheriting from `BaseScraper` in `backend/services/scrapers/`
 2. Implement `scrape_products()` and `scrape_promotions()` async methods
 3. Populate `weight` and `url` fields on `ScrapedProduct`:
@@ -876,6 +969,30 @@ scripts\run-tests.bat
 - **Scheduler**: APScheduler with SQLAlchemy job store persists scheduled runs across restarts
 
 ## Debugging Tips
+
+### Debugging Approach
+
+**Check configuration FIRST before code-level fixes:**
+
+1. **Verify .env files** - Ensure all required environment variables exist and have correct values
+2. **Check service availability** - Can you reach Supabase? Is the backend running? Test with simple curl/HTTP requests
+3. **Confirm actual error messages** - Read the EXACT error before diagnosing root cause
+4. **Test connectivity** - Verify server reachability before assuming encoding or config issues
+
+**For Supabase issues:**
+- Verify service role key, anon key, and URL are correct in `.env`
+- Test connectivity: `curl https://YOUR_PROJECT.supabase.co/rest/v1/`
+- Check Supabase dashboard for service status and recent errors
+
+**When debugging connection/auth errors:**
+- First verify the actual error message and server reachability
+- Don't assume encoding issues or config problems without evidence
+- Missing `SUPABASE_SERVICE_ROLE_KEY` is the #1 cause of auth failures
+
+**When the user references specific files or plans:**
+- Focus on those EXACT files first
+- Do NOT broadly search the entire codebase
+- Ask for clarification rather than scanning everything
 
 ### Backend Issues
 
@@ -1051,12 +1168,6 @@ Each workflow follows a consistent pattern:
 - Each workflow is self-contained but builds on previous workflows
 - Success criteria must be fully met before moving to next workflow
 - Workflows reference ARCHITECTURE.md for design context
-### notes from insights
-Add as a top-level section: ## Platform & Environment\n\nThis project runs on Windows. Avoid Unix-specific commands (e.g., `kill`, `lsof`), watch for reserved filenames (e.g., `nul`, `con`, `aux`), and use `taskkill` or PowerShell equivalents for process management. For Python asyncio, prefer `asyncio.WindowsSelectorEventLoopPolicy()` or test subprocess approaches carefully on Windows/Python 3.13+.
-Add under a new section: ## Git & Version Control\n\nWhen committing changes, do NOT use interactive commit helper scripts. Instead, manually stage and commit files using `git add` and `git commit` commands directly. Organize commits into logical groups (e.g., backend, frontend, tests, docs).
-Add under a new section: ## Debugging Guidelines\n\nWhen debugging connection or configuration issues, check .env files and actual service availability FIRST before attempting code-level fixes. For Supabase, verify the service role key, anon key, and URL are correct and the service is reachable.
-Add as a top-level section: ## Project Architecture\n\nThis project uses: Python (backend/scrapers), TypeScript (frontend), Supabase (database/auth). The scraper pipeline writes to Supabase. Products have weight variants with fuzzy matching. Always check existing database schema and migrations before making data model assumptions.
-Add under a new section: ## Working Style Preferences\n\nWhen the user references specific files or plans, focus on those FIRST before doing broad searches across the codebase. Ask for clarification rather than scanning everything.
 
 ## References
 

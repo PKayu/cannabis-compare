@@ -3,6 +3,10 @@
 .env.local
 .env.*.local
 .env.production.local
+.env.mcp
+
+# MCP configuration
+.mcp.json
 
 # Credentials and Secrets (NEVER COMMIT)
 SUPABASE_CREDENTIALS.md
@@ -64,3 +68,6 @@ docs/Screenshot 2026-01-22 090126.png
 htmlcov/
 .coverage
 *.coverage
+
+# TypeScript build artifacts
+*.tsbuildinfo

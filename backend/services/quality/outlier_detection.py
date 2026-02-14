@@ -61,7 +61,7 @@ class OutlierDetector:
         # Get products with multiple prices (needed for outlier detection)
         product_counts = (
             db.query(Price.product_id, func.count(Price.id).label('count'))
-            .filter(Price.in_stock == True)
+            .filter(Price.in_stock.is_(True))
             .group_by(Price.product_id)
             .having(func.count(Price.id) >= 3)
             .all()
@@ -73,7 +73,7 @@ class OutlierDetector:
             prices = (
                 db.query(Price)
                 .filter(Price.product_id == product_id)
-                .filter(Price.in_stock == True)
+                .filter(Price.in_stock.is_(True))
                 .all()
             )
 

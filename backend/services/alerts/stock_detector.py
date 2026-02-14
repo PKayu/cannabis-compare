@@ -20,7 +20,7 @@ class StockDetector:
 
         # Get all watched products with stock alerts enabled
         watchlist_items = db.query(Watchlist).filter(
-            Watchlist.alert_on_stock == True
+            Watchlist.alert_on_stock.is_(True)
         ).all()
 
         for item in watchlist_items:
@@ -36,7 +36,7 @@ class StockDetector:
             # Check if product is in stock at any dispensary
             in_stock_prices = db.query(Price).filter(
                 Price.product_id.in_(price_product_ids),
-                Price.in_stock == True
+                Price.in_stock.is_(True)
             ).all()
 
             # For each dispensary that has it in stock

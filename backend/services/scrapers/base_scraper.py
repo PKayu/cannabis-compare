@@ -35,6 +35,7 @@ class ScrapedProduct:
     in_stock: bool = True
     thc_percentage: Optional[float] = None
     cbd_percentage: Optional[float] = None
+    cbg_percentage: Optional[float] = None
     batch_number: Optional[str] = None
     cultivation_date: Optional[datetime] = None
     weight: Optional[str] = None  # e.g., "1g", "3.5g", "1oz"

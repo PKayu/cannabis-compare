@@ -452,7 +452,7 @@ async def get_price_outliers(
 async def get_admin_dashboard(db: Session = Depends(get_db)):
     """Get admin dashboard summary."""
     pending_flags = ScraperFlagProcessor.get_flag_count(db, "pending")
-    total_products = db.query(Product).filter(Product.is_master == True).count()
+    total_products = db.query(Product).filter(Product.is_master.is_(True)).count()
     total_prices = db.query(Price).count()
     outliers = OutlierDetector.get_all_outliers(db, limit=100)
     high_severity = len([o for o in outliers if o["severity"] == "high"])

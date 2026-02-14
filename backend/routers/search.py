@@ -49,7 +49,7 @@ async def search_products(
     products = (
         db.query(Product)
         .options(joinedload(Product.brand))
-        .filter(Product.is_master == True)
+        .filter(Product.is_master.is_(True))
         .all()
     )
 

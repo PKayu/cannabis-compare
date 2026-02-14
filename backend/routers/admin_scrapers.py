@@ -251,7 +251,7 @@ async def resume_scraper(scraper_id: str):
 @router.get("/quality/metrics", response_model=QualityMetricsResponse)
 async def get_quality_metrics(db: Session = Depends(get_db)):
     """Get data quality metrics for master products."""
-    total = db.query(Product).filter(Product.is_master == True).count()
+    total = db.query(Product).filter(Product.is_master.is_(True)).count()
     if total == 0:
         return QualityMetricsResponse(
             total_master_products=0,

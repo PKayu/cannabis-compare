@@ -189,7 +189,7 @@ async def get_dispensary_inventory(
     )
 
     if in_stock_only:
-        query = query.filter(Price.in_stock == True)
+        query = query.filter(Price.in_stock.is_(True))
 
     prices = query.all()
 

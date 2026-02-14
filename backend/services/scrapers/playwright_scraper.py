@@ -493,12 +493,18 @@ class WholesomeCoScraper(PlaywrightScraper):
                             }
                         }
 
-                        // Extract price - look for price elements
+                        // Extract price - handle sale vs regular prices
+                        // LLM Edge Case: Sale items use nested span, regular items use direct text
                         let price = null;
-                        const priceEl = el.querySelector('[class*="price"], [data-qa*="price"]');
+                        // Try sale price first (nested span)
+                        let priceEl = el.querySelector('.productListItem-price span[class*="sale"]');
+                        if (!priceEl) {
+                            // Fallback to regular price container
+                            priceEl = el.querySelector('.productListItem-price, [class*="price"]');
+                        }
                         if (priceEl) {
-                            // Get numeric price, handle comma separators
-                            const priceMatch = priceEl.textContent.replace(/,/g, '').match(/\\$?(\\d+\\.?\\d*)/);
+                            // LLM Pattern: Extract price value
+                            const priceMatch = priceEl.textContent.replace(/,/g, '').match(/\\$(\\d+\\.?\\d*)/);
                             if (priceMatch) {
                                 price = priceMatch[1];
                             }
@@ -512,39 +518,71 @@ class WholesomeCoScraper(PlaywrightScraper):
                             }
                         }
 
-                        // Extract strain type (I/S/H) from attrs or text
+                        // Extract strain type from aria-label (full name: Sativa/Indica/Hybrid)
                         const attrsEl = el.querySelector('.productListItem-attrs, [class*="attrs"]');
                         const attrsText = attrsEl?.textContent || fullText;
 
                         let strainType = null;
-                        const strainMatch = attrsText.match(/\\b([HSI])\\b/);
-                        if (strainMatch) {
-                            strainType = strainMatch[1];
+                        // Look for strain type badge with aria-label
+                        const strainBadge = el.querySelector('span[aria-label*="ativa"], span[aria-label*="ndica"], span[aria-label*="ybrid"]');
+                        if (strainBadge) {
+                            const ariaLabel = strainBadge.getAttribute('aria-label');
+                            if (ariaLabel) {
+                                // Extract full strain name: "Sativa", "Indica", or "Hybrid"
+                                strainType = ariaLabel.trim();
+                            }
                         }
 
-                        // Extract cannabinoids - patterns like "19% THC" and "0.42% CBG"
-                        // The format is: number% CANNABINOID (e.g., "19% THC")
+                        // Extract cannabinoids - support both percentage and milligram formats
+                        // LLM Edge Case: Flower/vapes use "19% THC", edibles use "100 MG THC"
                         let thc = null, cbd = null, cbg = null, cbn = null;
 
-                        // Check percentage format first (number% followed by cannabinoid name)
-                        // This is the correct format: "19% THC" not "THC19%"
-                        const thcMatch = attrsText.match(/(\\d+\\.?\\d*)%\\s*THC/i);
-                        if (thcMatch) thc = thcMatch[1];
+                        // THC: Try percentage format first, then milligram format
+                        // LLM Pattern: (\d+\.?\d*)%\s*(THC|CBD|CBG|CBN)
+                        let thcMatch = attrsText.match(/(\\d+\\.?\\d*)%\\s*THC/i);
+                        if (thcMatch) {
+                            thc = thcMatch[1];
+                        } else {
+                            // LLM Pattern: (\d+\.?\d*)\s*MG\s*(THC|CBD|CBG|CBN)
+                            thcMatch = attrsText.match(/(\\d+\\.?\\d*)\\s*MG\\s*THC/i);
+                            if (thcMatch) thc = thcMatch[1];
+                        }
 
-                        const cbdMatch = attrsText.match(/(\\d+\\.?\\d*)%\\s*CBD/i);
-                        if (cbdMatch) cbd = cbdMatch[1];
+                        // CBD: Percentage or milligram
+                        let cbdMatch = attrsText.match(/(\\d+\\.?\\d*)%\\s*CBD/i);
+                        if (cbdMatch) {
+                            cbd = cbdMatch[1];
+                        } else {
+                            cbdMatch = attrsText.match(/(\\d+\\.?\\d*)\\s*MG\\s*CBD/i);
+                            if (cbdMatch) cbd = cbdMatch[1];
+                        }
 
-                        const cbgMatch = attrsText.match(/(\\d+\\.?\\d*)%\\s*CBG/i);
-                        if (cbgMatch) cbg = cbgMatch[1];
+                        // CBG: Percentage or milligram (handle missing "mg" unit)
+                        let cbgMatch = attrsText.match(/(\\d+\\.?\\d*)%\\s*CBG/i);
+                        if (cbgMatch) {
+                            cbg = cbgMatch[1];
+                        } else {
+                            // Try with "mg", then without (some products show "153 CBG" instead of "153 mg CBG")
+                            cbgMatch = attrsText.match(/(\\d+\\.?\\d*)\\s*(?:mg\\s+)?CBG/i);
+                            if (cbgMatch) cbg = cbgMatch[1];
+                        }
 
-                        const cbnMatch = attrsText.match(/(\\d+\\.?\\d*)%\\s*CBN/i);
-                        if (cbnMatch) cbn = cbnMatch[1];
+                        // CBN: Percentage or milligram
+                        let cbnMatch = attrsText.match(/(\\d+\\.?\\d*)%\\s*CBN/i);
+                        if (cbnMatch) {
+                            cbn = cbnMatch[1];
+                        } else {
+                            cbnMatch = attrsText.match(/(\\d+\\.?\\d*)\\s*MG\\s*CBN/i);
+                            if (cbnMatch) cbn = cbnMatch[1];
+                        }
 
-                        // Extract weight/size
+                        // Extract weight/size - support decimals, fractions, and variations
+                        // LLM Edge Case: Weight embedded in product name, not separate field
+                        // LLM Pattern: (\d+\.?\d*)\s*(gr|g|mg|oz|pack)
                         let weight = null;
-                        const weightMatch = fullText.match(/(\\d+\\.?\\d*)\\s*(gr?|g|oz|ml|mg|each)/i);
+                        const weightMatch = fullText.match(/(\\d+(?:\\.\\d+)?|\\d+\\/\\d+)\\s*(gr|g|oz|ml|mg|each|pack)/i);
                         if (weightMatch) {
-                            weight = weightMatch[1] + weightMatch[2];
+                            weight = weightMatch[0].trim(); // Keep full match with spacing
                         }
 
                         // Extract category from text
@@ -552,7 +590,7 @@ class WholesomeCoScraper(PlaywrightScraper):
                         const lowerText = fullText.toLowerCase();
                         if (lowerText.includes('flower') || lowerText.includes('indoor') || lowerText.includes('outdoor') || lowerText.includes('greenhouse')) {
                             category = 'flower';
-                        } else if (lowerText.includes('vape') || lowerText.includes('cartridge') || lowerText.includes('cart')) {
+                        } else if (lowerText.includes('vape') || lowerText.includes('cartridge') || lowerText.includes('cart') || lowerText.includes('disposable pen') || lowerText.includes('pen')) {
                             category = 'vaporizer';
                         } else if (lowerText.includes('edible') || lowerText.includes('gummy') || lowerText.includes('chocolate') || lowerText.includes('caramel')) {
                             category = 'edible';
@@ -566,11 +604,26 @@ class WholesomeCoScraper(PlaywrightScraper):
                             category = 'pre-roll';
                         }
 
-                        // Check stock status
+                        // Check stock status and extract urgency messages
+                        // LLM Pattern: Only (\d+) left, order soon!
+                        let stockStatus = 'in_stock';
+                        let stockQuantity = null;
+
                         const outOfStock = el.classList.contains('out-of-stock') ||
                                           el.classList.contains('sold-out') ||
                                           fullText.toLowerCase().includes('out of stock') ||
                                           fullText.toLowerCase().includes('sold out');
+
+                        if (outOfStock) {
+                            stockStatus = 'out_of_stock';
+                        } else {
+                            // Check for low stock urgency message
+                            const stockMatch = fullText.match(/Only (\\d+) left/i);
+                            if (stockMatch) {
+                                stockStatus = 'low_stock';
+                                stockQuantity = parseInt(stockMatch[1]);
+                            }
+                        }
 
                         if (name && price) {
                             products.push({
@@ -584,7 +637,9 @@ class WholesomeCoScraper(PlaywrightScraper):
                                 cbn: cbn,
                                 strainType: strainType,
                                 weight: weight,
-                                inStock: !outOfStock,
+                                inStock: stockStatus === 'in_stock',
+                                stockStatus: stockStatus,
+                                stockQuantity: stockQuantity,
                                 url: url,
                                 html: el.outerHTML.substring(0, 1000)
                             });
@@ -610,6 +665,7 @@ class WholesomeCoScraper(PlaywrightScraper):
                     price=float(item["price"]),
                     thc_percentage=float(item["thc"]) if item.get("thc") else None,
                     cbd_percentage=float(item["cbd"]) if item.get("cbd") else None,
+                    cbg_percentage=float(item["cbg"]) if item.get("cbg") else None,
                     weight=item.get("weight"),
                     in_stock=item.get("inStock", True),
                     url=item.get("url"),

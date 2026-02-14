@@ -127,7 +127,8 @@
       "Bash(if exist nul del nul)",
       "Bash(test:*)",
       "WebFetch(domain:docs.firecrawl.dev)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(git reset:*)"
     ]
   },
   "mcpServers": {

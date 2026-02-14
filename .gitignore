@@ -71,3 +71,6 @@ htmlcov/
 
 # TypeScript build artifacts
 *.tsbuildinfo
+
+# Discovery system output (generated locally)
+backend/discovery_output/

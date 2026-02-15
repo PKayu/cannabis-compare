@@ -15,11 +15,19 @@ from sqlalchemy import func, case
 from typing import List, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
+import logging
+
+logger = logging.getLogger(__name__)
 
 from database import get_db
 from models import ScraperFlag, Product, Price, Brand, Dispensary
 from services.normalization.flag_processor import ScraperFlagProcessor
 from services.quality.outlier_detection import OutlierDetector
+from services.admin.flag_analyzer import (
+    compute_match_type,
+    compute_data_quality,
+    get_matched_product_dispensary_ids,
+)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -112,15 +120,128 @@ async def get_pending_flags(
     db: Session = Depends(get_db),
     limit: int = Query(50, ge=1, le=100),
     skip: int = Query(0, ge=0),
-    dispensary_id: Optional[str] = None
+    dispensary_id: Optional[str] = None,
+    match_type: Optional[str] = Query(None, pattern="^(cross_dispensary|same_dispensary)$"),
+    data_quality: Optional[str] = None,  # Comma-separated: "good", "fair", "poor"
+    min_confidence: Optional[float] = Query(None, ge=0.0, le=1.0),
+    max_confidence: Optional[float] = Query(None, ge=0.0, le=1.0),
+    sort_by: Optional[str] = Query("created_at", pattern="^(confidence|created_at)$"),
+    sort_order: Optional[str] = Query("desc", pattern="^(asc|desc)$"),
 ):
-    """Get pending ScraperFlags for admin review."""
-    return ScraperFlagProcessor.get_pending_flags(
-        db=db,
-        limit=limit,
-        offset=skip,
-        dispensary_id=dispensary_id
-    )
+    """
+    Get pending ScraperFlags for admin review with advanced filtering and sorting.
+
+    New filtering capabilities:
+    - match_type: Filter by cross-dispensary vs same-dispensary matches
+    - data_quality: Filter by quality score (good, fair, poor)
+    - min_confidence/max_confidence: Filter by confidence score range
+    - sort_by: Sort by confidence score or creation date
+    - sort_order: Ascending or descending
+    """
+    # Build base query with DB-level filters
+    query = db.query(ScraperFlag).filter(ScraperFlag.status == "pending")
+
+    if dispensary_id:
+        query = query.filter(ScraperFlag.dispensary_id == dispensary_id)
+
+    if min_confidence is not None:
+        query = query.filter(ScraperFlag.confidence_score >= min_confidence)
+    if max_confidence is not None:
+        query = query.filter(ScraperFlag.confidence_score <= max_confidence)
+
+    # Fetch all matching flags (we'll filter/sort/paginate in Python)
+    # This is acceptable since cleanup queues rarely exceed 1000 pending flags
+    all_flags = query.all()
+
+    # Build full response list with computed fields, then filter
+    flag_data = []
+    for flag in all_flags:
+        # Compute match type and quality
+        match_type_computed = compute_match_type(flag, db)
+        quality_computed = compute_data_quality(flag)
+
+        # Apply Python-level filters
+        if match_type and match_type_computed != match_type:
+            continue
+
+        if data_quality:
+            quality_filters = [q.strip() for q in data_quality.split(",")]
+            if quality_computed not in quality_filters:
+                continue
+
+        # Get dispensary name
+        dispensary = db.query(Dispensary).filter(
+            Dispensary.id == flag.dispensary_id
+        ).first()
+
+        # Get matched product if exists
+        matched_product = None
+        matched_product_dispensary_ids = []
+        if flag.matched_product_id:
+            matched_product_dispensary_ids = get_matched_product_dispensary_ids(
+                flag.matched_product_id, db
+            )
+
+            product = db.query(Product).filter(
+                Product.id == flag.matched_product_id
+            ).first()
+            if product:
+                matched_product = {
+                    "id": product.id,
+                    "name": product.name,
+                    "product_type": product.product_type,
+                    "brand": product.brand.name if product.brand else None,
+                    "brand_id": product.brand_id,
+                    "thc_percentage": product.thc_percentage,
+                    "cbd_percentage": product.cbd_percentage,
+                }
+
+        flag_data.append({
+            "id": flag.id,
+            "original_name": flag.original_name,
+            "original_thc": flag.original_thc,
+            "original_cbd": flag.original_cbd,
+            "original_weight": flag.original_weight,
+            "original_price": flag.original_price,
+            "original_category": flag.original_category,
+            "original_url": flag.original_url,
+            "brand_name": flag.brand_name,
+            "dispensary_id": flag.dispensary_id,
+            "dispensary_name": dispensary.name if dispensary else None,
+            "confidence_score": flag.confidence_score,
+            "confidence_percent": f"{flag.confidence_score:.0%}",
+            "matched_product": matched_product,
+            "merge_reason": flag.merge_reason,
+            "issue_tags": flag.issue_tags,
+            "created_at": flag.created_at.isoformat(),
+            # NEW computed fields
+            "match_type": match_type_computed,
+            "data_quality": quality_computed,
+            "matched_product_dispensary_ids": matched_product_dispensary_ids,
+            # Keep datetime for sorting
+            "_created_at_dt": flag.created_at,
+        })
+
+    # Apply sorting in Python
+    if sort_by == "confidence":
+        flag_data.sort(
+            key=lambda x: x["confidence_score"],
+            reverse=(sort_order == "desc")
+        )
+    else:  # sort_by == "created_at"
+        flag_data.sort(
+            key=lambda x: x["_created_at_dt"],
+            reverse=(sort_order == "desc")
+        )
+
+    # Apply pagination in Python
+    paginated_results = flag_data[skip:skip + limit]
+
+    # Remove internal fields
+    for item in paginated_results:
+        item.pop("_created_at_dt", None)
+
+    return paginated_results
 
 
 @router.get("/flags/stats", response_model=FlagStatsResponse)
@@ -262,6 +383,79 @@ async def dismiss_flag(
         return {"status": "dismissed"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+class BulkActionRequest(BaseModel):
+    """Request body for bulk flag actions."""
+    flag_ids: List[str]
+    action: str  # "approve", "reject", or "dismiss"
+    admin_notes: Optional[str] = ""
+
+
+@router.post("/flags/bulk-action")
+async def bulk_action_flags(
+    request: BulkActionRequest,
+    db: Session = Depends(get_db),
+    admin_id: str = Depends(verify_admin)
+):
+    """
+    Approve, reject, or dismiss multiple flags at once.
+
+    Useful for batch processing obvious duplicates or dismissing
+    bad scraper runs. Note: Bulk operations do not support per-flag
+    field edits; use individual endpoints for complex corrections.
+    """
+    if request.action not in ["approve", "reject", "dismiss"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Action must be 'approve', 'reject', or 'dismiss'"
+        )
+
+    if not request.flag_ids:
+        raise HTTPException(status_code=400, detail="No flag IDs provided")
+
+    success_count = 0
+    failed_count = 0
+    errors = []
+
+    for flag_id in request.flag_ids:
+        try:
+            if request.action == "approve":
+                ScraperFlagProcessor.approve_flag(
+                    db=db,
+                    flag_id=flag_id,
+                    admin_id=admin_id,
+                    notes=request.admin_notes or "",
+                )
+            elif request.action == "reject":
+                ScraperFlagProcessor.reject_flag(
+                    db=db,
+                    flag_id=flag_id,
+                    admin_id=admin_id,
+                    notes=request.admin_notes or "",
+                )
+            elif request.action == "dismiss":
+                ScraperFlagProcessor.dismiss_flag(
+                    db=db,
+                    flag_id=flag_id,
+                    admin_id=admin_id,
+                    notes=request.admin_notes or "",
+                )
+            success_count += 1
+        except Exception as e:
+            failed_count += 1
+            errors.append({
+                "flag_id": flag_id,
+                "error": str(e)
+            })
+            logger.error(f"Bulk action failed for flag {flag_id}: {str(e)}")
+
+    return {
+        "success_count": success_count,
+        "failed_count": failed_count,
+        "total_requested": len(request.flag_ids),
+        "errors": errors
+    }
 
 
 # === Flag Analytics Endpoint ===

@@ -181,7 +181,7 @@ class ConfidenceScorer:
                 original_name=name_for_matching,  # Store clean name in flag
                 original_thc=scraped_product.thc_percentage,
                 original_cbd=scraped_product.cbd_percentage,
-                brand_name=scraped_product.brand,
+                brand_name=scraped_product.brand or "Unknown",  # Handle None brand
                 dispensary_id=dispensary_id,
                 matched_product_id=best_match["id"] if best_match else None,
                 confidence_score=confidence,

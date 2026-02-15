@@ -128,7 +128,15 @@
       "Bash(test:*)",
       "WebFetch(domain:docs.firecrawl.dev)",
       "Bash(git checkout:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(pgrep:*)",
+      "Bash(pip show:*)",
+      "Bash(pip index:*)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" --version)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" -m venv .venv)",
+      "Bash(\"../.venv/Scripts/python.exe\" -m pip install --upgrade pip)",
+      "Bash(\"../.venv/Scripts/python.exe\" -m playwright install chromium)",
+      "Bash(\"../.venv/Scripts/python.exe\" -m playwright install --help)"
     ]
   },
   "mcpServers": {

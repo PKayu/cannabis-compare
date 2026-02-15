@@ -150,6 +150,9 @@ class ScraperRunner:
             flags_created = 0
 
             for scraped in products:
+                # Create savepoint before processing each product
+                # This allows per-product rollback without losing entire batch
+                savepoint = self.db.begin_nested()
                 try:
                     product_id, action = ConfidenceScorer.process_scraped_product(
                         db=self.db,
@@ -160,6 +163,7 @@ class ScraperRunner:
 
                     if action == "flagged_review":
                         flags_created += 1
+                        savepoint.commit()  # Commit the flag creation
                         continue  # Don't create price for flagged products
 
                     if product_id:
@@ -175,14 +179,16 @@ class ScraperRunner:
                                 scraped.url
                             )
                             processed_count += 1
+
+                    savepoint.commit()  # Commit this product's changes
+
                 except Exception as e:
                     logger.error(
                         f"Failed to process product '{scraped.name}': {e}",
                         exc_info=True
                     )
-                    # Don't rollback - ConfidenceScorer uses flush() not commit()
-                    # Rolling back would lose ALL previous work in this scraper run
-                    # Just skip this product and continue with the next one
+                    # Rollback ONLY this product's changes, not the entire batch
+                    savepoint.rollback()
                     continue
 
             # 5. Complete run log and commit all changes
@@ -192,8 +198,16 @@ class ScraperRunner:
                 products_processed=processed_count,
                 flags_created=flags_created
             )
-            self.db.commit()
-            logger.info(f"Database import complete for {config.name}!")
+
+            # Explicit commit with error handling
+            try:
+                self.db.commit()
+                logger.info(f"Database import complete for {config.name}! " +
+                           f"Processed: {processed_count}, Flags: {flags_created}")
+            except Exception as commit_error:
+                logger.error(f"Failed to commit scraper run: {commit_error}", exc_info=True)
+                self.db.rollback()
+                raise  # Re-raise to mark run as failed
 
             return {
                 "status": "success",

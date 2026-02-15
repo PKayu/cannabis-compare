@@ -17,6 +17,9 @@ engine = create_engine(
     echo=settings.debug,
     future=True,
     pool_pre_ping=True,  # Auto-reconnect if connection drops
+    pool_size=10,        # Increased from default 5
+    max_overflow=20,     # Increased from default 10
+    pool_recycle=3600,   # Recycle connections after 1 hour
     connect_args=connect_args
 )
 

@@ -28,8 +28,9 @@ logger = logging.getLogger(__name__)
 # Standalone function for scheduled jobs (must be at module level for serialization)
 async def run_scheduled_scraper(scraper_class: Type[BaseScraper], dispensary_id: str) -> dict:
     """
-    Execute a scraper via ScraperRunner with full DB logging.
+    Execute a scraper in a separate subprocess.
 
+    Runs scrapers in isolated processes to avoid Playwright + FastAPI event loop conflicts.
     This is a standalone function (not a method) to avoid serialization issues
     with APScheduler's SQLAlchemy job store.
 
@@ -40,32 +41,29 @@ async def run_scheduled_scraper(scraper_class: Type[BaseScraper], dispensary_id:
     Returns:
         Scraper run result dict
     """
-    from database import SessionLocal
-    from services.scraper_runner import ScraperRunner
+    from services.scraper_subprocess import run_scraper_subprocess_async
 
     scraper = scraper_class(dispensary_id)
-    logger.info(f"Scheduler running {scraper.name}")
-    db = SessionLocal()
+    logger.info(f"Scheduler running {scraper.name} in subprocess")
+
     try:
-        runner = ScraperRunner(db, triggered_by="scheduler")
-        result = await runner.run_by_id(scraper.dispensary_id)
+        # Run scraper in subprocess with 600-second timeout
+        result = await run_scraper_subprocess_async(dispensary_id, timeout=600)
 
         if result["status"] != "success":
             logger.error(
                 f"{scraper.name} finished with status: {result['status']} "
-                f"- {result.get('error', result.get('message', ''))}"
+                f"- {result.get('message', '')}"
             )
 
         return result
     except Exception as e:
         logger.exception(f"Unexpected error running {scraper.name}: {e}")
         return {
-            "dispensary_id": scraper.dispensary_id,
+            "dispensary_id": dispensary_id,
             "status": "error",
             "error": str(e)
         }
-    finally:
-        db.close()
 
 
 class ScraperScheduler:

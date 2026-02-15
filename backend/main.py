@@ -10,8 +10,8 @@ This module:
 import sys
 import asyncio
 
-# Fix for Python 3.13 + Playwright on Windows
-# Python 3.13 changed default event loop policy which breaks Playwright's async subprocess
+# Set ProactorEventLoop for Python 3.12 + Playwright compatibility
+# This matches what asyncio.run() uses by default and works with Playwright
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 

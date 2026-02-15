@@ -183,18 +183,23 @@ async def get_scheduler_status():
 
 
 async def _run_scraper_in_background(scraper_id: str) -> None:
-    """Run a scraper with its own database session (for background execution)."""
-    from services.scraper_runner import ScraperRunner
+    """Run a scraper in a separate subprocess (for background execution).
 
-    db = SessionLocal()
+    This avoids Playwright + FastAPI event loop conflicts by running the scraper
+    in an isolated process with its own asyncio.run() context.
+    """
+    from services.scraper_subprocess import run_scraper_subprocess_async
+
     try:
-        runner = ScraperRunner(db, triggered_by="admin-manual")
-        result = await runner.run_by_id(scraper_id)
-        logger.info(f"Background scraper run complete for '{scraper_id}': {result.get('status')}")
+        logger.info(f"Starting subprocess for scraper '{scraper_id}'")
+
+        # Run scraper in subprocess with 600-second timeout
+        result = await run_scraper_subprocess_async(scraper_id, timeout=600)
+
+        logger.info(f"Subprocess for scraper '{scraper_id}' completed: {result['status']}")
+
     except Exception as e:
-        logger.error(f"Background scraper run failed for '{scraper_id}': {e}", exc_info=True)
-    finally:
-        db.close()
+        logger.error(f"Failed to run scraper '{scraper_id}' in subprocess: {e}", exc_info=True)
 
 
 @router.post("/run/{scraper_id}")

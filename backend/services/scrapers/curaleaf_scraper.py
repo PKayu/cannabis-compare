@@ -261,7 +261,7 @@ class CuraleafScraper(PlaywrightScraper):
 
         last_count = 0
         attempts = 0
-        max_attempts = 30  # Reduced to prevent excessive wait times
+        max_attempts = 15  # Further reduced from 30 to match WholesomeCo and prevent timeouts
 
         # Try to determine which product selector to use for this page
         # Category pages use product-item-list, main page uses product-carousel
@@ -312,7 +312,7 @@ class CuraleafScraper(PlaywrightScraper):
 
             # Scroll to bottom to trigger infinite scroll
             await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            await page.wait_for_timeout(2000)  # Increased from 1500ms
+            await page.wait_for_timeout(4000)  # WholesomeCo learning: increased from 2000ms for better lazy loading
 
             # Check if product count has changed
             try:
@@ -323,8 +323,8 @@ class CuraleafScraper(PlaywrightScraper):
             logger.info(f"Scroll attempt {attempts + 1}/{max_attempts}: {current_count} products")
 
             if current_count == last_count and current_count > 0:
-                # Product count stabilized - try a couple more times to be sure
-                await page.wait_for_timeout(2000)
+                # WholesomeCo pattern: Double-check with 4-second wait to ensure all products loaded
+                await page.wait_for_timeout(4000)
                 try:
                     new_count = await page.locator(product_selector).count()
                     if new_count == last_count:
@@ -380,6 +380,16 @@ class CuraleafScraper(PlaywrightScraper):
                             return;
                         }
 
+                        // Extract product URL (WholesomeCo pattern)
+                        const linkEl = el.querySelector('a[href]');
+                        let url = null;
+                        if (linkEl) {
+                            url = linkEl.href;
+                            if (url && !url.startsWith('http')) {
+                                url = new URL(url, window.location.origin).href;
+                            }
+                        }
+
                         // Parse Curaleaf's specific format
                         // Example: "Grape Cakes Whole FlowerDGTHybridTHC: 15.4%$94.50$135.0030% offAdd to cart"
 
@@ -409,6 +419,26 @@ class CuraleafScraper(PlaywrightScraper):
                         } else {
                             const cbdMgMatch = fullText.match(/CBD:\\s*(\\d+\\.?\\d*)\\s*mg/i);
                             if (cbdMgMatch) cbd = cbdMgMatch[1];
+                        }
+
+                        // Extract CBG (WholesomeCo pattern - supports percentage and milligram)
+                        let cbg = null;
+                        const cbgPercentMatch = fullText.match(/CBG:\\s*(\\d+\\.?\\d*)%/i);
+                        if (cbgPercentMatch) {
+                            cbg = cbgPercentMatch[1];
+                        } else {
+                            const cbgMgMatch = fullText.match(/CBG:\\s*(\\d+\\.?\\d*)\\s*mg/i);
+                            if (cbgMgMatch) cbg = cbgMgMatch[1];
+                        }
+
+                        // Extract CBN (WholesomeCo pattern - supports percentage and milligram, stored in raw_data)
+                        let cbn = null;
+                        const cbnPercentMatch = fullText.match(/CBN:\\s*(\\d+\\.?\\d*)%/i);
+                        if (cbnPercentMatch) {
+                            cbn = cbnPercentMatch[1];
+                        } else {
+                            const cbnMgMatch = fullText.match(/CBN:\\s*(\\d+\\.?\\d*)\\s*mg/i);
+                            if (cbnMgMatch) cbn = cbnMgMatch[1];
                         }
 
                         // Determine category from product name/text
@@ -587,12 +617,26 @@ class CuraleafScraper(PlaywrightScraper):
                             weight = weightMatch[1] + weightMatch[2];
                         }
 
-                        // Check stock status
+                        // Check stock status and extract urgency messages (WholesomeCo pattern)
+                        let stockStatus = 'in_stock';
+                        let stockQuantity = null;
+
                         const outOfStock =
                             el.classList.contains('out-of-stock') ||
                             el.classList.contains('sold-out') ||
                             lowerText.includes('out of stock') ||
                             lowerText.includes('sold out');
+
+                        if (outOfStock) {
+                            stockStatus = 'out_of_stock';
+                        } else {
+                            // Check for low stock urgency message
+                            const stockMatch = fullText.match(/Only (\\d+) left/i);
+                            if (stockMatch) {
+                                stockStatus = 'low_stock';
+                                stockQuantity = parseInt(stockMatch[1]);
+                            }
+                        }
 
                         // Only include products with name and price
                         if (name && price && name.length > 3) {
@@ -603,9 +647,14 @@ class CuraleafScraper(PlaywrightScraper):
                                 price: price,
                                 thc: thc,
                                 cbd: cbd,
+                                cbg: cbg,  // WholesomeCo learning: CBG extraction
+                                cbn: cbn,  // WholesomeCo learning: CBN for raw_data
                                 weight: weight,
                                 strainType: strainType,
-                                inStock: !outOfStock,
+                                inStock: stockStatus === 'in_stock',
+                                stockStatus: stockStatus,  // WholesomeCo learning: detailed stock status
+                                stockQuantity: stockQuantity,  // WholesomeCo learning: urgency detection
+                                url: url,  // WholesomeCo learning: product URL for direct links
                                 html: el.outerHTML.substring(0, 500)
                             });
                         }
@@ -630,9 +679,11 @@ class CuraleafScraper(PlaywrightScraper):
                     price=float(item["price"]),
                     thc_percentage=self._parse_float(item.get("thc")),
                     cbd_percentage=self._parse_float(item.get("cbd")),
+                    cbg_percentage=self._parse_float(item.get("cbg")),  # WholesomeCo learning: CBG extraction
                     weight=item.get("weight"),
                     in_stock=item.get("inStock", True),
-                    raw_data=item
+                    url=item.get("url"),  # WholesomeCo learning: product URL for direct links
+                    raw_data=item  # CBN, stockStatus, stockQuantity preserved here
                 )
                 products.append(product)
             except Exception as e:

@@ -14,15 +14,6 @@ from typing import List, Optional, TYPE_CHECKING
 from .base_scraper import BaseScraper, ScrapedProduct, ScrapedPromotion
 from .registry import register_scraper
 
-# Fix for Python 3.13 + Playwright on Windows
-# Python 3.13 changed default event loop policy which breaks Playwright's async subprocess
-if sys.platform == "win32":
-    try:
-        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-    except RuntimeError:
-        # Event loop is already running, skip
-        pass
-
 logger = logging.getLogger(__name__)
 
 try:
@@ -406,7 +397,7 @@ class WholesomeCoScraper(PlaywrightScraper):
 
         last_product_count = 0
         scroll_attempts = 0
-        max_scroll_attempts = 50  # Safety limit
+        max_scroll_attempts = 15  # Reduced from 50 to prevent excessive wait times
 
         while scroll_attempts < max_scroll_attempts:
             # Get current product count
@@ -415,8 +406,8 @@ class WholesomeCoScraper(PlaywrightScraper):
             # Scroll to bottom
             await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
 
-            # Wait for new products to load
-            await page.wait_for_timeout(1500)
+            # Wait for new products to load (increased for slow lazy loading)
+            await page.wait_for_timeout(4000)
 
             # Check if product count increased
             new_count = await page.locator(".productListItem").count()
@@ -425,8 +416,8 @@ class WholesomeCoScraper(PlaywrightScraper):
             logger.info(f"Scroll {scroll_attempts}: {current_count} -> {new_count} products")
 
             if new_count == last_product_count:
-                # Product count hasn't changed, try a few more times
-                await page.wait_for_timeout(2000)
+                # Product count hasn't changed, wait longer and check again (lazy load is slow)
+                await page.wait_for_timeout(5000)
                 new_count = await page.locator(".productListItem").count()
                 if new_count == last_product_count:
                     logger.info(f"Product count stabilized at {new_count} - all products loaded")

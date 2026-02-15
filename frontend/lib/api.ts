@@ -145,7 +145,17 @@ export const api = {
   admin: {
     dashboard: () => apiClient.get('/api/admin/dashboard'),
     flags: {
-      pending: (params?: any) => apiClient.get('/api/admin/flags/pending', { params }),
+      pending: (params?: {
+        limit?: number
+        skip?: number
+        dispensary_id?: string
+        match_type?: 'cross_dispensary' | 'same_dispensary'
+        data_quality?: string  // comma-separated: "good,fair,poor"
+        min_confidence?: number
+        max_confidence?: number
+        sort_by?: 'confidence' | 'created_at'
+        sort_order?: 'asc' | 'desc'
+      }) => apiClient.get('/api/admin/flags/pending', { params }),
       stats: () => apiClient.get('/api/admin/flags/stats'),
       approve: (flagId: string, data?: {
         notes?: string; name?: string; brand_name?: string; product_type?: string;
@@ -159,6 +169,11 @@ export const api = {
       }) => apiClient.post(`/api/admin/flags/reject/${flagId}`, data || {}),
       dismiss: (flagId: string, data?: { notes?: string; issue_tags?: string[] }) =>
         apiClient.post(`/api/admin/flags/dismiss/${flagId}`, data || {}),
+      bulkAction: (payload: {
+        flag_ids: string[]
+        action: 'approve' | 'reject' | 'dismiss'
+        admin_notes?: string
+      }) => apiClient.post('/api/admin/flags/bulk-action', payload),
       analytics: (days?: number) =>
         apiClient.get('/api/admin/flags/analytics', { params: { days } }),
     },

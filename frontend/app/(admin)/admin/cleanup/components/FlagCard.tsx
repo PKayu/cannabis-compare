@@ -76,12 +76,14 @@ const ISSUE_TAGS: IssueTagDef[] = [
 
 interface FlagCardProps {
   flag: ScraperFlag
+  selected?: boolean
+  onToggleSelect?: (flagId: string) => void
   onApprove: (flagId: string, edits?: Partial<EditableFields>, notes?: string, issueTags?: string[]) => Promise<void>
   onReject: (flagId: string, edits?: Partial<EditableFields>, notes?: string, issueTags?: string[]) => Promise<void>
   onDismiss: (flagId: string, notes?: string, issueTags?: string[]) => Promise<void>
 }
 
-export function FlagCard({ flag, onApprove, onReject, onDismiss }: FlagCardProps) {
+export function FlagCard({ flag, selected, onToggleSelect, onApprove, onReject, onDismiss }: FlagCardProps) {
   const [editing, setEditing] = useState<Record<string, boolean>>({})
   const [editValues, setEditValues] = useState<Partial<EditableFields>>({})
   const [activeTags, setActiveTags] = useState<string[]>([])
@@ -234,16 +236,42 @@ export function FlagCard({ flag, onApprove, onReject, onDismiss }: FlagCardProps
   const hasEdits = !!getChangedEdits()
 
   return (
-    <div className="bg-white rounded-lg shadow p-5">
+    <div className="bg-white rounded-lg shadow p-5 relative">
+      {/* Checkbox for bulk selection */}
+      {onToggleSelect && (
+        <div className="absolute top-3 right-3">
+          <input
+            type="checkbox"
+            checked={selected || false}
+            onChange={() => onToggleSelect(flag.id)}
+            className="w-5 h-5 rounded border-gray-300 text-cannabis-600 focus:ring-cannabis-500 cursor-pointer"
+          />
+        </div>
+      )}
+
       {/* Header Row */}
       <div className="flex items-start justify-between mb-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+        <div className="flex-1 min-w-0 pr-8">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             {flag.dispensary_name && (
               <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
                 {flag.dispensary_name}
               </span>
             )}
+
+            {/* Match Type Badge */}
+            {(flag as any).match_type === 'cross_dispensary' && (
+              <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
+                Cross-Dispensary Match
+              </span>
+            )}
+            {(flag as any).match_type === 'same_dispensary' && (
+              <span className="text-xs font-medium text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded">
+                Same Dispensary
+              </span>
+            )}
+
+            {/* Confidence Score */}
             <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
               flag.confidence_score >= 0.9
                 ? 'bg-green-100 text-green-800'
@@ -253,6 +281,18 @@ export function FlagCard({ flag, onApprove, onReject, onDismiss }: FlagCardProps
             }`}>
               {flag.confidence_percent || `${Math.round(flag.confidence_score * 100)}%`}
             </span>
+
+            {/* Data Quality Indicator */}
+            {(flag as any).data_quality === 'poor' && (
+              <span className="text-xs font-medium text-red-700 bg-red-100 px-2 py-0.5 rounded flex items-center gap-1">
+                ⚠️ Poor Quality
+              </span>
+            )}
+            {(flag as any).data_quality === 'fair' && (
+              <span className="text-xs font-medium text-orange-700 bg-orange-100 px-2 py-0.5 rounded flex items-center gap-1">
+                ⚠️ Needs Review
+              </span>
+            )}
           </div>
           {/* Editable Name */}
           {editing.name ? (

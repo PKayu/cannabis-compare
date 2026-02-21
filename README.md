@@ -16,6 +16,14 @@ A web-based platform for Utah Medical Cannabis patients to compare prices across
 └── README.md          # This file
 ```
 
+## AI Workflow (Claude + Codex)
+
+- Claude workflow instructions remain in `CLAUDE.md` and `.claude/`.
+- Codex workflow instructions are in `AGENTS.md` and `docs/codex/`.
+- Codex workflow guide: `docs/codex/WORKFLOW.md`
+- Claude-to-Codex mapping: `docs/codex/MAPPING.md`
+- Task templates: `docs/codex/templates/`
+
 ## Tech Stack
 
 - **Frontend**: Next.js (React), TypeScript, Tailwind CSS

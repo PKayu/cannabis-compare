@@ -49,6 +49,7 @@ interface PriceData {
     discount_amount: number | null
   } | null
   last_updated: string | null
+  product_url: string | null
 }
 
 interface WeightGroup {

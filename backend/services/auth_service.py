@@ -8,6 +8,21 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 from config import settings
 
+# Fix passlib 1.7.4 incompatibility with bcrypt >= 4.0
+# bcrypt 4.x (a) removed __about__ and (b) raises ValueError for passwords > 72 bytes
+# instead of silently truncating. passlib's backend detection hashes a long test vector
+# which triggers the ValueError. Restore pre-4.0 truncation behaviour so passlib init works.
+import bcrypt as _bcrypt_lib
+if not hasattr(_bcrypt_lib, '__about__'):
+    class _BcryptAbout:
+        __version__ = getattr(_bcrypt_lib, '__version__', '4.0.0')
+    _bcrypt_lib.__about__ = _BcryptAbout()
+    # Wrap hashpw to silently truncate passwords > 72 bytes (restores bcrypt 3.x behaviour)
+    _orig_hashpw = _bcrypt_lib.hashpw
+    def _hashpw_truncating(password: bytes, salt: bytes) -> bytes:  # noqa: E306
+        return _orig_hashpw(password[:72], salt)
+    _bcrypt_lib.hashpw = _hashpw_truncating
+
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

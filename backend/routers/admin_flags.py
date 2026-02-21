@@ -94,11 +94,32 @@ class SplitRequest(BaseModel):
     product_type: Optional[str] = "Unknown"
 
 
+class CleanAndActivateRequest(BaseModel):
+    """Request body for cleaning and activating a flagged product."""
+    notes: Optional[str] = ""
+    name: Optional[str] = None
+    brand_name: Optional[str] = None
+    product_type: Optional[str] = None
+    thc_percentage: Optional[float] = None
+    cbd_percentage: Optional[float] = None
+    weight: Optional[str] = None
+    price: Optional[float] = None
+    issue_tags: Optional[List[str]] = None
+
+
+class DeleteFlaggedProductRequest(BaseModel):
+    """Request body for deleting a garbage product linked to a flag."""
+    notes: Optional[str] = ""
+
+
 class FlagStatsResponse(BaseModel):
     pending: int
+    pending_cleanup: int = 0
+    pending_review: int = 0
     approved: int
     rejected: int
     dismissed: int
+    cleaned: int = 0
     total: int
 
 
@@ -137,6 +158,7 @@ async def get_pending_flags(
     sort_by: Optional[str] = Query("created_at", pattern="^(confidence|created_at)$"),
     sort_order: Optional[str] = Query("desc", pattern="^(asc|desc)$"),
     include_auto_merged: bool = Query(False),  # When True, also returns auto_merged flags
+    flag_type: Optional[str] = Query(None, pattern="^(match_review|data_cleanup)$"),
 ):
     """
     Get pending ScraperFlags for admin review with advanced filtering and sorting.
@@ -159,14 +181,30 @@ async def get_pending_flags(
     if dispensary_id:
         query = query.filter(ScraperFlag.dispensary_id == dispensary_id)
 
+    if flag_type:
+        query = query.filter(ScraperFlag.flag_type == flag_type)
+
     if min_confidence is not None:
         query = query.filter(ScraperFlag.confidence_score >= min_confidence)
     if max_confidence is not None:
         query = query.filter(ScraperFlag.confidence_score <= max_confidence)
 
-    # Fetch all matching flags (we'll filter/sort/paginate in Python)
-    # This is acceptable since cleanup queues rarely exceed 1000 pending flags
-    all_flags = query.all()
+    # Apply DB-level sort when no Python-level filtering is needed
+    if sort_by == "confidence":
+        from sqlalchemy import asc, desc as sa_desc
+        order_fn = sa_desc if sort_order == "desc" else asc
+        query = query.order_by(order_fn(ScraperFlag.confidence_score))
+    else:
+        from sqlalchemy import asc, desc as sa_desc
+        order_fn = sa_desc if sort_order == "desc" else asc
+        query = query.order_by(order_fn(ScraperFlag.created_at))
+
+    # When no Python-level filters are active, paginate at DB level (fast path)
+    use_db_pagination = not match_type and not data_quality
+    if use_db_pagination:
+        all_flags = query.offset(skip).limit(limit).all()
+    else:
+        all_flags = query.all()
 
     # Build full response list with computed fields, then filter
     flag_data = []
@@ -231,6 +269,7 @@ async def get_pending_flags(
             "matched_product": matched_product,
             "merge_reason": flag.merge_reason,
             "status": flag.status,
+            "flag_type": flag.flag_type,
             "issue_tags": flag.issue_tags,
             "created_at": flag.created_at.isoformat(),
             # NEW computed fields
@@ -253,8 +292,11 @@ async def get_pending_flags(
             reverse=(sort_order == "desc")
         )
 
-    # Apply pagination in Python
-    paginated_results = flag_data[skip:skip + limit]
+    # Apply pagination in Python (only needed when Python-level filters were active)
+    if use_db_pagination:
+        paginated_results = flag_data  # Already paginated at DB level
+    else:
+        paginated_results = flag_data[skip:skip + limit]
 
     # Remove internal fields
     for item in paginated_results:
@@ -267,16 +309,28 @@ async def get_pending_flags(
 async def get_flag_stats(db: Session = Depends(get_db)):
     """Get statistics on ScraperFlags."""
     pending = db.query(ScraperFlag).filter(ScraperFlag.status == "pending").count()
+    pending_cleanup = db.query(ScraperFlag).filter(
+        ScraperFlag.status == "pending",
+        ScraperFlag.flag_type == "data_cleanup"
+    ).count()
+    pending_review = db.query(ScraperFlag).filter(
+        ScraperFlag.status == "pending",
+        ScraperFlag.flag_type == "match_review"
+    ).count()
     approved = db.query(ScraperFlag).filter(ScraperFlag.status == "approved").count()
     rejected = db.query(ScraperFlag).filter(ScraperFlag.status == "rejected").count()
     dismissed = db.query(ScraperFlag).filter(ScraperFlag.status == "dismissed").count()
+    cleaned = db.query(ScraperFlag).filter(ScraperFlag.status == "cleaned").count()
 
     return {
         "pending": pending,
+        "pending_cleanup": pending_cleanup,
+        "pending_review": pending_review,
         "approved": approved,
         "rejected": rejected,
         "dismissed": dismissed,
-        "total": pending + approved + rejected + dismissed,
+        "cleaned": cleaned,
+        "total": pending + approved + rejected + dismissed + cleaned,
     }
 
 
@@ -406,6 +460,54 @@ async def dismiss_flag(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post("/flags/clean/{flag_id}")
+async def clean_and_activate_flag(
+    flag_id: str,
+    request: CleanAndActivateRequest = Body(default=CleanAndActivateRequest()),
+    db: Session = Depends(get_db),
+    admin_id: str = Depends(verify_admin)
+):
+    """Clean up a data_cleanup flag: apply edits and activate the product."""
+    try:
+        product_id = ScraperFlagProcessor.clean_and_activate(
+            db=db,
+            flag_id=flag_id,
+            admin_id=admin_id,
+            notes=request.notes or "",
+            name=request.name,
+            brand_name=request.brand_name,
+            product_type=request.product_type,
+            thc_percentage=request.thc_percentage,
+            cbd_percentage=request.cbd_percentage,
+            weight=request.weight,
+            price=request.price,
+            issue_tags=request.issue_tags,
+        )
+        return {"status": "cleaned", "product_id": product_id}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/flags/delete-product/{flag_id}")
+async def delete_flagged_product(
+    flag_id: str,
+    request: DeleteFlaggedProductRequest = Body(default=DeleteFlaggedProductRequest()),
+    db: Session = Depends(get_db),
+    admin_id: str = Depends(verify_admin)
+):
+    """Delete the product linked to a data_cleanup flag (garbage data)."""
+    try:
+        ScraperFlagProcessor.delete_flagged_product(
+            db=db,
+            flag_id=flag_id,
+            admin_id=admin_id,
+            notes=request.notes or "",
+        )
+        return {"status": "deleted"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.post("/flags/merge-duplicate/{flag_id}")
 async def merge_duplicate_flag(
     flag_id: str,
@@ -432,11 +534,45 @@ async def merge_duplicate_flag(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+class RejectAutoMergeRequest(BaseModel):
+    """Request body for rejecting an auto-merged flag (marking it as a bad merge)."""
+    notes: Optional[str] = ""
+
+
 class BulkActionRequest(BaseModel):
     """Request body for bulk flag actions."""
     flag_ids: List[str]
-    action: str  # "approve", "reject", or "dismiss"
+    action: str  # "approve", "reject", "dismiss", "clean", "delete_product", or "reject_auto_merge"
     admin_notes: Optional[str] = ""
+
+
+@router.post("/flags/reject-auto-merge/{flag_id}")
+async def reject_auto_merge(
+    flag_id: str,
+    request: RejectAutoMergeRequest,
+    db: Session = Depends(get_db),
+    admin_id: str = Depends(verify_admin)
+):
+    """
+    Mark an auto-merged flag as rejected (bad merge decision).
+
+    This is a non-destructive operation — it marks the audit flag as rejected
+    without touching price or product records (the price update may have been
+    legitimate). Use this to record disagreement with an auto-merge for
+    analytics and future training purposes.
+    """
+    flag = db.query(ScraperFlag).filter(
+        ScraperFlag.id == flag_id,
+        ScraperFlag.status == "auto_merged"
+    ).first()
+    if not flag:
+        raise HTTPException(status_code=404, detail="Auto-merged flag not found or already resolved")
+
+    flag.status = "rejected"
+    flag.admin_notes = request.notes or ""
+    flag.resolved_at = datetime.utcnow()
+    db.commit()
+    return {"status": "rejected", "flag_id": flag_id}
 
 
 @router.post("/flags/bulk-action")
@@ -452,10 +588,10 @@ async def bulk_action_flags(
     bad scraper runs. Note: Bulk operations do not support per-flag
     field edits; use individual endpoints for complex corrections.
     """
-    if request.action not in ["approve", "reject", "dismiss"]:
+    if request.action not in ["approve", "reject", "dismiss", "clean", "delete_product", "reject_auto_merge"]:
         raise HTTPException(
             status_code=400,
-            detail="Action must be 'approve', 'reject', or 'dismiss'"
+            detail="Action must be 'approve', 'reject', 'dismiss', 'clean', 'delete_product', or 'reject_auto_merge'"
         )
 
     if not request.flag_ids:
@@ -488,6 +624,32 @@ async def bulk_action_flags(
                     admin_id=admin_id,
                     notes=request.admin_notes or "",
                 )
+            elif request.action == "clean":
+                ScraperFlagProcessor.clean_and_activate(
+                    db=db,
+                    flag_id=flag_id,
+                    admin_id=admin_id,
+                    notes=request.admin_notes or "",
+                )
+            elif request.action == "delete_product":
+                ScraperFlagProcessor.delete_flagged_product(
+                    db=db,
+                    flag_id=flag_id,
+                    admin_id=admin_id,
+                    notes=request.admin_notes or "",
+                )
+            elif request.action == "reject_auto_merge":
+                flag = db.query(ScraperFlag).filter(
+                    ScraperFlag.id == flag_id,
+                    ScraperFlag.status == "auto_merged"
+                ).first()
+                if flag:
+                    flag.status = "rejected"
+                    flag.admin_notes = request.admin_notes or ""
+                    flag.resolved_at = datetime.utcnow()
+                    db.flush()
+                else:
+                    raise ValueError(f"Flag {flag_id} is not an auto_merged flag")
             success_count += 1
         except Exception as e:
             failed_count += 1

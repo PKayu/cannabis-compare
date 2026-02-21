@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "frontend",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev", "-p", "4002"],
+      "cwd": "frontend",
+      "port": 4002
+    },
+    {
+      "name": "backend",
+      "runtimeExecutable": "D:/Projects/cannabis compare/backend/venv/Scripts/python.exe",
+      "runtimeArgs": ["run_server.py"],
+      "cwd": "backend",
+      "port": 8000
+    }
+  ]
+}

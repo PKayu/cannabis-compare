@@ -36,6 +36,7 @@ export default function ScrapersPage() {
   const [runs, setRuns] = useState<ScraperRun[]>([])
   const [filterScraper, setFilterScraper] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [runningScrapers, setRunningScrapers] = useState<Set<string>>(new Set())
 
   const loadData = useCallback(async () => {
@@ -47,8 +48,10 @@ export default function ScrapersPage() {
       ])
       setHealth(healthRes.data)
       setRuns(runsRes.data)
+      setLoadError(null)
     } catch (err) {
       console.error('Failed to load scraper data:', err)
+      setLoadError('Could not load scraper data — the database may be empty or the backend may be down. Restart the backend to fix this.')
     } finally {
       setLoading(false)
     }
@@ -111,6 +114,14 @@ export default function ScrapersPage() {
 
   return (
     <div>
+      {/* Error banner — shown when API call fails (e.g. backend down or blank DB) */}
+      {loadError && (
+        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start gap-2">
+          <span className="text-red-500 mt-0.5">⚠</span>
+          <span>{loadError}</span>
+        </div>
+      )}
+
       {/* Scraper Health Cards */}
       <h2 className="text-lg font-semibold text-gray-900 mb-3">Scraper Health (7-day)</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">

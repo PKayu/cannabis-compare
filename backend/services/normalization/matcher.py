@@ -23,9 +23,10 @@ class ProductMatcher:
     # <60% = create new entry
 
     # Weights for scoring components
-    NAME_WEIGHT = 0.70
-    BRAND_WEIGHT = 0.20
-    THC_WEIGHT = 0.10
+    # THC removed from scoring — mg vs % unit ambiguity makes it unreliable
+    NAME_WEIGHT = 0.75
+    BRAND_WEIGHT = 0.25
+    THC_WEIGHT = 0.00
 
     @classmethod
     def score_match(
@@ -93,7 +94,7 @@ class ProductMatcher:
         logger.debug(
             f"Match score: {confidence:.3f} ({match_type}) - "
             f"'{scraped_name}' vs '{master_name}' "
-            f"[name={name_similarity:.2f}, brand={brand_similarity:.2f}, thc={thc_similarity:.2f}]"
+            f"[name={name_similarity:.2f}, brand={brand_similarity:.2f}]"
         )
 
         return confidence, match_type

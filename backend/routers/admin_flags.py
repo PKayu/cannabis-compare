@@ -53,6 +53,9 @@ class ApproveWithEditsRequest(BaseModel):
     price: Optional[float] = None
     # Issue tags for analytics
     issue_tags: Optional[List[str]] = None
+    # Overrides for the matched (existing) product — lets admin clean both sides
+    matched_product_name: Optional[str] = None
+    matched_product_brand: Optional[str] = None
 
 
 class RejectWithEditsRequest(BaseModel):
@@ -72,6 +75,12 @@ class DismissRequest(BaseModel):
     """Request body for dismissing a flag without creating any product."""
     notes: Optional[str] = ""
     issue_tags: Optional[List[str]] = None
+
+
+class MergeDuplicateRequest(BaseModel):
+    """Request body for resolving a same-dispensary duplicate via flag."""
+    kept_product_id: str
+    notes: Optional[str] = ""
 
 
 class MergeRequest(BaseModel):
@@ -127,6 +136,7 @@ async def get_pending_flags(
     max_confidence: Optional[float] = Query(None, ge=0.0, le=1.0),
     sort_by: Optional[str] = Query("created_at", pattern="^(confidence|created_at)$"),
     sort_order: Optional[str] = Query("desc", pattern="^(asc|desc)$"),
+    include_auto_merged: bool = Query(False),  # When True, also returns auto_merged flags
 ):
     """
     Get pending ScraperFlags for admin review with advanced filtering and sorting.
@@ -139,7 +149,12 @@ async def get_pending_flags(
     - sort_order: Ascending or descending
     """
     # Build base query with DB-level filters
-    query = db.query(ScraperFlag).filter(ScraperFlag.status == "pending")
+    if include_auto_merged:
+        query = db.query(ScraperFlag).filter(
+            ScraperFlag.status.in_(["pending", "auto_merged"])
+        )
+    else:
+        query = db.query(ScraperFlag).filter(ScraperFlag.status == "pending")
 
     if dispensary_id:
         query = query.filter(ScraperFlag.dispensary_id == dispensary_id)
@@ -201,6 +216,8 @@ async def get_pending_flags(
             "original_name": flag.original_name,
             "original_thc": flag.original_thc,
             "original_cbd": flag.original_cbd,
+            "original_thc_content": flag.original_thc_content,
+            "original_cbd_content": flag.original_cbd_content,
             "original_weight": flag.original_weight,
             "original_price": flag.original_price,
             "original_category": flag.original_category,
@@ -210,8 +227,10 @@ async def get_pending_flags(
             "dispensary_name": dispensary.name if dispensary else None,
             "confidence_score": flag.confidence_score,
             "confidence_percent": f"{flag.confidence_score:.0%}",
+            "matched_product_id": flag.matched_product_id,  # Needed for frontend approve button
             "matched_product": matched_product,
             "merge_reason": flag.merge_reason,
+            "status": flag.status,
             "issue_tags": flag.issue_tags,
             "created_at": flag.created_at.isoformat(),
             # NEW computed fields
@@ -330,6 +349,8 @@ async def approve_flag(
             weight=request.weight,
             price=request.price,
             issue_tags=request.issue_tags,
+            matched_product_name=request.matched_product_name,
+            matched_product_brand=request.matched_product_brand,
         )
         return {"status": "approved", "product_id": product_id}
     except ValueError as e:
@@ -381,6 +402,32 @@ async def dismiss_flag(
             issue_tags=request.issue_tags,
         )
         return {"status": "dismissed"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/flags/merge-duplicate/{flag_id}")
+async def merge_duplicate_flag(
+    flag_id: str,
+    request: MergeDuplicateRequest = Body(default=MergeDuplicateRequest(kept_product_id="")),
+    db: Session = Depends(get_db),
+    admin_id: str = Depends(verify_admin)
+):
+    """
+    Resolve a same-dispensary duplicate flag by merging the loser into the winner.
+
+    Moves all Price, Review, and Watchlist records from the loser product to the
+    kept_product_id (winner), then soft-deletes the loser.
+    """
+    try:
+        result = ScraperFlagProcessor.merge_duplicate_flag(
+            db=db,
+            flag_id=flag_id,
+            kept_product_id=request.kept_product_id,
+            admin_id=admin_id,
+            notes=request.notes or "",
+        )
+        return {"status": "merged", **result}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

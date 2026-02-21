@@ -49,7 +49,7 @@ class ScraperFlagProcessor:
         flag_id: str,
         admin_id: str,
         notes: str = "",
-        # Editable field overrides
+        # Editable field overrides for the incoming (flagged) product
         name: Optional[str] = None,
         brand_name: Optional[str] = None,
         product_type: Optional[str] = None,
@@ -58,6 +58,9 @@ class ScraperFlagProcessor:
         weight: Optional[str] = None,
         price: Optional[float] = None,
         issue_tags: Optional[List[str]] = None,
+        # Overrides for the matched (existing) product
+        matched_product_name: Optional[str] = None,
+        matched_product_brand: Optional[str] = None,
     ) -> str:
         """
         Approve merge of flagged product to matched product.
@@ -108,20 +111,23 @@ class ScraperFlagProcessor:
         ).first()
 
         if parent:
-            if name is not None and name != parent.name:
-                parent.name = name
+            # Apply incoming-product overrides to the matched parent
+            final_parent_name = matched_product_name if matched_product_name is not None else name
+            final_parent_brand = matched_product_brand if matched_product_brand is not None else brand_name
+            if final_parent_name is not None and final_parent_name != parent.name:
+                parent.name = final_parent_name
             if product_type is not None and product_type != parent.product_type:
                 parent.product_type = product_type
-            if brand_name is not None:
+            if final_parent_brand is not None:
                 existing_brand = parent.brand
-                if not existing_brand or existing_brand.name.lower() != brand_name.lower():
+                if not existing_brand or existing_brand.name.lower() != final_parent_brand.lower():
                     brand = (
                         db.query(Brand)
-                        .filter(Brand.name.ilike(brand_name))
+                        .filter(Brand.name.ilike(final_parent_brand))
                         .first()
                     )
                     if not brand:
-                        brand = Brand(name=brand_name)
+                        brand = Brand(name=final_parent_brand)
                         db.add(brand)
                         db.flush()
                     parent.brand_id = brand.id
@@ -472,6 +478,114 @@ class ScraperFlagProcessor:
                 results["errors"].append({"flag_id": flag_id, "error": str(e)})
 
         return results
+
+    @staticmethod
+    def merge_duplicate_flag(
+        db: Session,
+        flag_id: str,
+        kept_product_id: str,
+        admin_id: str,
+        notes: str = "",
+    ) -> dict:
+        """
+        Resolve a same-dispensary duplicate by merging the loser into the winner.
+
+        Moves all Price, Review, and Watchlist records from the loser product
+        to the winner (kept_product_id), then soft-deletes the loser.
+
+        Args:
+            db: Database session
+            flag_id: ScraperFlag ID referencing the two products
+            kept_product_id: ID of the product to keep (winner)
+            admin_id: Resolving admin's ID
+            notes: Optional admin notes
+
+        Returns:
+            dict with winner_id, loser_id, prices_moved, reviews_moved, watchlist_moved
+        """
+        from models import ScraperFlag, Product, Price, Review
+
+        flag = db.query(ScraperFlag).filter(ScraperFlag.id == flag_id).first()
+        if not flag:
+            raise ValueError(f"ScraperFlag not found: {flag_id}")
+        if flag.status != "pending":
+            raise ValueError(f"Flag already resolved with status: {flag.status}")
+        if not flag.matched_product_id:
+            raise ValueError(f"Flag has no matched product to merge: {flag_id}")
+
+        # Determine the loser — whichever product is NOT the kept one
+        candidate_ids = {flag.matched_product_id}
+        # The "incoming" product may have already been created as a variant;
+        # if not, we just work with the matched product pair
+        if kept_product_id not in candidate_ids:
+            raise ValueError(
+                f"kept_product_id {kept_product_id} must be one of the flagged products: "
+                f"{candidate_ids}"
+            )
+
+        loser_id = next(id for id in candidate_ids if id != kept_product_id)
+
+        # Ensure both products exist
+        winner = db.query(Product).filter(Product.id == kept_product_id).first()
+        loser = db.query(Product).filter(Product.id == loser_id).first()
+        if not winner:
+            raise ValueError(f"Winner product not found: {kept_product_id}")
+        if not loser:
+            raise ValueError(f"Loser product not found: {loser_id}")
+
+        # Move Price records
+        prices_moved = (
+            db.query(Price)
+            .filter(Price.product_id == loser_id)
+            .update({Price.product_id: kept_product_id}, synchronize_session=False)
+        )
+
+        # Move Review records (reviews attach to master products)
+        reviews_moved = (
+            db.query(Review)
+            .filter(Review.product_id == loser_id)
+            .update({Review.product_id: kept_product_id}, synchronize_session=False)
+        )
+
+        # Move Watchlist records if model exists
+        watchlist_moved = 0
+        try:
+            from models import Watchlist
+            watchlist_moved = (
+                db.query(Watchlist)
+                .filter(Watchlist.product_id == loser_id)
+                .update({Watchlist.product_id: kept_product_id}, synchronize_session=False)
+            )
+        except Exception:
+            pass  # Watchlist model may not exist in all deployments
+
+        # Soft-delete the loser
+        loser.is_active = False
+        loser.master_product_id = kept_product_id  # Point to winner for traceability
+
+        # Resolve flag
+        flag.status = "dismissed"
+        flag.resolved_by = admin_id
+        flag.resolved_at = datetime.utcnow()
+        flag.admin_notes = notes or f"Duplicate merged: kept {kept_product_id}"
+        flag.issue_tags = flag.issue_tags or []
+        if "duplicate" not in (flag.issue_tags or []):
+            flag.issue_tags = list(flag.issue_tags or []) + ["duplicate_merged"]
+
+        db.commit()
+
+        logger.info(
+            f"Merged duplicate: loser={loser_id} -> winner={kept_product_id} "
+            f"(prices={prices_moved}, reviews={reviews_moved}) by admin {admin_id}"
+        )
+
+        return {
+            "winner_id": kept_product_id,
+            "loser_id": loser_id,
+            "prices_moved": prices_moved,
+            "reviews_moved": reviews_moved,
+            "watchlist_moved": watchlist_moved,
+        }
 
     @staticmethod
     def get_recent_resolutions(

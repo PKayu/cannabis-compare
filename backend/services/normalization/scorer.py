@@ -16,6 +16,7 @@ import logging
 
 from services.normalization.matcher import ProductMatcher
 from services.normalization.weight_parser import parse_weight, extract_weight_from_name
+from services.normalization.name_cleaner import clean_product_name
 from services.scrapers.base_scraper import ScrapedProduct
 
 logger = logging.getLogger(__name__)
@@ -82,6 +83,8 @@ def find_or_create_variant(
         thc_percentage=scraped.thc_percentage or parent.thc_percentage,
         cbd_percentage=scraped.cbd_percentage or parent.cbd_percentage,
         cbg_percentage=scraped.cbg_percentage or parent.cbg_percentage,
+        thc_content=scraped.thc_content or parent.thc_content,
+        cbd_content=scraped.cbd_content or parent.cbd_content,
         is_master=False,
         master_product_id=parent_id,
         weight=weight_label,
@@ -143,11 +146,12 @@ class ConfidenceScorer:
                     "thc_percentage": master.thc_percentage
                 })
 
-        # Extract weight from name and get clean name for better matching
+        # Clean name first (remove cart text, junk), then extract weight
+        junk_cleaned = clean_product_name(scraped_product.name)
         clean_name, extracted_weight_label, extracted_weight_g = extract_weight_from_name(
-            scraped_product.name
+            junk_cleaned
         )
-        name_for_matching = clean_name or scraped_product.name
+        name_for_matching = clean_name or junk_cleaned
 
         # Find best match using clean name
         best_match, confidence, match_type = ProductMatcher.find_best_match(
@@ -168,6 +172,28 @@ class ConfidenceScorer:
             variant = find_or_create_variant(
                 db, best_match["id"], weight_to_use, scraped_product
             )
+
+            # Create audit log entry so admins can spot-check auto-merges
+            audit_flag = ScraperFlag(
+                original_name=name_for_matching,
+                original_thc=scraped_product.thc_percentage,
+                original_cbd=scraped_product.cbd_percentage,
+                original_thc_content=scraped_product.thc_content,
+                original_cbd_content=scraped_product.cbd_content,
+                brand_name=scraped_product.brand or "Unknown",
+                dispensary_id=dispensary_id,
+                matched_product_id=best_match["id"],
+                confidence_score=confidence,
+                status="auto_merged",
+                merge_reason=f"Auto-merged at {confidence:.0%} confidence",
+                original_weight=scraped_product.weight,
+                original_price=scraped_product.price,
+                original_category=scraped_product.category,
+                original_url=scraped_product.url,
+            )
+            db.add(audit_flag)
+            db.flush()
+
             return variant.id, "auto_merge"
 
         elif match_type == "flagged_review":
@@ -181,6 +207,8 @@ class ConfidenceScorer:
                 original_name=name_for_matching,  # Store clean name in flag
                 original_thc=scraped_product.thc_percentage,
                 original_cbd=scraped_product.cbd_percentage,
+                original_thc_content=scraped_product.thc_content,
+                original_cbd_content=scraped_product.cbd_content,
                 brand_name=scraped_product.brand or "Unknown",  # Handle None brand
                 dispensary_id=dispensary_id,
                 matched_product_id=best_match["id"] if best_match else None,
@@ -216,6 +244,8 @@ class ConfidenceScorer:
                 thc_percentage=scraped_product.thc_percentage,
                 cbd_percentage=scraped_product.cbd_percentage,
                 cbg_percentage=scraped_product.cbg_percentage,
+                thc_content=scraped_product.thc_content,
+                cbd_content=scraped_product.cbd_content,
                 is_master=True,
                 normalization_confidence=1.0
             )

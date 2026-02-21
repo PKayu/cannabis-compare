@@ -6,7 +6,7 @@ Run with: pytest backend/tests/test_scraper.py -v
 import pytest
 from datetime import datetime, timezone
 from services.scrapers.base_scraper import BaseScraper, ScrapedProduct, ScrapedPromotion
-from services.scrapers.playwright_scraper import WholesomeCoScraper
+from services.scrapers.wholesome_co_scraper import WholesomeCoScraper
 
 
 class MockScraper(BaseScraper):

@@ -105,7 +105,7 @@ class TestProductMatcher:
         assert "wholesomeco" in normalized
 
     def test_thc_similarity_close_values(self):
-        """Similar THC values should have high similarity"""
+        """THC weight is 0.00 so THC values do not affect the match score"""
         score1, _ = ProductMatcher.score_match(
             scraped_name="Test Product",
             master_name="Test Product",
@@ -121,10 +121,11 @@ class TestProductMatcher:
             scraped_brand="Brand",
             master_brand="Brand",
             scraped_thc=24.0,
-            master_thc=40.0  # Very different THC
+            master_thc=40.0  # Very different THC — no longer penalised
         )
 
-        assert score1 > score2
+        # THC_WEIGHT is 0.00: scores are identical regardless of THC difference
+        assert abs(score1 - score2) < 0.01
 
     def test_missing_thc_no_penalty(self):
         """Missing THC values should not penalize score"""

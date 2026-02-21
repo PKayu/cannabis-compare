@@ -90,16 +90,23 @@ class TestProductEndpoints:
         assert "detail" in response.json()
 
     def test_get_product_price_comparison(self, client):
-        """Test GET /api/products/{id}/prices returns price comparison"""
+        """Test GET /api/products/{id}/prices returns price comparison grouped by weight"""
         response = client.get(f"/api/products/{self.product.id}/prices")
 
         assert response.status_code == status.HTTP_200_OK
-        prices = response.json()
+        weight_groups = response.json()
 
-        assert len(prices) == 2
+        # API returns a list of weight groups; test data has no weight so one group
+        assert len(weight_groups) >= 1
 
-        # Check first price structure
-        price = prices[0]
+        # Each weight group has variant metadata and a nested prices list
+        group = weight_groups[0]
+        assert "variant_id" in group
+        assert "prices" in group
+        assert len(group["prices"]) == 2  # Two dispensaries in test setup
+
+        # Check individual price structure inside the group
+        price = group["prices"][0]
         assert "dispensary_id" in price
         assert "dispensary_name" in price
         assert "dispensary_location" in price
@@ -132,10 +139,11 @@ class TestProductEndpoints:
         response = client.get(f"/api/products/{self.product.id}/prices")
 
         assert response.status_code == status.HTTP_200_OK
-        prices = response.json()
+        weight_groups = response.json()
 
-        # Find the price with promotion
-        promo_price = next((p for p in prices if p["promotion"] is not None), None)
+        # Flatten all prices across weight groups to find the one with a promotion
+        all_prices = [p for wg in weight_groups for p in wg["prices"]]
+        promo_price = next((p for p in all_prices if p["promotion"] is not None), None)
         assert promo_price is not None
         assert promo_price["promotion"]["title"] == "Monday Sale"
         assert promo_price["deal_price"] is not None

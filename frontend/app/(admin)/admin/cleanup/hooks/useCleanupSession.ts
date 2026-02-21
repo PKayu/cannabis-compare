@@ -27,7 +27,8 @@ export interface ScraperFlag {
   confidence_score: number
   confidence_percent: string
   merge_reason: string | null
-  status: 'pending' | 'approved' | 'rejected' | 'dismissed' | 'merged' | 'auto_merged'
+  flag_type: 'match_review' | 'data_cleanup'
+  status: 'pending' | 'approved' | 'rejected' | 'dismissed' | 'merged' | 'auto_merged' | 'cleaned'
   corrections: Record<string, any> | null
   issue_tags: string[] | null
   created_at: string
@@ -36,9 +37,12 @@ export interface ScraperFlag {
 
 export interface FlagStats {
   pending: number
+  pending_cleanup: number
+  pending_review: number
   approved: number
   rejected: number
   dismissed: number
+  cleaned: number
   merged: number
   total: number
 }

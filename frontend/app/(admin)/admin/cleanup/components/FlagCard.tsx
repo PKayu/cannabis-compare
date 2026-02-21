@@ -79,7 +79,7 @@ interface MatchedProductEdits {
   brand?: string
 }
 
-export type FlagCardTabMode = 'priority' | 'cleanup' | 'duplicates' | 'auto_linked' | 'all'
+export type FlagCardTabMode = 'data_cleanup' | 'legacy_review' | 'auto_linked' | 'all'
 
 interface FlagCardProps {
   flag: ScraperFlag
@@ -96,9 +96,12 @@ interface FlagCardProps {
   onReject: (flagId: string, edits?: Partial<EditableFields>, notes?: string, issueTags?: string[]) => Promise<void>
   onDismiss: (flagId: string, notes?: string, issueTags?: string[]) => Promise<void>
   onMergeDuplicate?: (flagId: string, keptProductId: string, notes?: string) => Promise<void>
+  onCleanAndActivate?: (flagId: string, edits: Partial<EditableFields>, notes?: string, issueTags?: string[]) => Promise<void>
+  onDeleteProduct?: (flagId: string, notes?: string) => Promise<void>
+  onRejectAutoMerge?: (flagId: string, notes?: string) => Promise<void>
 }
 
-export function FlagCard({ flag, selected, tabMode = 'all', onToggleSelect, onApprove, onReject, onDismiss, onMergeDuplicate }: FlagCardProps) {
+export function FlagCard({ flag, selected, tabMode = 'all', onToggleSelect, onApprove, onReject, onDismiss, onMergeDuplicate, onCleanAndActivate, onDeleteProduct, onRejectAutoMerge }: FlagCardProps) {
   const [editing, setEditing] = useState<Record<string, boolean>>({})
   const [editValues, setEditValues] = useState<Partial<EditableFields>>({})
   const [activeTags, setActiveTags] = useState<string[]>([])
@@ -174,6 +177,41 @@ export function FlagCard({ flag, selected, tabMode = 'all', onToggleSelect, onAp
     setLoading(true)
     try {
       await onDismiss(flag.id, notes || undefined, activeTags.length > 0 ? activeTags : undefined)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCleanAndActivate = async () => {
+    if (!onCleanAndActivate) return
+    setLoading(true)
+    try {
+      await onCleanAndActivate(
+        flag.id,
+        editValues as Partial<EditableFields>,
+        notes || undefined,
+        activeTags.length > 0 ? activeTags : undefined
+      )
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRejectAutoMerge = async () => {
+    if (!onRejectAutoMerge) return
+    setLoading(true)
+    try {
+      await onRejectAutoMerge(flag.id, notes || undefined)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteProduct = async () => {
+    if (!onDeleteProduct) return
+    setLoading(true)
+    try {
+      await onDeleteProduct(flag.id, notes || undefined)
     } finally {
       setLoading(false)
     }
@@ -298,39 +336,60 @@ export function FlagCard({ flag, selected, tabMode = 'all', onToggleSelect, onAp
               </span>
             )}
 
-            {/* Match Type Badge */}
-            {(flag as any).match_type === 'cross_dispensary' && (
-              <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
-                Cross-Dispensary Match
+            {/* Flag Type Badge */}
+            {flag.flag_type === 'data_cleanup' && (
+              <span className="text-xs font-medium text-orange-700 bg-orange-100 px-2 py-0.5 rounded">
+                Data Cleanup
               </span>
             )}
-            {(flag as any).match_type === 'same_dispensary' && (
-              <span className="text-xs font-medium text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded">
-                Same Dispensary
+            {flag.flag_type === 'match_review' && (
+              <>
+                {/* Match Type Badge (legacy) */}
+                {(flag as any).match_type === 'cross_dispensary' && (
+                  <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
+                    Cross-Dispensary Match
+                  </span>
+                )}
+                {(flag as any).match_type === 'same_dispensary' && (
+                  <span className="text-xs font-medium text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded">
+                    Same Dispensary
+                  </span>
+                )}
+              </>
+            )}
+
+            {/* Confidence Score — hide for data_cleanup flags */}
+            {flag.flag_type !== 'data_cleanup' && (
+              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                flag.confidence_score >= 0.9
+                  ? 'bg-green-100 text-green-800'
+                  : flag.confidence_score >= 0.6
+                  ? 'bg-yellow-100 text-yellow-800'
+                  : 'bg-red-100 text-red-800'
+              }`}>
+                {flag.confidence_percent || `${Math.round(flag.confidence_score * 100)}%`}
               </span>
             )}
 
-            {/* Confidence Score */}
-            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-              flag.confidence_score >= 0.9
-                ? 'bg-green-100 text-green-800'
-                : flag.confidence_score >= 0.6
-                ? 'bg-yellow-100 text-yellow-800'
-                : 'bg-red-100 text-red-800'
-            }`}>
-              {flag.confidence_percent || `${Math.round(flag.confidence_score * 100)}%`}
-            </span>
-
-            {/* Data Quality Indicator */}
-            {(flag as any).data_quality === 'poor' && (
-              <span className="text-xs font-medium text-red-700 bg-red-100 px-2 py-0.5 rounded flex items-center gap-1">
-                ⚠️ Poor Quality
-              </span>
-            )}
-            {(flag as any).data_quality === 'fair' && (
-              <span className="text-xs font-medium text-orange-700 bg-orange-100 px-2 py-0.5 rounded flex items-center gap-1">
-                ⚠️ Needs Review
-              </span>
+            {/* Issue Tags — prominent for data_cleanup flags */}
+            {flag.flag_type === 'data_cleanup' && flag.issue_tags && flag.issue_tags.length > 0 && (
+              <>
+                {flag.issue_tags.includes('junk_in_name') && (
+                  <span className="text-xs font-medium text-red-700 bg-red-100 px-2 py-0.5 rounded">
+                    Junk in Name
+                  </span>
+                )}
+                {flag.issue_tags.includes('missing_price') && (
+                  <span className="text-xs font-medium text-red-700 bg-red-100 px-2 py-0.5 rounded">
+                    Missing Price
+                  </span>
+                )}
+                {flag.issue_tags.includes('unknown_brand') && (
+                  <span className="text-xs font-medium text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded">
+                    Unknown Brand
+                  </span>
+                )}
+              </>
             )}
           </div>
           {/* Editable Name */}
@@ -454,8 +513,8 @@ export function FlagCard({ flag, selected, tabMode = 'all', onToggleSelect, onAp
         />
       </div>
 
-      {/* Matched Product Comparison with inline editing */}
-      {flag.matched_product && (
+      {/* Matched Product Comparison with inline editing — hidden for data_cleanup flags */}
+      {flag.matched_product && flag.flag_type !== 'data_cleanup' && (
         <div className="bg-gray-50 rounded-md p-3 mb-4">
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs font-semibold text-gray-500">
@@ -574,10 +633,30 @@ export function FlagCard({ flag, selected, tabMode = 'all', onToggleSelect, onAp
         </div>
       )}
 
-      {/* Action Buttons — rendered contextually by tab */}
+      {/* Action Buttons — rendered contextually by tab and flag_type */}
       <div className="flex gap-2">
-        {/* Priority Queue: full approve + new product + dismiss */}
-        {(tabMode === 'priority' || tabMode === 'all') && (
+        {/* Data Cleanup: Save & Activate + Delete */}
+        {(tabMode === 'data_cleanup' || (tabMode === 'all' && flag.flag_type === 'data_cleanup')) && (
+          <>
+            <button
+              onClick={handleCleanAndActivate}
+              disabled={loading || !onCleanAndActivate}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? '...' : 'Save & Activate'}
+            </button>
+            <button
+              onClick={handleDeleteProduct}
+              disabled={loading || !onDeleteProduct}
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? '...' : 'Delete'}
+            </button>
+          </>
+        )}
+
+        {/* Legacy Review: full approve + new product + dismiss */}
+        {(tabMode === 'legacy_review' || (tabMode === 'all' && flag.flag_type === 'match_review')) && (
           <>
             <button
               onClick={handleApprove}
@@ -597,65 +676,34 @@ export function FlagCard({ flag, selected, tabMode = 'all', onToggleSelect, onAp
           </>
         )}
 
-        {/* Needs Cleanup: only Save as New Product + Dismiss (no linking) */}
-        {tabMode === 'cleanup' && (
-          <button
-            onClick={handleReject}
-            disabled={loading}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50"
-          >
-            {loading ? '...' : hasEdits ? 'Save as New Product' : 'Save as New Product'}
-          </button>
-        )}
-
-        {/* Duplicates: Keep This One + Not a Duplicate */}
-        {tabMode === 'duplicates' && flag.matched_product_id && (
+        {/* Auto-Linked: confirm or reject the auto-merge */}
+        {tabMode === 'auto_linked' && (
           <>
             <button
-              onClick={() => onMergeDuplicate && onMergeDuplicate(flag.id, flag.matched_product_id!, notes || undefined)}
-              disabled={loading || !onMergeDuplicate}
-              className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={handleDismiss}
+              disabled={loading}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50"
             >
-              {loading ? '...' : 'Keep Matched Product'}
+              {loading ? '...' : 'Looks Good ✓'}
             </button>
             <button
-              onClick={handleApprove}
-              disabled={loading || (!flag.matched_product_id && !flag.matched_product?.id)}
-              className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={handleRejectAutoMerge}
+              disabled={loading || !onRejectAutoMerge}
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50"
             >
-              {loading ? '...' : 'Keep Incoming'}
+              {loading ? '...' : 'Reject Link'}
             </button>
           </>
         )}
-        {tabMode === 'duplicates' && !flag.matched_product_id && (
-          <button
-            onClick={handleReject}
-            disabled={loading}
-            className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50"
-          >
-            {loading ? '...' : 'Create as New Product'}
-          </button>
-        )}
 
-        {/* Auto-Linked: read-only confirmation buttons */}
-        {tabMode === 'auto_linked' && (
-          <button
-            onClick={handleDismiss}
-            disabled={loading}
-            className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50"
-          >
-            {loading ? '...' : 'Looks Good ✓'}
-          </button>
-        )}
-
-        {/* Dismiss always shown (except auto_linked where it's "Looks Good") */}
-        {tabMode !== 'auto_linked' && (
+        {/* Dismiss — shown for legacy_review and auto_linked */}
+        {tabMode !== 'data_cleanup' && tabMode !== 'auto_linked' && !(tabMode === 'all' && flag.flag_type === 'data_cleanup') && (
           <button
             onClick={handleDismiss}
             disabled={loading}
             className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md font-medium text-sm transition-colors disabled:opacity-50"
           >
-            {tabMode === 'duplicates' ? 'Not a Duplicate' : 'Dismiss'}
+            Dismiss
           </button>
         )}
 

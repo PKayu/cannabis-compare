@@ -88,9 +88,11 @@ class Product(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String, nullable=False, index=True)  # e.g., "Gorilla Glue #4"
     product_type = Column(String, nullable=False)  # e.g., "Flower", "Vape", "Edible"
-    thc_percentage = Column(Float, nullable=True)  # THC content
-    cbd_percentage = Column(Float, nullable=True)  # CBD content
+    thc_percentage = Column(Float, nullable=True)  # THC content as % (null when source is mg)
+    cbd_percentage = Column(Float, nullable=True)  # CBD content as % (null when source is mg)
     cbg_percentage = Column(Float, nullable=True)  # CBG content
+    thc_content = Column(String, nullable=True)   # Display value: "15.4%" or "396mg"
+    cbd_content = Column(String, nullable=True)   # Display value: "1.2%" or "50mg"
     brand_id = Column(String, ForeignKey("brands.id"), nullable=False)
 
     # Weight/quantity (for variant products)
@@ -103,6 +105,7 @@ class Product(Base):
     master_product_id = Column(String, ForeignKey("products.id"), nullable=True, index=True)
     normalization_confidence = Column(Float, default=1.0)  # 0.0-1.0 confidence score
     is_master = Column(Boolean, default=True, index=True)  # True if this is parent entry
+    is_active = Column(Boolean, default=True, index=True)  # False if soft-deleted (e.g. merged duplicate)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -212,6 +215,8 @@ class ScraperFlag(Base):
     original_name = Column(String, nullable=False)  # Product name as scraped from dispensary
     original_thc = Column(Float, nullable=True)
     original_cbd = Column(Float, nullable=True)
+    original_thc_content = Column(String, nullable=True)  # Display value: "15.4%" or "396mg"
+    original_cbd_content = Column(String, nullable=True)  # Display value: "1.2%" or "50mg"
     brand_name = Column(String, nullable=False)
     dispensary_id = Column(String, ForeignKey("dispensaries.id"), nullable=False)
     original_weight = Column(String, nullable=True)  # Raw weight string from scraper

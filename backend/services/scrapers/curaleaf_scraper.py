@@ -403,22 +403,26 @@ class CuraleafScraper(PlaywrightScraper):
 
                         // Extract THC (format: "THC: 15.4%" or "THC: 134 mg")
                         let thc = null;
+                        let thcUnit = null;
                         const thcPercentMatch = fullText.match(/THC:\\s*(\\d+\\.?\\d*)%/i);
                         if (thcPercentMatch) {
                             thc = thcPercentMatch[1];
+                            thcUnit = '%';
                         } else {
                             const thcMgMatch = fullText.match(/THC:\\s*(\\d+\\.?\\d*)\\s*mg/i);
-                            if (thcMgMatch) thc = thcMgMatch[1];
+                            if (thcMgMatch) { thc = thcMgMatch[1]; thcUnit = 'mg'; }
                         }
 
                         // Extract CBD (format: "CBD: 203.98 mg" or "CBD: 0.23%")
                         let cbd = null;
+                        let cbdUnit = null;
                         const cbdPercentMatch = fullText.match(/CBD:\\s*(\\d+\\.?\\d*)%/i);
                         if (cbdPercentMatch) {
                             cbd = cbdPercentMatch[1];
+                            cbdUnit = '%';
                         } else {
                             const cbdMgMatch = fullText.match(/CBD:\\s*(\\d+\\.?\\d*)\\s*mg/i);
-                            if (cbdMgMatch) cbd = cbdMgMatch[1];
+                            if (cbdMgMatch) { cbd = cbdMgMatch[1]; cbdUnit = 'mg'; }
                         }
 
                         // Extract CBG (WholesomeCo pattern - supports percentage and milligram)
@@ -646,7 +650,9 @@ class CuraleafScraper(PlaywrightScraper):
                                 category: category,
                                 price: price,
                                 thc: thc,
+                                thcUnit: thcUnit,
                                 cbd: cbd,
+                                cbdUnit: cbdUnit,
                                 cbg: cbg,  // WholesomeCo learning: CBG extraction
                                 cbn: cbn,  // WholesomeCo learning: CBN for raw_data
                                 weight: weight,
@@ -672,14 +678,29 @@ class CuraleafScraper(PlaywrightScraper):
         products = []
         for item in product_data:
             try:
+                thc_val = item.get("thc")
+                thc_unit = item.get("thcUnit")
+                cbd_val = item.get("cbd")
+                cbd_unit = item.get("cbdUnit")
+
+                # Build plain-text display strings (e.g. "15.4%" or "396mg")
+                thc_content = f"{thc_val}{thc_unit}" if thc_val and thc_unit else None
+                cbd_content = f"{cbd_val}{cbd_unit}" if cbd_val and cbd_unit else None
+
+                # Only store float percentage when unit is actually %; mg values go in content only
+                thc_pct = self._parse_float(thc_val) if thc_unit == '%' else None
+                cbd_pct = self._parse_float(cbd_val) if cbd_unit == '%' else None
+
                 product = ScrapedProduct(
                     name=item["name"],
                     brand=item.get("brand"),
                     category=item.get("category", "other"),
                     price=float(item["price"]),
-                    thc_percentage=self._parse_float(item.get("thc")),
-                    cbd_percentage=self._parse_float(item.get("cbd")),
+                    thc_percentage=thc_pct,
+                    cbd_percentage=cbd_pct,
                     cbg_percentage=self._parse_float(item.get("cbg")),  # WholesomeCo learning: CBG extraction
+                    thc_content=thc_content,
+                    cbd_content=cbd_content,
                     weight=item.get("weight"),
                     in_stock=item.get("inStock", True),
                     url=item.get("url"),  # WholesomeCo learning: product URL for direct links

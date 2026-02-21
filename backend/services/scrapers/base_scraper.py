@@ -33,9 +33,11 @@ class ScrapedProduct:
     category: str  # "Flower", "Vape", "Edible", "Concentrate", "Topical"
     price: float
     in_stock: bool = True
-    thc_percentage: Optional[float] = None
+    thc_percentage: Optional[float] = None   # Numeric % value (None when source is mg)
     cbd_percentage: Optional[float] = None
     cbg_percentage: Optional[float] = None
+    thc_content: Optional[str] = None        # Plain-text display: "15.4%" or "396mg"
+    cbd_content: Optional[str] = None        # Plain-text display: "1.2%" or "50mg"
     batch_number: Optional[str] = None
     cultivation_date: Optional[datetime] = None
     weight: Optional[str] = None  # e.g., "1g", "3.5g", "1oz"

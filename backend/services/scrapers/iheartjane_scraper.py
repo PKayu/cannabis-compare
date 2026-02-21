@@ -137,9 +137,9 @@ class IHeartJaneScraper(BaseScraper):
         # Extract brand (may be nested object or simple string)
         brand = self._extract_brand(item)
 
-        # Extract THC/CBD percentages
-        thc = self._extract_percentage(item.get("potency_thc"))
-        cbd = self._extract_percentage(item.get("potency_cbd"))
+        # Extract THC/CBD with unit awareness
+        thc, thc_content = self._extract_potency(item.get("potency_thc"))
+        cbd, cbd_content = self._extract_potency(item.get("potency_cbd"))
 
         # Map category to our product types
         category = item.get("category") or item.get("kind") or item.get("type") or ""
@@ -176,6 +176,8 @@ class IHeartJaneScraper(BaseScraper):
             category=product_type,
             thc_percentage=thc,
             cbd_percentage=cbd,
+            thc_content=thc_content,
+            cbd_content=cbd_content,
             price=float(price),
             in_stock=in_stock,
             weight=self._extract_unit_size(name),
@@ -205,6 +207,46 @@ class IHeartJaneScraper(BaseScraper):
 
         return None
 
+    def _extract_potency(self, potency_data) -> tuple[Optional[float], Optional[str]]:
+        """
+        Extract potency value and build a plain-text display string.
+
+        Returns:
+            (float_percentage_or_None, display_string_or_None)
+            e.g. (15.4, "15.4%") or (None, "396mg") for edibles
+        """
+        if potency_data is None:
+            return None, None
+
+        # Dict format: {"value": 22.5, "unit": "%"} or {"value": 396, "unit": "mg"}
+        if isinstance(potency_data, dict):
+            value = potency_data.get("value") or potency_data.get("percentage")
+            unit = (potency_data.get("unit") or "%").strip().lower()
+            if value is not None:
+                f = float(value)
+                if unit == "mg":
+                    # mg-based (edibles) — do NOT store as percentage
+                    return None, f"{f:g}mg"
+                else:
+                    return f, f"{f:g}%"
+            return None, None
+
+        # String format: "22.5%" or "22.5"
+        if isinstance(potency_data, str):
+            cleaned = potency_data.replace("%", "").strip()
+            try:
+                f = float(cleaned)
+                return f, f"{f:g}%"
+            except ValueError:
+                return None, None
+
+        # Direct number — assume %
+        try:
+            f = float(potency_data)
+            return f, f"{f:g}%"
+        except (ValueError, TypeError):
+            return None, None
+
     def _extract_percentage(self, potency_data) -> Optional[float]:
         """
         Extract percentage from various iHeartJane potency formats
@@ -221,30 +263,8 @@ class IHeartJaneScraper(BaseScraper):
         Returns:
             Float percentage or None
         """
-        if potency_data is None:
-            return None
-
-        # Handle dict format (most common)
-        if isinstance(potency_data, dict):
-            value = potency_data.get("value") or potency_data.get("percentage")
-            if value is not None:
-                return float(value)
-
-        # Handle string format
-        if isinstance(potency_data, str):
-            # Remove % and any whitespace, convert to float
-            cleaned = potency_data.replace("%", "").strip()
-            if cleaned:
-                try:
-                    return float(cleaned)
-                except ValueError:
-                    pass
-
-        # Handle direct number
-        try:
-            return float(potency_data)
-        except (ValueError, TypeError):
-            return None
+        pct, _ = self._extract_potency(potency_data)
+        return pct
 
     def _map_category(self, category: str) -> str:
         """

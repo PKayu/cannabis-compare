@@ -332,7 +332,7 @@ class ScraperFlagProcessor:
         if not flag:
             raise ValueError(f"ScraperFlag not found: {flag_id}")
 
-        if flag.status != "pending":
+        if flag.status not in ("pending", "auto_merged"):
             raise ValueError(
                 f"Flag already resolved with status: {flag.status}"
             )

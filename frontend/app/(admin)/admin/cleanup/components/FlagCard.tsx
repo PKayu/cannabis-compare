@@ -575,11 +575,13 @@ export function FlagCard({ flag, selected, tabMode = 'all', onToggleSelect, onAp
       )}
 
       {/* Action Buttons — rendered contextually by tab */}
+      {/* onMouseDown preventDefault stops input blur from shifting layout before click registers */}
       <div className="flex gap-2">
         {/* Priority Queue: full approve + new product + dismiss */}
         {(tabMode === 'priority' || tabMode === 'all') && (
           <>
             <button
+              onMouseDown={(e) => e.preventDefault()}
               onClick={handleApprove}
               disabled={loading || (!flag.matched_product_id && !flag.matched_product?.id)}
               className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -588,6 +590,7 @@ export function FlagCard({ flag, selected, tabMode = 'all', onToggleSelect, onAp
               {loading ? '...' : hasEdits || hasMatchedEdits ? 'Approve + Save Edits' : 'Approve'}
             </button>
             <button
+              onMouseDown={(e) => e.preventDefault()}
               onClick={handleReject}
               disabled={loading}
               className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50"
@@ -600,6 +603,7 @@ export function FlagCard({ flag, selected, tabMode = 'all', onToggleSelect, onAp
         {/* Needs Cleanup: only Save as New Product + Dismiss (no linking) */}
         {tabMode === 'cleanup' && (
           <button
+            onMouseDown={(e) => e.preventDefault()}
             onClick={handleReject}
             disabled={loading}
             className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50"
@@ -612,6 +616,7 @@ export function FlagCard({ flag, selected, tabMode = 'all', onToggleSelect, onAp
         {tabMode === 'duplicates' && flag.matched_product_id && (
           <>
             <button
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => onMergeDuplicate && onMergeDuplicate(flag.id, flag.matched_product_id!, notes || undefined)}
               disabled={loading || !onMergeDuplicate}
               className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -619,6 +624,7 @@ export function FlagCard({ flag, selected, tabMode = 'all', onToggleSelect, onAp
               {loading ? '...' : 'Keep Matched Product'}
             </button>
             <button
+              onMouseDown={(e) => e.preventDefault()}
               onClick={handleApprove}
               disabled={loading || (!flag.matched_product_id && !flag.matched_product?.id)}
               className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -629,6 +635,7 @@ export function FlagCard({ flag, selected, tabMode = 'all', onToggleSelect, onAp
         )}
         {tabMode === 'duplicates' && !flag.matched_product_id && (
           <button
+            onMouseDown={(e) => e.preventDefault()}
             onClick={handleReject}
             disabled={loading}
             className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50"
@@ -640,6 +647,7 @@ export function FlagCard({ flag, selected, tabMode = 'all', onToggleSelect, onAp
         {/* Auto-Linked: read-only confirmation buttons */}
         {tabMode === 'auto_linked' && (
           <button
+            onMouseDown={(e) => e.preventDefault()}
             onClick={handleDismiss}
             disabled={loading}
             className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50"
@@ -651,6 +659,7 @@ export function FlagCard({ flag, selected, tabMode = 'all', onToggleSelect, onAp
         {/* Dismiss always shown (except auto_linked where it's "Looks Good") */}
         {tabMode !== 'auto_linked' && (
           <button
+            onMouseDown={(e) => e.preventDefault()}
             onClick={handleDismiss}
             disabled={loading}
             className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md font-medium text-sm transition-colors disabled:opacity-50"
@@ -660,6 +669,7 @@ export function FlagCard({ flag, selected, tabMode = 'all', onToggleSelect, onAp
         )}
 
         <button
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => setShowNotes(!showNotes)}
           className={`px-3 py-2 rounded-md text-sm transition-colors ${
             showNotes ? 'bg-gray-800 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'

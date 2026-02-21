@@ -116,6 +116,7 @@ class FlagStatsResponse(BaseModel):
     pending: int
     pending_cleanup: int = 0
     pending_review: int = 0
+    auto_merged: int = 0
     approved: int
     rejected: int
     dismissed: int
@@ -317,6 +318,7 @@ async def get_flag_stats(db: Session = Depends(get_db)):
         ScraperFlag.status == "pending",
         ScraperFlag.flag_type == "match_review"
     ).count()
+    auto_merged = db.query(ScraperFlag).filter(ScraperFlag.status == "auto_merged").count()
     approved = db.query(ScraperFlag).filter(ScraperFlag.status == "approved").count()
     rejected = db.query(ScraperFlag).filter(ScraperFlag.status == "rejected").count()
     dismissed = db.query(ScraperFlag).filter(ScraperFlag.status == "dismissed").count()
@@ -326,11 +328,12 @@ async def get_flag_stats(db: Session = Depends(get_db)):
         "pending": pending,
         "pending_cleanup": pending_cleanup,
         "pending_review": pending_review,
+        "auto_merged": auto_merged,
         "approved": approved,
         "rejected": rejected,
         "dismissed": dismissed,
         "cleaned": cleaned,
-        "total": pending + approved + rejected + dismissed + cleaned,
+        "total": pending + auto_merged + approved + rejected + dismissed + cleaned,
     }
 
 

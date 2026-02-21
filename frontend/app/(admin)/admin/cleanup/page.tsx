@@ -68,18 +68,13 @@ export default function CleanupQueuePage() {
 
   const loadTabCounts = async () => {
     try {
-      const [cleanupRes, legacyRes, autoLinkedRes, allRes] = await Promise.all([
-        api.admin.flags.pending({ flag_type: 'data_cleanup', limit: 1000 }),
-        api.admin.flags.pending({ flag_type: 'match_review', limit: 1000 }),
-        api.admin.flags.pending({ include_auto_merged: true, limit: 1000 }),
-        api.admin.flags.pending({ limit: 1000 })
-      ])
-
+      const statsRes = await api.admin.flags.stats()
+      const stats = statsRes.data
       setTabCounts({
-        data_cleanup: cleanupRes.data?.length || 0,
-        legacy_review: legacyRes.data?.length || 0,
-        auto_linked: autoLinkedRes.data?.filter((f: any) => f.status === 'auto_merged').length || 0,
-        all: allRes.data?.length || 0
+        data_cleanup: stats.pending_cleanup || 0,
+        legacy_review: stats.pending_review || 0,
+        auto_linked: stats.auto_merged || 0,
+        all: (stats.pending || 0) + (stats.auto_merged || 0)
       })
     } catch (err) {
       console.error('Failed to load tab counts:', err)

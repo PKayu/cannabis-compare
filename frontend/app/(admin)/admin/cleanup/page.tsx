@@ -50,7 +50,12 @@ export default function CleanupQueuePage() {
         api.admin.flags.pending(params),
         api.admin.flags.stats(),
       ])
-      setListFlags(flagsRes.data)
+      // For auto_linked tab, include_auto_merged adds them to pending results —
+      // filter client-side so only true auto_merged flags appear in this tab.
+      const flags = activeTab === 'auto_linked'
+        ? (flagsRes.data || []).filter((f: any) => f.status === 'auto_merged')
+        : flagsRes.data
+      setListFlags(flags)
       setListStats(statsRes.data)
       setListError(null)
     } catch (err) {

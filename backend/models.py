@@ -224,12 +224,15 @@ class ScraperFlag(Base):
     original_category = Column(String, nullable=True)  # Product category from scraper
     original_url = Column(String, nullable=True)  # Direct link to product page at dispensary
 
-    # Potential match
+    # Flag type: "match_review" (legacy 60-90% match) or "data_cleanup" (dirty data on new product)
+    flag_type = Column(String, default="match_review", index=True)
+
+    # Potential match (for match_review: suggested match; for data_cleanup: the created product)
     matched_product_id = Column(String, ForeignKey("products.id"), nullable=True)
     confidence_score = Column(Float, nullable=False)  # 0.0 to 1.0
 
     # Status workflow
-    status = Column(String, default="pending", index=True)  # pending, approved, rejected, dismissed, merged
+    status = Column(String, default="pending", index=True)  # pending, approved, rejected, dismissed, merged, auto_merged, cleaned
     merge_reason = Column(String, nullable=True)  # Why flagged for review
 
     # Admin action

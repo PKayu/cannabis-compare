@@ -74,16 +74,31 @@ const ISSUE_TAGS: IssueTagDef[] = [
 
 // --- Component Props ---
 
+interface MatchedProductEdits {
+  name?: string
+  brand?: string
+}
+
+export type FlagCardTabMode = 'priority' | 'cleanup' | 'duplicates' | 'auto_linked' | 'all'
+
 interface FlagCardProps {
   flag: ScraperFlag
   selected?: boolean
+  tabMode?: FlagCardTabMode
   onToggleSelect?: (flagId: string) => void
-  onApprove: (flagId: string, edits?: Partial<EditableFields>, notes?: string, issueTags?: string[]) => Promise<void>
+  onApprove: (
+    flagId: string,
+    edits?: Partial<EditableFields>,
+    notes?: string,
+    issueTags?: string[],
+    matchedEdits?: MatchedProductEdits
+  ) => Promise<void>
   onReject: (flagId: string, edits?: Partial<EditableFields>, notes?: string, issueTags?: string[]) => Promise<void>
   onDismiss: (flagId: string, notes?: string, issueTags?: string[]) => Promise<void>
+  onMergeDuplicate?: (flagId: string, keptProductId: string, notes?: string) => Promise<void>
 }
 
-export function FlagCard({ flag, selected, onToggleSelect, onApprove, onReject, onDismiss }: FlagCardProps) {
+export function FlagCard({ flag, selected, tabMode = 'all', onToggleSelect, onApprove, onReject, onDismiss, onMergeDuplicate }: FlagCardProps) {
   const [editing, setEditing] = useState<Record<string, boolean>>({})
   const [editValues, setEditValues] = useState<Partial<EditableFields>>({})
   const [activeTags, setActiveTags] = useState<string[]>([])
@@ -92,6 +107,8 @@ export function FlagCard({ flag, selected, onToggleSelect, onApprove, onReject, 
   const [showNotes, setShowNotes] = useState(false)
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
+  const [matchedEditing, setMatchedEditing] = useState<Record<string, boolean>>({})
+  const [matchedEditValues, setMatchedEditValues] = useState<MatchedProductEdits>({})
   const categoryRef = useRef<HTMLSelectElement>(null)
 
   // Initialize edit values from flag data
@@ -111,6 +128,8 @@ export function FlagCard({ flag, selected, onToggleSelect, onApprove, onReject, 
     setHighlightMissing(false)
     setNotes('')
     setShowNotes(false)
+    setMatchedEditing({})
+    setMatchedEditValues({})
   }, [flag.id])
 
   // Compute changed edits (only fields that differ from original)
@@ -130,7 +149,13 @@ export function FlagCard({ flag, selected, onToggleSelect, onApprove, onReject, 
   const handleApprove = async () => {
     setLoading(true)
     try {
-      await onApprove(flag.id, getChangedEdits(), notes || undefined, activeTags.length > 0 ? activeTags : undefined)
+      await onApprove(
+        flag.id,
+        getChangedEdits(),
+        notes || undefined,
+        activeTags.length > 0 ? activeTags : undefined,
+        getMatchedEditsPayload()
+      )
     } finally {
       setLoading(false)
     }
@@ -234,6 +259,20 @@ export function FlagCard({ flag, selected, onToggleSelect, onApprove, onReject, 
   }
 
   const hasEdits = !!getChangedEdits()
+
+  const getMatchedEditsPayload = (): MatchedProductEdits | undefined => {
+    const edits: MatchedProductEdits = {}
+    let hasChanges = false
+    if (matchedEditValues.name !== undefined && matchedEditValues.name !== (flag.matched_product?.name || '')) {
+      edits.name = matchedEditValues.name; hasChanges = true
+    }
+    if (matchedEditValues.brand !== undefined && matchedEditValues.brand !== (flag.matched_product?.brand || '')) {
+      edits.brand = matchedEditValues.brand; hasChanges = true
+    }
+    return hasChanges ? edits : undefined
+  }
+
+  const hasMatchedEdits = !!getMatchedEditsPayload()
 
   return (
     <div className="bg-white rounded-lg shadow p-5 relative">
@@ -392,43 +431,105 @@ export function FlagCard({ flag, selected, onToggleSelect, onApprove, onReject, 
           type="number"
         />
         <EditableField
-          label="THC %"
+          label="THC"
           value={editValues.thc_percentage || ''}
-          original={flag.original_thc?.toString() || ''}
+          original={flag.original_thc_content || (flag.original_thc?.toString() || '')}
           isEditing={!!editing.thc_percentage}
           isMissing={isFieldMissing('thc_percentage')}
           onEdit={() => setEditing(prev => ({ ...prev, thc_percentage: true }))}
           onBlur={() => setEditing(prev => ({ ...prev, thc_percentage: false }))}
           onChange={(v) => updateField('thc_percentage', v)}
-          suffix="%"
-          type="number"
+          type="text"
         />
         <EditableField
-          label="CBD %"
+          label="CBD"
           value={editValues.cbd_percentage || ''}
-          original={flag.original_cbd?.toString() || ''}
+          original={flag.original_cbd_content || (flag.original_cbd?.toString() || '')}
           isEditing={!!editing.cbd_percentage}
           isMissing={isFieldMissing('cbd_percentage')}
           onEdit={() => setEditing(prev => ({ ...prev, cbd_percentage: true }))}
           onBlur={() => setEditing(prev => ({ ...prev, cbd_percentage: false }))}
           onChange={(v) => updateField('cbd_percentage', v)}
-          suffix="%"
-          type="number"
+          type="text"
         />
       </div>
 
-      {/* Matched Product Comparison */}
+      {/* Matched Product Comparison with inline editing */}
       {flag.matched_product && (
         <div className="bg-gray-50 rounded-md p-3 mb-4">
-          <p className="text-xs font-semibold text-gray-500 mb-2">
-            Suggested Match ({flag.confidence_percent || `${Math.round(flag.confidence_score * 100)}%`})
-          </p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold text-gray-500">
+              Suggested Match ({flag.confidence_percent || `${Math.round(flag.confidence_score * 100)}%`})
+            </p>
+            <button
+              onClick={() => setMatchedEditing(prev => Object.values(prev).some(v => v) ? ({} as Record<string, boolean>) : { name: true, brand: true })}
+              className="text-xs px-2 py-0.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-100"
+            >
+              {Object.values(matchedEditing).some(v => v) ? 'Done' : 'Edit Match'}
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
-            <CompareField label="Name" scraped={editValues.name || ''} matched={flag.matched_product.name} />
-            <CompareField label="Brand" scraped={editValues.brand_name || ''} matched={flag.matched_product.brand || ''} />
+            {/* Matched product Name — editable */}
+            <div className="col-span-2">
+              <span className="text-xs text-gray-400">Matched Name:</span>
+              {matchedEditing.name ? (
+                <input
+                  type="text"
+                  value={matchedEditValues.name ?? (flag.matched_product.name || '')}
+                  onChange={(e) => setMatchedEditValues(prev => ({ ...prev, name: e.target.value }))}
+                  onBlur={() => setMatchedEditing(prev => ({ ...prev, name: false }))}
+                  className="w-full mt-0.5 text-sm border border-gray-300 rounded px-2 py-0.5 focus:ring-cannabis-500 focus:border-cannabis-500"
+                  autoFocus
+                />
+              ) : (
+                <p
+                  className={`cursor-pointer hover:bg-gray-100 rounded px-1 -mx-1 font-medium ${
+                    matchedEditValues.name !== undefined && matchedEditValues.name !== flag.matched_product.name
+                      ? 'text-cannabis-700'
+                      : 'text-gray-800'
+                  }`}
+                  onClick={() => setMatchedEditing(prev => ({ ...prev, name: true }))}
+                >
+                  {matchedEditValues.name ?? flag.matched_product.name}
+                </p>
+              )}
+            </div>
+            {/* Matched product Brand — editable */}
+            <div>
+              <span className="text-xs text-gray-400">Brand:</span>
+              {matchedEditing.brand ? (
+                <input
+                  type="text"
+                  value={matchedEditValues.brand ?? (flag.matched_product.brand || '')}
+                  onChange={(e) => setMatchedEditValues(prev => ({ ...prev, brand: e.target.value }))}
+                  onBlur={() => setMatchedEditing(prev => ({ ...prev, brand: false }))}
+                  className="w-full mt-0.5 text-sm border border-gray-300 rounded px-2 py-0.5 focus:ring-cannabis-500 focus:border-cannabis-500"
+                />
+              ) : (
+                <p
+                  className={`cursor-pointer hover:bg-gray-100 rounded px-1 -mx-1 ${
+                    matchedEditValues.brand !== undefined && matchedEditValues.brand !== flag.matched_product.brand
+                      ? 'text-cannabis-700'
+                      : 'text-gray-700'
+                  }`}
+                  onClick={() => setMatchedEditing(prev => ({ ...prev, brand: true }))}
+                >
+                  {matchedEditValues.brand ?? (flag.matched_product.brand || '—')}
+                </p>
+              )}
+            </div>
+            {/* Read-only comparison fields */}
             <CompareField label="Type" scraped={editValues.product_type || ''} matched={flag.matched_product.product_type || ''} />
-            <CompareField label="THC" scraped={editValues.thc_percentage ? `${editValues.thc_percentage}%` : ''} matched={flag.matched_product.thc_percentage != null ? `${flag.matched_product.thc_percentage}%` : ''} />
-            <CompareField label="CBD" scraped={editValues.cbd_percentage ? `${editValues.cbd_percentage}%` : ''} matched={flag.matched_product.cbd_percentage != null ? `${flag.matched_product.cbd_percentage}%` : ''} />
+            <CompareField
+              label="THC"
+              scraped={flag.original_thc_content || (editValues.thc_percentage ? `${editValues.thc_percentage}%` : '')}
+              matched={flag.matched_product.thc_percentage != null ? `${flag.matched_product.thc_percentage}%` : ''}
+            />
+            <CompareField
+              label="CBD"
+              scraped={flag.original_cbd_content || (editValues.cbd_percentage ? `${editValues.cbd_percentage}%` : '')}
+              matched={flag.matched_product.cbd_percentage != null ? `${flag.matched_product.cbd_percentage}%` : ''}
+            />
           </div>
           {flag.merge_reason && (
             <p className="text-xs text-gray-400 mt-2">{flag.merge_reason}</p>
@@ -473,29 +574,91 @@ export function FlagCard({ flag, selected, onToggleSelect, onApprove, onReject, 
         </div>
       )}
 
-      {/* Action Buttons */}
+      {/* Action Buttons — rendered contextually by tab */}
       <div className="flex gap-2">
-        <button
-          onClick={handleApprove}
-          disabled={loading || !flag.matched_product_id}
-          className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? '...' : hasEdits ? 'Approve + Save Edits' : 'Approve'}
-        </button>
-        <button
-          onClick={handleReject}
-          disabled={loading}
-          className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50"
-        >
-          {loading ? '...' : hasEdits ? 'New Product + Save Edits' : 'New Product'}
-        </button>
-        <button
-          onClick={handleDismiss}
-          disabled={loading}
-          className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md font-medium text-sm transition-colors disabled:opacity-50"
-        >
-          Dismiss
-        </button>
+        {/* Priority Queue: full approve + new product + dismiss */}
+        {(tabMode === 'priority' || tabMode === 'all') && (
+          <>
+            <button
+              onClick={handleApprove}
+              disabled={loading || (!flag.matched_product_id && !flag.matched_product?.id)}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title={(!flag.matched_product_id && !flag.matched_product?.id) ? 'No suggested match — use New Product instead' : undefined}
+            >
+              {loading ? '...' : hasEdits || hasMatchedEdits ? 'Approve + Save Edits' : 'Approve'}
+            </button>
+            <button
+              onClick={handleReject}
+              disabled={loading}
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50"
+            >
+              {loading ? '...' : hasEdits ? 'New Product + Save Edits' : 'New Product'}
+            </button>
+          </>
+        )}
+
+        {/* Needs Cleanup: only Save as New Product + Dismiss (no linking) */}
+        {tabMode === 'cleanup' && (
+          <button
+            onClick={handleReject}
+            disabled={loading}
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50"
+          >
+            {loading ? '...' : hasEdits ? 'Save as New Product' : 'Save as New Product'}
+          </button>
+        )}
+
+        {/* Duplicates: Keep This One + Not a Duplicate */}
+        {tabMode === 'duplicates' && flag.matched_product_id && (
+          <>
+            <button
+              onClick={() => onMergeDuplicate && onMergeDuplicate(flag.id, flag.matched_product_id!, notes || undefined)}
+              disabled={loading || !onMergeDuplicate}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? '...' : 'Keep Matched Product'}
+            </button>
+            <button
+              onClick={handleApprove}
+              disabled={loading || (!flag.matched_product_id && !flag.matched_product?.id)}
+              className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? '...' : 'Keep Incoming'}
+            </button>
+          </>
+        )}
+        {tabMode === 'duplicates' && !flag.matched_product_id && (
+          <button
+            onClick={handleReject}
+            disabled={loading}
+            className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50"
+          >
+            {loading ? '...' : 'Create as New Product'}
+          </button>
+        )}
+
+        {/* Auto-Linked: read-only confirmation buttons */}
+        {tabMode === 'auto_linked' && (
+          <button
+            onClick={handleDismiss}
+            disabled={loading}
+            className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50"
+          >
+            {loading ? '...' : 'Looks Good ✓'}
+          </button>
+        )}
+
+        {/* Dismiss always shown (except auto_linked where it's "Looks Good") */}
+        {tabMode !== 'auto_linked' && (
+          <button
+            onClick={handleDismiss}
+            disabled={loading}
+            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md font-medium text-sm transition-colors disabled:opacity-50"
+          >
+            {tabMode === 'duplicates' ? 'Not a Duplicate' : 'Dismiss'}
+          </button>
+        )}
+
         <button
           onClick={() => setShowNotes(!showNotes)}
           className={`px-3 py-2 rounded-md text-sm transition-colors ${
@@ -572,7 +735,7 @@ function EditableSelectField({
   label: string; value: string; original: string; options: string[];
   isEditing: boolean; isMissing: boolean;
   onEdit: () => void; onBlur: () => void; onChange: (v: string) => void;
-  selectRef?: React.RefObject<HTMLSelectElement | null>;
+  selectRef?: React.Ref<HTMLSelectElement>;
 }) {
   const changed = value !== original
   const ringClass = isMissing ? 'ring-2 ring-yellow-300' : ''

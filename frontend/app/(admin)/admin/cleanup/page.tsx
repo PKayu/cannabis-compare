@@ -31,6 +31,7 @@ export default function CleanupQueuePage() {
     priority: 0,
     cleanup: 0,
     duplicates: 0,
+    auto_linked: 0,
     all: 0
   })
 
@@ -71,10 +72,11 @@ export default function CleanupQueuePage() {
   const loadTabCounts = async () => {
     try {
       // Fetch counts for each tab in parallel (using large limit to get accurate counts)
-      const [priorityRes, cleanupRes, duplicatesRes, allRes] = await Promise.all([
-        api.admin.flags.pending({ match_type: 'cross_dispensary', min_confidence: 0.7, limit: 1000 }),
+      const [priorityRes, cleanupRes, duplicatesRes, autoLinkedRes, allRes] = await Promise.all([
+        api.admin.flags.pending({ match_type: 'cross_dispensary', limit: 1000 }),
         api.admin.flags.pending({ data_quality: 'poor,fair', limit: 1000 }),
         api.admin.flags.pending({ match_type: 'same_dispensary', limit: 1000 }),
+        api.admin.flags.pending({ include_auto_merged: true, limit: 1000 }),
         api.admin.flags.pending({ limit: 1000 })
       ])
 
@@ -82,6 +84,7 @@ export default function CleanupQueuePage() {
         priority: priorityRes.data?.length || 0,
         cleanup: cleanupRes.data?.length || 0,
         duplicates: duplicatesRes.data?.length || 0,
+        auto_linked: autoLinkedRes.data?.filter((f: any) => f.status === 'auto_merged').length || 0,
         all: allRes.data?.length || 0
       })
     } catch (err) {
@@ -89,7 +92,13 @@ export default function CleanupQueuePage() {
     }
   }
 
-  const handleListApprove = async (flagId: string, edits?: Partial<EditableFields>, notes?: string, issueTags?: string[]) => {
+  const handleListApprove = async (
+    flagId: string,
+    edits?: Partial<EditableFields>,
+    notes?: string,
+    issueTags?: string[],
+    matchedEdits?: { name?: string; brand?: string }
+  ) => {
     try {
       const data: Record<string, unknown> = { notes: notes || '' }
       if (edits) {
@@ -102,6 +111,8 @@ export default function CleanupQueuePage() {
         if (edits.price) data.price = parseFloat(edits.price)
       }
       if (issueTags && issueTags.length > 0) data.issue_tags = issueTags
+      if (matchedEdits?.name) data.matched_product_name = matchedEdits.name
+      if (matchedEdits?.brand) data.matched_product_brand = matchedEdits.brand
       await api.admin.flags.approve(flagId, data)
       setListFlags(prev => prev.filter(f => f.id !== flagId))
       loadListStats()
@@ -143,6 +154,17 @@ export default function CleanupQueuePage() {
     } catch (err) {
       console.error('Failed to dismiss:', err)
       setListError('Failed to dismiss flag')
+    }
+  }
+
+  const handleMergeDuplicate = async (flagId: string, keptProductId: string, notes?: string) => {
+    try {
+      await api.admin.flags.mergeDuplicate(flagId, { kept_product_id: keptProductId, notes })
+      setListFlags(prev => prev.filter(f => f.id !== flagId))
+      loadListStats()
+    } catch (err) {
+      console.error('Failed to merge duplicate:', err)
+      setListError('Failed to merge duplicate')
     }
   }
 
@@ -321,11 +343,13 @@ export default function CleanupQueuePage() {
               <p className="text-gray-700 text-lg font-medium">All caught up</p>
               <p className="text-gray-500 mt-1">
                 {activeTab === 'priority'
-                  ? 'No cross-dispensary matches found. Try the other tabs.'
+                  ? 'No cross-dispensary matches to link. Try the other tabs.'
                   : activeTab === 'cleanup'
-                  ? 'No quality issues found. Great job!'
+                  ? 'No dirty-data flags found. Great job!'
                   : activeTab === 'duplicates'
                   ? 'No same-dispensary duplicates found.'
+                  : activeTab === 'auto_linked'
+                  ? 'No auto-linked products to review. Check back after the next scraper run.'
                   : 'Every flag has been reviewed. Check back after the next scraper run.'}
               </p>
             </div>
@@ -336,10 +360,12 @@ export default function CleanupQueuePage() {
                   key={flag.id}
                   flag={flag}
                   selected={selectedFlagIds.includes(flag.id)}
+                  tabMode={activeTab}
                   onToggleSelect={handleToggleSelect}
                   onApprove={handleListApprove}
                   onReject={handleListReject}
                   onDismiss={handleListDismiss}
+                  onMergeDuplicate={handleMergeDuplicate}
                 />
               ))}
             </div>

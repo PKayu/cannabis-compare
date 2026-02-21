@@ -13,6 +13,8 @@ export interface ScraperFlag {
   original_name: string
   original_thc: number | null
   original_cbd: number | null
+  original_thc_content: string | null  // Plain-text display: "15.4%" or "396mg"
+  original_cbd_content: string | null
   original_weight: string | null
   original_price: number | null
   original_category: string | null
@@ -25,7 +27,7 @@ export interface ScraperFlag {
   confidence_score: number
   confidence_percent: string
   merge_reason: string | null
-  status: 'pending' | 'approved' | 'rejected' | 'dismissed' | 'merged'
+  status: 'pending' | 'approved' | 'rejected' | 'dismissed' | 'merged' | 'auto_merged'
   corrections: Record<string, any> | null
   issue_tags: string[] | null
   created_at: string

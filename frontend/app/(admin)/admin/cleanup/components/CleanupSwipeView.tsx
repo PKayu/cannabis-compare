@@ -29,7 +29,13 @@ export function CleanupSwipeView() {
     }
   }
 
-  const handleApprove = async (flagId: string, edits?: Partial<EditableFields>, notes?: string, issueTags?: string[]) => {
+  const handleApprove = async (
+    flagId: string,
+    edits?: Partial<EditableFields>,
+    notes?: string,
+    issueTags?: string[],
+    matchedEdits?: { name?: string; brand?: string }
+  ) => {
     try {
       const data: Record<string, unknown> = { notes: notes || '' }
       if (edits) {
@@ -42,6 +48,8 @@ export function CleanupSwipeView() {
         if (edits.price) data.price = parseFloat(edits.price)
       }
       if (issueTags && issueTags.length > 0) data.issue_tags = issueTags
+      if (matchedEdits?.name) data.matched_product_name = matchedEdits.name
+      if (matchedEdits?.brand) data.matched_product_brand = matchedEdits.brand
       await api.admin.flags.approve(flagId, data)
       moveToNext()
     } catch (err) {

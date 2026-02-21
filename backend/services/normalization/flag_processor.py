@@ -2,9 +2,11 @@
 Process and resolve ScraperFlags created by the scraper.
 
 Provides admin functionality to:
-- Approve merges (link flagged product to matched master)
-- Reject merges (create new master product from flagged data)
+- Approve merges (link flagged product to matched master) [legacy match_review]
+- Reject merges (create new master product from flagged data) [legacy match_review]
 - Dismiss bad imports (no product created)
+- Clean and activate dirty products [data_cleanup]
+- Delete garbage products [data_cleanup]
 - View and filter pending flags
 """
 from sqlalchemy.orm import Session
@@ -586,6 +588,179 @@ class ScraperFlagProcessor:
             "reviews_moved": reviews_moved,
             "watchlist_moved": watchlist_moved,
         }
+
+    @staticmethod
+    def clean_and_activate(
+        db: Session,
+        flag_id: str,
+        admin_id: str,
+        notes: str = "",
+        name: Optional[str] = None,
+        brand_name: Optional[str] = None,
+        product_type: Optional[str] = None,
+        thc_percentage: Optional[float] = None,
+        cbd_percentage: Optional[float] = None,
+        weight: Optional[str] = None,
+        price: Optional[float] = None,
+        issue_tags: Optional[List[str]] = None,
+    ) -> str:
+        """
+        Clean up a data_cleanup flag by applying edits to the linked product
+        and setting is_active=True.
+
+        Unlike approve_flag (which merges into a matched product), this edits
+        the product that was ALREADY CREATED and stored on matched_product_id.
+
+        Returns:
+            ID of the activated parent product
+        """
+        from models import ScraperFlag, Product, Brand, Price
+        from services.normalization.weight_parser import parse_weight
+
+        flag = db.query(ScraperFlag).filter(ScraperFlag.id == flag_id).first()
+        if not flag:
+            raise ValueError(f"ScraperFlag not found: {flag_id}")
+        if flag.status != "pending":
+            raise ValueError(f"Flag already resolved with status: {flag.status}")
+        if flag.flag_type != "data_cleanup":
+            raise ValueError(
+                f"clean_and_activate is only for data_cleanup flags, got: {flag.flag_type}"
+            )
+        if not flag.matched_product_id:
+            raise ValueError(f"Flag has no linked product: {flag_id}")
+
+        # Load the product that was created during scraping
+        product = db.query(Product).filter(
+            Product.id == flag.matched_product_id
+        ).first()
+        if not product:
+            raise ValueError(f"Linked product not found: {flag.matched_product_id}")
+
+        # Track corrections
+        overrides = {
+            "name": name, "brand_name": brand_name, "product_type": product_type,
+            "thc_percentage": thc_percentage, "cbd_percentage": cbd_percentage,
+            "weight": weight, "price": price,
+        }
+        corrections = _build_corrections(flag, overrides)
+        if corrections:
+            flag.corrections = corrections
+
+        # Apply edits to the parent product
+        if name is not None and name != product.name:
+            product.name = name
+            # Also update variant names to stay consistent
+            for variant in product.variants:
+                variant.name = name
+        if product_type is not None:
+            product.product_type = product_type
+        if thc_percentage is not None:
+            product.thc_percentage = thc_percentage
+        if cbd_percentage is not None:
+            product.cbd_percentage = cbd_percentage
+
+        # Handle brand change
+        if brand_name is not None:
+            existing_brand = product.brand
+            if not existing_brand or existing_brand.name.lower() != brand_name.lower():
+                brand = (
+                    db.query(Brand)
+                    .filter(Brand.name.ilike(brand_name))
+                    .first()
+                )
+                if not brand:
+                    brand = Brand(name=brand_name)
+                    db.add(brand)
+                    db.flush()
+                product.brand_id = brand.id
+
+        # Handle weight change on variants
+        if weight is not None:
+            weight_label, weight_g = parse_weight(weight)
+            for variant in product.variants:
+                variant.weight = weight_label
+                variant.weight_grams = weight_g
+
+        # Handle price update on existing price records
+        if price is not None and price > 0:
+            for variant in product.variants:
+                existing_prices = (
+                    db.query(Price)
+                    .filter(Price.product_id == variant.id)
+                    .all()
+                )
+                for p in existing_prices:
+                    p.update_price(price)
+
+        # Activate the product
+        product.is_active = True
+
+        # Resolve the flag
+        flag.status = "cleaned"
+        flag.resolved_by = admin_id
+        flag.resolved_at = datetime.utcnow()
+        flag.admin_notes = notes
+        if issue_tags:
+            flag.issue_tags = issue_tags
+
+        db.commit()
+
+        logger.info(
+            f"Cleaned and activated product '{product.name}' (id={product.id}) "
+            f"by admin {admin_id}"
+            f"{' with corrections' if corrections else ''}"
+        )
+
+        return product.id
+
+    @staticmethod
+    def delete_flagged_product(
+        db: Session,
+        flag_id: str,
+        admin_id: str,
+        notes: str = "",
+    ) -> None:
+        """
+        Delete the product linked to a data_cleanup flag (garbage data).
+
+        The product and its variants are deleted. The flag is kept with
+        status='dismissed' for analytics.
+        """
+        from models import ScraperFlag, Product
+
+        flag = db.query(ScraperFlag).filter(ScraperFlag.id == flag_id).first()
+        if not flag:
+            raise ValueError(f"ScraperFlag not found: {flag_id}")
+        if flag.status != "pending":
+            raise ValueError(f"Flag already resolved with status: {flag.status}")
+        if flag.flag_type != "data_cleanup":
+            raise ValueError(
+                f"delete_flagged_product is only for data_cleanup flags, got: {flag.flag_type}"
+            )
+
+        # Delete the product if it exists
+        if flag.matched_product_id:
+            product = db.query(Product).filter(
+                Product.id == flag.matched_product_id
+            ).first()
+            if product:
+                # Delete variants first
+                for variant in product.variants:
+                    db.delete(variant)
+                db.delete(product)
+
+        # Resolve the flag
+        flag.status = "dismissed"
+        flag.resolved_by = admin_id
+        flag.resolved_at = datetime.utcnow()
+        flag.admin_notes = notes or "Product deleted (garbage data)"
+        flag.matched_product_id = None  # Clear reference since product is gone
+
+        db.commit()
+
+        logger.info(
+            f"Deleted flagged product for flag '{flag.original_name}' by admin {admin_id}"
+        )
 
     @staticmethod
     def get_recent_resolutions(

@@ -14,7 +14,22 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 if __name__ == "__main__":
+    import subprocess
     import uvicorn
+
+    # Auto-migrate database on startup — ensures schema is always current,
+    # even on a fresh SQLite file (worktree, new clone, CI, etc.)
+    print("Running database migrations...")
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        capture_output=True, text=True
+    )
+    if result.stderr and "Running upgrade" in result.stderr:
+        print(result.stderr.strip())  # Show what migrations ran
+    elif result.returncode != 0:
+        print(f"Migration warning: {result.stderr.strip() or result.stdout.strip()}")
+    else:
+        print("Database schema up to date.")
 
     # Use environment variables for configuration (Docker compatibility)
     host = os.getenv("HOST", "0.0.0.0")

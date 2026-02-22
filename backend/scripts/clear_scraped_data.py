@@ -6,7 +6,6 @@ This script removes:
 - Prices
 - Brands
 - Promotions
-- ScraperRuns
 - ScraperFlags
 
 Preserves:
@@ -15,6 +14,8 @@ Preserves:
 - Watchlists (orphaned)
 - PriceAlerts (orphaned)
 - NotificationPreferences
+- Dispensaries  ← KEEP so scrapers can reference them after reset
+- ScraperRuns   ← KEEP so the admin scrapers health page still shows history
 """
 
 import sys
@@ -25,7 +26,7 @@ backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
 from database import SessionLocal
-from models import Product, Price, Brand, Promotion, ScraperRun, ScraperFlag
+from models import Product, Price, Brand, Promotion, ScraperFlag
 
 def clear_scraped_data():
     """Clear all scraped data from database."""
@@ -40,7 +41,6 @@ def clear_scraped_data():
         price_count = db.query(Price).count()
         brand_count = db.query(Brand).count()
         promo_count = db.query(Promotion).count()
-        run_count = db.query(ScraperRun).count()
         flag_count = db.query(ScraperFlag).count()
 
         print(f"Current database state:")
@@ -48,8 +48,10 @@ def clear_scraped_data():
         print(f"   Prices: {price_count}")
         print(f"   Brands: {brand_count}")
         print(f"   Promotions: {promo_count}")
-        print(f"   ScraperRuns: {run_count}")
         print(f"   ScraperFlags: {flag_count}")
+        print()
+        print(f"Preserved (not touched):")
+        print(f"   Dispensaries, ScraperRuns, Users, Reviews, Watchlists, PriceAlerts, NotificationPreferences")
         print()
 
         if product_count == 0 and price_count == 0:
@@ -79,22 +81,17 @@ def clear_scraped_data():
         deleted = db.query(Promotion).delete()
         print(f"   [OK] Deleted {deleted} Promotion records")
 
-        # 6. Delete ScraperRuns (execution history)
-        deleted = db.query(ScraperRun).delete()
-        print(f"   [OK] Deleted {deleted} ScraperRun records")
-
         # Commit all deletions
         db.commit()
 
         print()
         print("[SUCCESS] Database cleared successfully!")
         print()
-        print("Note: User-generated content preserved:")
-        print("   - Users")
-        print("   - Reviews (orphaned - no product references)")
-        print("   - Watchlists (orphaned)")
-        print("   - PriceAlerts (orphaned)")
-        print("   - NotificationPreferences")
+        print("Preserved:")
+        print("   - Dispensaries  (scrapers reference these)")
+        print("   - ScraperRuns   (admin scrapers health page)")
+        print("   - Users + NotificationPreferences")
+        print("   - Reviews, Watchlists, PriceAlerts (orphaned but kept)")
         print()
 
     except Exception as e:

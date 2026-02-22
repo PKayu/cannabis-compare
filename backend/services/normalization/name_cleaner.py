@@ -19,8 +19,9 @@ logger = logging.getLogger(__name__)
 # Ordered list of (pattern, replacement) tuples.
 # Applied sequentially so earlier removals can expose later patterns.
 _CLEANING_RULES: list[tuple[str, str]] = [
-    # "Add 800mg to cart", "Add to cart", "Add 1g to cart"
-    (r'[Aa]dd\s+\d*\.?\d*\s*(?:mg|g|oz|ml)?\s*to\s+cart', ''),
+    # "Add to cart", "Add N/A to cart", "Add 1g to cart", "Add 800mg to cart"
+    # The optional (?:\S+\s+)? captures any intermediate word (N/A, quantity, etc.)
+    (r'[Aa]dd\s+(?:\S+\s+)?to\s+cart', ''),
 
     # Repeated "mg" tokens: "mg mg mg", "300mg mg mg", "Fruit of mg mg"
     # This also catches "of mg mg" artifacts from edible product descriptions

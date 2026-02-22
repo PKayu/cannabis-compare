@@ -18,14 +18,17 @@ import re
 
 logger = logging.getLogger(__name__)
 
-# Patterns that indicate junk survived the name cleaner
+# Patterns that indicate junk survived the name cleaner.
+# Only checked against the CLEANED name (after clean_product_name() ran),
+# so these catch junk the cleaner couldn't remove.
 _JUNK_PATTERNS = [
-    re.compile(r'<[^>]+>'),                  # HTML tags
-    re.compile(r'&[a-z]+;', re.IGNORECASE),  # HTML entities
-    re.compile(r'[^\x20-\x7E]'),             # Non-printable ASCII
-    re.compile(r'\s{3,}'),                    # Excessive whitespace (3+)
-    re.compile(r'add\s+to\s+cart', re.IGNORECASE),
-    re.compile(r'\$\d+\.?\d*'),              # Stray prices
+    re.compile(r'<[^>]+>'),                   # HTML tags
+    re.compile(r'&[a-z]+;', re.IGNORECASE),   # HTML entities
+    re.compile(r'[\x00-\x1F\x7F]'),           # Actual control characters (NUL, DEL, etc.)
+    re.compile(r'\s{3,}'),                     # Excessive whitespace (3+) — cleaner normalizes this
+    # "Add to cart", "Add N/A to cart", "Add 1g to cart" — broader pattern
+    re.compile(r'add\s+(?:\S+\s+)?to\s+cart', re.IGNORECASE),
+    re.compile(r'\$\d+\.?\d*'),               # Stray prices
     re.compile(r'\d+\s*%\s*off', re.IGNORECASE),
 ]
 
@@ -59,8 +62,8 @@ def check_data_quality(
     if scraped.price is None or scraped.price <= 0:
         issues.append("missing_price")
 
-    # 3. Unknown/missing brand
-    if _is_unknown_brand(scraped.brand):
+    # 3. Unknown/missing brand (skip for hardware — accessories don't require a cannabis brand)
+    if scraped.category != "hardware" and _is_unknown_brand(scraped.brand):
         issues.append("unknown_brand")
 
     is_dirty = len(issues) > 0
@@ -77,18 +80,15 @@ def _has_junk_in_name(raw_name: str, cleaned_name: str) -> bool:
     """
     Check if the name still contains junk after cleaning.
 
-    Two checks:
-    1. If cleaning removed a large portion (>30%), there was significant junk
-    2. If known junk patterns still exist in the cleaned name
+    Only checks whether known junk patterns remain in the cleaned name.
+
+    Note: a reduction-ratio check (raw vs cleaned length) was removed because
+    it produced false positives whenever the cleaner correctly stripped
+    Curaleaf-specific artifacts ("mg Wellness", "Add 30g to cart", etc.).
+    If the cleaner did its job, the stored name is fine — no flag needed.
     """
     if not raw_name or not cleaned_name:
         return False
-
-    # Check if cleaning removed a large portion (indicates heavy junk)
-    if len(raw_name) > 0:
-        reduction_ratio = 1 - (len(cleaned_name) / len(raw_name))
-        if reduction_ratio > 0.3:  # >30% of name was junk
-            return True
 
     # Check if known junk patterns remain in the cleaned name
     for pattern in _JUNK_PATTERNS:

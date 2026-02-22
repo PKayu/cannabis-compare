@@ -29,11 +29,12 @@ from routers import (
 # The imported classes are not used directly - the decorator registers them
 # OLD HTTP-based scraper - replaced with Playwright version below
 # from services.scrapers.wholesome_co_scraper import WholesomeCoScraper  # noqa: F401
-from services.scrapers.iheartjane_scraper import IHeartJaneScraper  # noqa: F401
+# iHeartJane + Beehive: not pointed at a live website yet — disabled to reduce noise
+# from services.scrapers.iheartjane_scraper import IHeartJaneScraper  # noqa: F401
 from services.scrapers.playwright_scraper import (  # noqa: F401
     PlaywrightScraper,
     WholesomeCoScraper as WholesomeCoPlaywrightScraper,
-    BeehiveScraper
+    # BeehiveScraper  # not pointed at a live website yet
 )
 from services.scrapers.curaleaf_scraper import (  # noqa: F401
     CuraleafScraper,

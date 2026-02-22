@@ -464,7 +464,9 @@ class CuraleafScraper(PlaywrightScraper):
                             category = 'vaporizer';
                         } else if (lowerText.includes('infusion') || lowerText.includes('gummy') ||
                                    lowerText.includes('edible') || lowerText.includes('chocolate') ||
-                                   lowerText.includes('x-bites')) {
+                                   lowerText.includes('x-bites') || lowerText.includes('chewable') ||
+                                   lowerText.includes('gummies') || lowerText.includes('capsule') ||
+                                   lowerText.includes('tablet')) {
                             category = 'edible';
                         } else if (lowerText.includes('concentrate') || lowerText.includes('rosin') ||
                                    lowerText.includes('resin')) {
@@ -501,7 +503,12 @@ class CuraleafScraper(PlaywrightScraper):
                             'Boojum', 'Hoodoo', 'Riverside Farm', 'Hi Variety',
                             'Surplus', 'Element', 'Cresco', 'Bazelet',
                             'Floweer', 'Plus', 'Loud', 'Connected',
-                            'Stiiizy', 'Select', 'RYTHM', 'Justice'
+                            'Stiiizy', 'RYTHM', 'Justice', 'Moxie',
+                            // Utah-specific craft brands
+                            'San Juan Squish Co.', 'San Juan Squish', 'HighWire',
+                            // Hardware / accessory brands
+                            'Rokin', 'Puffco', 'PAX', 'DynaVap', 'Storz & Bickel',
+                            'Volcano', 'Yocan', 'Boundless', 'Arizer',
                         ];
 
                         let brand = null;
@@ -610,9 +617,15 @@ class CuraleafScraper(PlaywrightScraper):
                         name = name.replace(/\\$\\d+\\.\\d{2}/g, ' ');
                         name = name.replace(/\\d+%/g, ' ');  // Remove discount percentages
 
-                        // Remove "Add to cart" and similar
-                        name = name.replace(/Add to cart/gi, '');
-                        name = name.replace(/BUY \\(\\d+\\)[^+]+/g, ' ');  // Remove promos like "BUY (4) SELECT..."
+                        // Remove "Add to cart" variants:
+                        // "Add to cart", "Add N/A to cart", "Add 1g to cart", "Add 30g to cart"
+                        name = name.replace(/Add\\s+(?:\\S+\\s+)?to\\s+cart/gi, '');
+
+                        // Remove promotional / badge text
+                        name = name.replace(/VALUE VAULT[^\\n]*/gi, '');    // "VALUE VAULT - BOGO FOR..."
+                        name = name.replace(/BOGO\\s+FOR[^\\n]*/gi, '');    // "BOGO FOR Assorted Items!"
+                        name = name.replace(/\\d+\\s*%\\s*OFF[^\\n]*/gi, ''); // "30% OFF ALL..."
+                        name = name.replace(/BUY \\(\\d+\\)[^+]+/g, ' ');   // "BUY (4) SELECT..."
 
                         // Remove the brand we found from the name (if found)
                         if (brand) {

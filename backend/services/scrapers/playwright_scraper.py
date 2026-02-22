@@ -696,14 +696,14 @@ class WholesomeCoScraper(PlaywrightScraper):
         return products
 
 
-@register_scraper(
-    id="beehive-playwright",
-    name="Beehive Farmacy (Playwright)",
-    dispensary_name="Beehive Farmacy",
-    dispensary_location="Salt Lake City, UT",
-    schedule_minutes=120,
-    description="Playwright-based scraper for Beehive Farmacy GraphQL menu"
-)
+# @register_scraper(  # Disabled: not pointed at a live website yet
+#     id="beehive-playwright",
+#     name="Beehive Farmacy (Playwright)",
+#     dispensary_name="Beehive Farmacy",
+#     dispensary_location="Salt Lake City, UT",
+#     schedule_minutes=120,
+#     description="Playwright-based scraper for Beehive Farmacy GraphQL menu"
+# )
 class BeehiveScraper(PlaywrightScraper):
     """
     Specialized scraper for Beehive Farmacy

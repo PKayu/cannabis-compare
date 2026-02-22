@@ -144,7 +144,11 @@
       "Bash(.db)",
       "Bash(.sqlite \")",
       "Bash(\"D:/Projects/cannabis compare/backend/venv/Scripts/python.exe\" -c:*)",
-      "Bash(\"D:/Projects/cannabis compare/backend/venv/Scripts/python.exe\" -m alembic upgrade head)"
+      "Bash(\"D:/Projects/cannabis compare/backend/venv/Scripts/python.exe\" -m alembic upgrade head)",
+      "Bash(wc:*)",
+      "Bash(venv/Scripts/alembic.exe history:*)",
+      "Bash(venv/Scripts/alembic.exe upgrade:*)",
+      "Bash(venv/Scripts/python:*)"
     ]
   },
   "hooks": {

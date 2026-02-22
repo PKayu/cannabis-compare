@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.exc import OperationalError
 
 
 # revision identifiers, used by Alembic.
@@ -18,11 +19,19 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _safe_create_index(name, table, columns, **kw):
+    """Create index if it doesn't already exist (SQLite compatibility)."""
+    try:
+        op.create_index(name, table, columns, **kw)
+    except OperationalError:
+        pass
+
+
 def upgrade() -> None:
     """Add indexes for search performance optimization"""
 
     # Index for product name text search (case-insensitive LIKE queries)
-    op.create_index(
+    _safe_create_index(
         'ix_products_name_lower',
         'products',
         [sa.text('LOWER(name)')],
@@ -30,21 +39,21 @@ def upgrade() -> None:
     )
 
     # Index for product type filtering
-    op.create_index(
+    _safe_create_index(
         'ix_products_product_type',
         'products',
         ['product_type']
     )
 
     # Index for THC percentage range queries
-    op.create_index(
+    _safe_create_index(
         'ix_products_thc_percentage',
         'products',
         ['thc_percentage']
     )
 
     # Index for CBD percentage range queries
-    op.create_index(
+    _safe_create_index(
         'ix_products_cbd_percentage',
         'products',
         ['cbd_percentage']
@@ -54,35 +63,35 @@ def upgrade() -> None:
     # Skipping as it's created by foreign key constraint
 
     # Index for price amount for sorting
-    op.create_index(
+    _safe_create_index(
         'ix_prices_amount',
         'prices',
         ['amount']
     )
 
     # Index for in_stock filtering
-    op.create_index(
+    _safe_create_index(
         'ix_prices_in_stock',
         'prices',
         ['in_stock']
     )
 
     # Composite index for product + in_stock queries
-    op.create_index(
+    _safe_create_index(
         'ix_prices_product_id_in_stock',
         'prices',
         ['product_id', 'in_stock']
     )
 
     # Index for promotion lookups by dispensary
-    op.create_index(
+    _safe_create_index(
         'ix_promotions_dispensary_active',
         'promotions',
         ['dispensary_id', 'is_active']
     )
 
     # Index for promotion date filtering
-    op.create_index(
+    _safe_create_index(
         'ix_promotions_dates',
         'promotions',
         ['start_date', 'end_date']

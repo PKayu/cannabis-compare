@@ -45,6 +45,21 @@ _CLEANING_RULES: list[tuple[str, str]] = [
     (r'&nbsp;', ' '),
     (r'&lt;', '<'),
     (r'&gt;', '>'),
+
+    # --- Trailing junk from textContent concatenation (Curaleaf-specific) ---
+    # Combined "The mg" suffix (e.g. "Patch 150mgThe mg" → "Patch 150mg")
+    (r'\s*\bThe\s+mg\s*$', ''),
+    # "The" concatenated directly to word (e.g. "100mgThe" → "100mg")
+    # \b won't work here because both sides are word chars — use lookbehind instead
+    (r'(?<=[a-zA-Z])The\s*$', ''),
+    # "The" with preceding whitespace (e.g. "RSO Stick Salve The" → "RSO Stick Salve")
+    (r'\s+The\s*$', ''),
+    # Department label appended (e.g. "Dragonbalm Balm 300mg Wellness" → "Dragonbalm Balm 300mg")
+    (r'\s*\bWellness\s*$', ''),
+    # Sale badge "off" — handles spaced ("Vapor Rub off") and concatenated ("Creamoff")
+    (r'\s*off\s*$', ''),
+    # Bare trailing "mg" left after the above patterns stripped their context
+    (r'\s+mg\s*$', ''),
 ]
 
 # After all removals, collapse any runs of whitespace and strip

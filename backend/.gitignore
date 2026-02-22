@@ -15,6 +15,9 @@ venv/
 *.log
 logs/
 
+# Windows reserved filenames (prevent git failures)
+nul
+
 # IDE
 .vscode/
 .idea/

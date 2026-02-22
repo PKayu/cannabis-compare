@@ -136,7 +136,39 @@
       "Bash(\"C:/Program Files/Python312/python.exe\" -m venv .venv)",
       "Bash(\"../.venv/Scripts/python.exe\" -m pip install --upgrade pip)",
       "Bash(\"../.venv/Scripts/python.exe\" -m playwright install chromium)",
-      "Bash(\"../.venv/Scripts/python.exe\" -m playwright install --help)"
+      "Bash(\"../.venv/Scripts/python.exe\" -m playwright install --help)",
+      "mcp__Claude_Preview__preview_start",
+      "mcp__mcp-registry__search_mcp_registry",
+      "Bash(/c/Python313/python:*)",
+      "Bash(Select-Object -First 5)",
+      "Bash(.db)",
+      "Bash(.sqlite \")",
+      "Bash(\"D:/Projects/cannabis compare/backend/venv/Scripts/python.exe\" -c:*)",
+      "Bash(\"D:/Projects/cannabis compare/backend/venv/Scripts/python.exe\" -m alembic upgrade head)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c \"import sys,json,os;d=json.load(sys.stdin);fp=d.get('tool_input',{}).get('file_path','');bn=os.path.basename(fp);b=bn.startswith('.env') and not bn.endswith('.example');print('Blocked: editing '+bn+' is protected. Edit .env.example for templates.') if b else None;sys.exit(2 if b else 0)\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c \"import sys,json,subprocess;d=json.load(sys.stdin);fp=d.get('tool_input',{}).get('file_path','');sys.exit(0) if not(fp.endswith('.ts') or fp.endswith('.tsx')) else None;r=subprocess.run(['npx','tsc','--noEmit','--pretty'],cwd='D:/Projects/cannabis compare/frontend',capture_output=True,text=True);print(r.stdout+r.stderr) if r.returncode!=0 else None;sys.exit(r.returncode)\""
+          }
+        ]
+      }
     ]
   },
   "mcpServers": {
@@ -191,6 +223,28 @@
         "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}"
       },
       "description": "Supabase project access for querying, logs, and migrations"
+    },
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+      },
+      "description": "GitHub PR review, issue tracking, code search, and repository management"
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest",
+        "--headless",
+        "--browser",
+        "chromium"
+      ],
+      "description": "Browser automation for e2e test debugging and scraper selector verification"
     }
   }
 }

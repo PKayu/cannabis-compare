@@ -154,13 +154,20 @@ class ConfidenceScorer:
         )
         name_for_matching = clean_name or junk_cleaned
 
-        # Find best match using clean name
-        best_match, confidence, match_type = ProductMatcher.find_best_match(
-            scraped_name=name_for_matching,
-            scraped_brand=scraped_product.brand,
-            candidates=candidates,
-            scraped_thc=scraped_product.thc_percentage
-        )
+        # Hardware guard: skip cannabis product matching entirely.
+        # Hardware items (Puffco, Volcano, grinders, etc.) must never fuzzy-match
+        # against cannabis strains — their names would produce false high-confidence
+        # matches and corrupt the product catalog. Always create as new products.
+        if scraped_product.category == "hardware":
+            best_match, confidence, match_type = None, 0.0, "new_product"
+        else:
+            # Find best match using clean name
+            best_match, confidence, match_type = ProductMatcher.find_best_match(
+                scraped_name=name_for_matching,
+                scraped_brand=scraped_product.brand,
+                candidates=candidates,
+                scraped_thc=scraped_product.thc_percentage
+            )
 
         if match_type == "auto_merge" and best_match:
             # AUTO-MERGE: Create/find variant under the matched parent

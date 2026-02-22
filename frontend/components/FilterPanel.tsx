@@ -77,6 +77,7 @@ export default function FilterPanel({ filters, onChange }: FilterPanelProps) {
           <option value="topical">Topical</option>
           <option value="tincture">Tincture</option>
           <option value="pre-roll">Pre-Roll</option>
+          <option value="hardware">Hardware</option>
         </select>
       </div>
 

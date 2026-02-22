@@ -5,6 +5,8 @@ import os
 from pydantic_settings import BaseSettings
 from typing import Optional
 
+_backend_dir = os.path.dirname(os.path.abspath(__file__))
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
 
@@ -38,8 +40,15 @@ class Settings(BaseSettings):
     alert_check_interval_hours: int = 1
 
     class Config:
-        env_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+        env_file = os.path.join(_backend_dir, ".env")
         case_sensitive = False
+
+    def model_post_init(self, __context):
+        """Resolve relative SQLite paths to the backend directory."""
+        if self.database_url.startswith("sqlite:///./"):
+            relative = self.database_url.replace("sqlite:///./", "")
+            absolute = os.path.join(_backend_dir, relative)
+            object.__setattr__(self, "database_url", f"sqlite:///{absolute}")
 
 # Create settings instance
 settings = Settings()

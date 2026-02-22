@@ -259,9 +259,21 @@ class PlaywrightScraper(BaseScraper):
             "edible": "edible",
             "gummy": "edible",
             "topical": "topical",
+            "lotion": "topical",
             "cream": "topical",
+            "balm": "topical",
+            "salve": "topical",
+            "ointment": "topical",
+            "patch": "topical",
+            "transdermal": "topical",
+            "gel": "topical",
+            "rub": "topical",
+            "stick": "topical",
             "tincture": "tincture",
             "oil": "tincture",
+            "drops": "tincture",
+            "sublingual": "tincture",
+            "elixir": "tincture",
         }
 
         return category_map.get(category_lower, "other")
@@ -587,12 +599,26 @@ class WholesomeCoScraper(PlaywrightScraper):
                             category = 'edible';
                         } else if (lowerText.includes('concentrate') || lowerText.includes('rosin') || lowerText.includes('badder') || lowerText.includes('shatter') || lowerText.includes('diamond')) {
                             category = 'concentrate';
-                        } else if (lowerText.includes('tincture')) {
+                        } else if (lowerText.includes('tincture') || lowerText.includes('drops') ||
+                                   lowerText.includes('sublingual') || lowerText.includes('elixir')) {
                             category = 'tincture';
-                        } else if (lowerText.includes('topical') || lowerText.includes('lotion') || lowerText.includes('balm')) {
+                        } else if (lowerText.includes('topical') || lowerText.includes('lotion') ||
+                                   lowerText.includes('balm') || lowerText.includes('cream') ||
+                                   lowerText.includes('salve') || lowerText.includes('ointment') ||
+                                   lowerText.includes('patch') || lowerText.includes('transdermal') ||
+                                   lowerText.includes('gel') || lowerText.includes('rub') ||
+                                   lowerText.includes('stick')) {
                             category = 'topical';
                         } else if (lowerText.includes('pre-roll') || lowerText.includes('preroll')) {
                             category = 'pre-roll';
+                        } else if (lowerText.includes('puffco') || lowerText.includes('volcano') ||
+                                   lowerText.includes('grinder') || lowerText.includes('glass') ||
+                                   lowerText.includes('accessory') || lowerText.includes('accessories') ||
+                                   lowerText.includes('pipe') || lowerText.includes('bong') ||
+                                   lowerText.includes('rig') || lowerText.includes('roller') ||
+                                   lowerText.includes('vaporizer device') || lowerText.includes('battery') ||
+                                   lowerText.includes('storz') || lowerText.includes('bickel')) {
+                            category = 'hardware';
                         }
 
                         // Check stock status and extract urgency messages

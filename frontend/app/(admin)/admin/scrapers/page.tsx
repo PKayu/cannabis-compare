@@ -49,9 +49,16 @@ export default function ScrapersPage() {
       setHealth(healthRes.data)
       setRuns(runsRes.data)
       setLoadError(null)
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load scraper data:', err)
-      setLoadError('Could not load scraper data — the database may be empty or the backend may be down. Restart the backend to fix this.')
+      const status = err?.response?.status
+      if (status === 401 || status === 403) {
+        setLoadError('Authentication required — please log in as an admin to view scraper data.')
+      } else if (!err?.response) {
+        setLoadError('Cannot reach the backend — is it running on port 8000?')
+      } else {
+        setLoadError(`Could not load scraper data (${status ?? 'unknown error'}) — the database may be empty or the backend may be down.`)
+      }
     } finally {
       setLoading(false)
     }

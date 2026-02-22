@@ -70,7 +70,7 @@ class CuraleafScraper(PlaywrightScraper):
         "concentrates",
         "tinctures",
         "topicals",
-        # "accessories",  # Skip accessories - not cannabis products
+        "accessories",  # Hardware/devices — mapped to "hardware" category after extraction
     ]
 
     async def scrape_products(self) -> List[ScrapedProduct]:
@@ -119,6 +119,13 @@ class CuraleafScraper(PlaywrightScraper):
                         logger.info(f"  Extracting products...")
                         category_products = await self._extract_products(page)
                         logger.info(f"  Found {len(category_products)} products in {category}")
+
+                        # The JS extraction infers category from product text keywords, not the page URL.
+                        # Override to "hardware" for the accessories page so these products don't
+                        # compete with cannabis products in confidence matching.
+                        if category == "accessories":
+                            for p in category_products:
+                                p.category = "hardware"
 
                         all_products.extend(category_products)
 
@@ -462,9 +469,15 @@ class CuraleafScraper(PlaywrightScraper):
                         } else if (lowerText.includes('concentrate') || lowerText.includes('rosin') ||
                                    lowerText.includes('resin')) {
                             category = 'concentrate';
-                        } else if (lowerText.includes('tincture')) {
+                        } else if (lowerText.includes('tincture') || lowerText.includes('drops') ||
+                                   lowerText.includes('sublingual') || lowerText.includes('elixir')) {
                             category = 'tincture';
-                        } else if (lowerText.includes('topical')) {
+                        } else if (lowerText.includes('topical') || lowerText.includes('lotion') ||
+                                   lowerText.includes('balm') || lowerText.includes('cream') ||
+                                   lowerText.includes('salve') || lowerText.includes('ointment') ||
+                                   lowerText.includes('patch') || lowerText.includes('transdermal') ||
+                                   lowerText.includes('gel') || lowerText.includes('rub') ||
+                                   lowerText.includes('stick')) {
                             category = 'topical';
                         } else if (lowerText.includes('pre-roll') || lowerText.includes('preroll')) {
                             category = 'pre-roll';

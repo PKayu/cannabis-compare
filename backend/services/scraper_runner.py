@@ -161,10 +161,8 @@ class ScraperRunner:
                         candidates=candidates
                     )
 
-                    if action == "flagged_review":
+                    if action == "new_product_flagged":
                         flags_created += 1
-                        savepoint.commit()  # Commit the flag creation
-                        continue  # Don't create price for flagged products
 
                     if product_id:
                         product = self.db.query(Product).filter(

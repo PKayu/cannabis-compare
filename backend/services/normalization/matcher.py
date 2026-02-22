@@ -1,10 +1,9 @@
 """
 Fuzzy matching and confidence scoring for product normalization.
 
-Implements confidence thresholds from PRD section 4.1:
+Confidence thresholds:
 - >90%: Auto-merge to existing product
-- 60-90%: Flagged for admin review
-- <60%: Create new product entry
+- <90%: Create new product entry (data quality checked separately)
 """
 from rapidfuzz import fuzz
 from typing import Tuple, Optional, List
@@ -17,10 +16,9 @@ logger = logging.getLogger(__name__)
 class ProductMatcher:
     """Matches scraped products to existing master products using fuzzy matching"""
 
-    # Confidence thresholds (PRD section 4.1)
+    # Confidence threshold
     AUTO_MERGE_THRESHOLD = 0.90     # >90% = automatic merge
-    REVIEW_THRESHOLD = 0.60         # 60-90% = flag for review
-    # <60% = create new entry
+    # <90% = create new product (data quality checked separately)
 
     # Weights for scoring components
     # THC removed from scoring — mg vs % unit ambiguity makes it unreliable
@@ -52,7 +50,7 @@ class ProductMatcher:
         Returns:
             Tuple of (confidence_score, match_type)
             - confidence_score: 0.0 to 1.0
-            - match_type: "auto_merge" | "flagged_review" | "new_product"
+            - match_type: "auto_merge" | "new_product"
         """
         # Normalize names for comparison
         normalized_scraped_name = cls.normalize_product_name(scraped_name)
@@ -83,11 +81,9 @@ class ProductMatcher:
             thc_similarity * cls.THC_WEIGHT
         )
 
-        # Determine match type based on thresholds
+        # Determine match type based on threshold
         if confidence >= cls.AUTO_MERGE_THRESHOLD:
             match_type = "auto_merge"
-        elif confidence >= cls.REVIEW_THRESHOLD:
-            match_type = "flagged_review"
         else:
             match_type = "new_product"
 
@@ -222,7 +218,5 @@ class ProductMatcher:
         """Get human-readable description of confidence level"""
         if confidence >= cls.AUTO_MERGE_THRESHOLD:
             return f"High confidence ({confidence:.0%}) - Auto-merge"
-        elif confidence >= cls.REVIEW_THRESHOLD:
-            return f"Medium confidence ({confidence:.0%}) - Needs review"
         else:
-            return f"Low confidence ({confidence:.0%}) - New product"
+            return f"Below threshold ({confidence:.0%}) - New product"

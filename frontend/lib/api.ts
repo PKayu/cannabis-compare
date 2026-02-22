@@ -156,6 +156,7 @@ export const api = {
         sort_by?: 'confidence' | 'created_at'
         sort_order?: 'asc' | 'desc'
         include_auto_merged?: boolean
+        flag_type?: 'match_review' | 'data_cleanup'
       }) => apiClient.get('/api/admin/flags/pending', { params }),
       stats: () => apiClient.get('/api/admin/flags/stats'),
       approve: (flagId: string, data?: {
@@ -171,11 +172,20 @@ export const api = {
       }) => apiClient.post(`/api/admin/flags/reject/${flagId}`, data || {}),
       dismiss: (flagId: string, data?: { notes?: string; issue_tags?: string[] }) =>
         apiClient.post(`/api/admin/flags/dismiss/${flagId}`, data || {}),
+      clean: (flagId: string, data?: {
+        notes?: string; name?: string; brand_name?: string; product_type?: string;
+        thc_percentage?: number | null; cbd_percentage?: number | null;
+        weight?: string; price?: number | null; issue_tags?: string[];
+      }) => apiClient.post(`/api/admin/flags/clean/${flagId}`, data || {}),
+      deleteProduct: (flagId: string, data?: { notes?: string }) =>
+        apiClient.post(`/api/admin/flags/delete-product/${flagId}`, data || {}),
+      rejectAutoMerge: (flagId: string, data?: { notes?: string }) =>
+        apiClient.post(`/api/admin/flags/reject-auto-merge/${flagId}`, data || {}),
       mergeDuplicate: (flagId: string, data: { kept_product_id: string; notes?: string }) =>
         apiClient.post(`/api/admin/flags/merge-duplicate/${flagId}`, data),
       bulkAction: (payload: {
         flag_ids: string[]
-        action: 'approve' | 'reject' | 'dismiss'
+        action: 'approve' | 'reject' | 'dismiss' | 'clean' | 'delete_product' | 'reject_auto_merge'
         admin_notes?: string
       }) => apiClient.post('/api/admin/flags/bulk-action', payload),
       analytics: (days?: number) =>

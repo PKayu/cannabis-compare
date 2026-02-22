@@ -18,14 +18,30 @@ export function CleanupSwipeView() {
   const loadFlags = async () => {
     setLoading(true)
     try {
-      const response = await api.admin.flags.pending({ limit: 50 })
-      setFlags(response.data)
+      // Default to data_cleanup flags first, then fall back to all pending
+      const response = await api.admin.flags.pending({ flag_type: 'data_cleanup', limit: 50 })
+      let data = response.data
+      if (!data || data.length === 0) {
+        // No cleanup flags — load legacy review flags
+        const fallback = await api.admin.flags.pending({ flag_type: 'match_review', limit: 50 })
+        data = fallback.data
+      }
+      setFlags(data || [])
       setError(null)
     } catch (err) {
       console.error('Failed to load flags:', err)
       setError('Failed to load pending flags')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const moveToNext = () => {
+    if (currentIndex < flags.length - 1) {
+      setCurrentIndex(currentIndex + 1)
+    } else {
+      loadFlags()
+      setCurrentIndex(0)
     }
   }
 
@@ -91,13 +107,32 @@ export function CleanupSwipeView() {
     }
   }
 
-  const moveToNext = () => {
-    if (currentIndex < flags.length - 1) {
-      setCurrentIndex(currentIndex + 1)
-    } else {
-      // Reload flags when reaching the end
-      loadFlags()
-      setCurrentIndex(0)
+  const handleCleanAndActivate = async (flagId: string, edits: Partial<EditableFields>, notes?: string, issueTags?: string[]) => {
+    try {
+      const data: Record<string, unknown> = { notes: notes || '' }
+      if (edits.name) data.name = edits.name
+      if (edits.brand_name) data.brand_name = edits.brand_name
+      if (edits.product_type) data.product_type = edits.product_type
+      if (edits.thc_percentage) data.thc_percentage = edits.thc_percentage
+      if (edits.cbd_percentage) data.cbd_percentage = edits.cbd_percentage
+      if (edits.weight) data.weight = edits.weight
+      if (edits.price) data.price = edits.price
+      if (issueTags && issueTags.length > 0) data.issue_tags = issueTags
+      await api.admin.flags.clean(flagId, data)
+      moveToNext()
+    } catch (err) {
+      console.error('Failed to clean and activate:', err)
+      setError('Failed to clean and activate product')
+    }
+  }
+
+  const handleDeleteProduct = async (flagId: string, notes?: string) => {
+    try {
+      await api.admin.flags.deleteProduct(flagId, { notes: notes || '' })
+      moveToNext()
+    } catch (err) {
+      console.error('Failed to delete product:', err)
+      setError('Failed to delete product')
     }
   }
 
@@ -130,6 +165,7 @@ export function CleanupSwipeView() {
   }
 
   const currentFlag = flags[currentIndex]
+  const isDataCleanup = currentFlag?.flag_type === 'data_cleanup'
 
   return (
     <div>
@@ -153,15 +189,22 @@ export function CleanupSwipeView() {
       {currentFlag && (
         <FlagCard
           flag={currentFlag}
+          tabMode={isDataCleanup ? 'data_cleanup' : 'legacy_review'}
           onApprove={handleApprove}
           onReject={handleReject}
           onDismiss={handleDismiss}
+          onCleanAndActivate={handleCleanAndActivate}
+          onDeleteProduct={handleDeleteProduct}
         />
       )}
 
       {/* Navigation Hints */}
       <div className="mt-4 text-center text-sm text-gray-500">
-        <p>Review the product data and choose an action above</p>
+        <p>
+          {isDataCleanup
+            ? 'Edit the product data and Save & Activate, or Delete if garbage'
+            : 'Review the product data and choose an action above'}
+        </p>
       </div>
     </div>
   )

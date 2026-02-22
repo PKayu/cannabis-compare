@@ -136,19 +136,24 @@ async def get_scraper_health(db: Session = Depends(get_db)):
     results = []
 
     for sid, config in all_scrapers.items():
-        runs = db.query(ScraperRun).filter(
-            ScraperRun.scraper_id == sid,
-            ScraperRun.started_at >= seven_days_ago
-        ).all()
+        # Wrap DB queries so a missing/empty table (e.g. fresh SQLite after a DB
+        # clear) returns zero metrics rather than crashing with HTTP 500.
+        try:
+            runs = db.query(ScraperRun).filter(
+                ScraperRun.scraper_id == sid,
+                ScraperRun.started_at >= seven_days_ago
+            ).all()
+            last_run = db.query(ScraperRun).filter(
+                ScraperRun.scraper_id == sid
+            ).order_by(desc(ScraperRun.started_at)).first()
+        except Exception:
+            runs = []
+            last_run = None
 
         total = len(runs)
         successful = sum(1 for r in runs if r.status == "success")
         failed = sum(1 for r in runs if r.status == "error")
         durations = [r.duration_seconds for r in runs if r.duration_seconds is not None]
-
-        last_run = db.query(ScraperRun).filter(
-            ScraperRun.scraper_id == sid
-        ).order_by(desc(ScraperRun.started_at)).first()
 
         results.append(ScraperHealthResponse(
             scraper_id=sid,

@@ -25,7 +25,7 @@ class TestProductMatcher:
         assert match_type == "auto_merge"
 
     def test_similar_name_auto_merge(self):
-        """Similar names with same brand should auto-merge"""
+        """Similar names with same brand should auto-merge or be new product"""
         score, match_type = ProductMatcher.score_match(
             scraped_name="GG4 (Gorilla Glue #4)",
             master_name="Gorilla Glue #4",
@@ -35,9 +35,9 @@ class TestProductMatcher:
             master_thc=24.5
         )
 
-        # Should be high but might be flagged depending on exact score
+        # Should be high — only two outcomes now: auto_merge or new_product
         assert score >= 0.60
-        assert match_type in ["auto_merge", "flagged_review"]
+        assert match_type in ["auto_merge", "new_product"]
 
     def test_different_brand_lowers_score(self):
         """Different brand should lower confidence score"""
@@ -69,8 +69,8 @@ class TestProductMatcher:
         assert score < 0.60
         assert match_type == "new_product"
 
-    def test_medium_confidence_flagged_for_review(self):
-        """Medium confidence should be flagged for review"""
+    def test_medium_confidence_now_new_product(self):
+        """Medium confidence (60-90%) should now be new_product, not flagged_review"""
         score, match_type = ProductMatcher.score_match(
             scraped_name="Blue Dream Haze",
             master_name="Blue Dream",
@@ -78,9 +78,9 @@ class TestProductMatcher:
             master_brand="WholesomeCo"
         )
 
-        # Partial match should be in review range
-        assert 0.60 <= score < 0.90
-        assert match_type == "flagged_review"
+        # Partial match: below 90% is now new_product (no more flagged_review)
+        assert score < 0.90
+        assert match_type == "new_product"
 
     def test_normalize_product_name_removes_symbols(self):
         """Normalization should remove trademark symbols"""
@@ -193,7 +193,7 @@ class TestProductMatcher:
         low = ProductMatcher.get_threshold_description(0.40)
 
         assert "Auto-merge" in high
-        assert "review" in medium.lower()
+        assert "New product" in medium  # No more "review" — medium is now new_product
         assert "New product" in low
 
 

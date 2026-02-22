@@ -3,8 +3,9 @@ Confidence scoring and product normalization service.
 
 Handles the decision logic for scraped products:
 - >90% confidence: Auto-merge to existing product (create variant)
-- 60-90% confidence: Create ScraperFlag for admin review
-- <60% confidence: Create new product entry (parent + variant)
+- <90% confidence: Create new product entry (parent + variant)
+  - Clean data: product is active immediately
+  - Dirty data: product is inactive, flagged for admin cleanup
 
 Products use a parent/variant hierarchy:
 - Parent (is_master=True): canonical product, holds reviews
@@ -125,10 +126,10 @@ class ConfidenceScorer:
 
         Returns:
             Tuple of (product_id, action_taken)
-            - product_id: ID of the variant product, None if flagged
-            - action_taken: "auto_merge" | "flagged_review" | "new_product"
+            - product_id: ID of the variant product (always set now)
+            - action_taken: "auto_merge" | "new_product" | "new_product_flagged"
         """
-        from models import Product, ScraperFlag
+        from models import Product, ScraperFlag, Price
 
         # Build candidate list if not provided
         if candidates is None:
@@ -173,59 +174,44 @@ class ConfidenceScorer:
                 db, best_match["id"], weight_to_use, scraped_product
             )
 
-            # Create audit log entry so admins can spot-check auto-merges
-            audit_flag = ScraperFlag(
-                original_name=name_for_matching,
-                original_thc=scraped_product.thc_percentage,
-                original_cbd=scraped_product.cbd_percentage,
-                original_thc_content=scraped_product.thc_content,
-                original_cbd_content=scraped_product.cbd_content,
-                brand_name=scraped_product.brand or "Unknown",
-                dispensary_id=dispensary_id,
-                matched_product_id=best_match["id"],
-                confidence_score=confidence,
-                status="auto_merged",
-                merge_reason=f"Auto-merged at {confidence:.0%} confidence",
-                original_weight=scraped_product.weight,
-                original_price=scraped_product.price,
-                original_category=scraped_product.category,
-                original_url=scraped_product.url,
+            # Only create an audit flag for TRUE cross-dispensary merges.
+            # If the matched product already has a price at this dispensary,
+            # this is a routine price refresh — no admin review needed.
+            existing_price_at_dispensary = (
+                db.query(Price)
+                .join(Product, Price.product_id == Product.id)
+                .filter(
+                    Product.master_product_id == best_match["id"],
+                    Price.dispensary_id == dispensary_id
+                )
+                .first()
             )
-            db.add(audit_flag)
-            db.flush()
+            if not existing_price_at_dispensary:
+                audit_flag = ScraperFlag(
+                    original_name=name_for_matching,
+                    original_thc=scraped_product.thc_percentage,
+                    original_cbd=scraped_product.cbd_percentage,
+                    original_thc_content=scraped_product.thc_content,
+                    original_cbd_content=scraped_product.cbd_content,
+                    brand_name=scraped_product.brand or "Unknown",
+                    dispensary_id=dispensary_id,
+                    matched_product_id=best_match["id"],
+                    confidence_score=confidence,
+                    status="auto_merged",
+                    merge_reason=f"Auto-merged at {confidence:.0%} confidence (cross-dispensary)",
+                    original_weight=scraped_product.weight,
+                    original_price=scraped_product.price,
+                    original_category=scraped_product.category,
+                    original_url=scraped_product.url,
+                )
+                db.add(audit_flag)
+                db.flush()
 
             return variant.id, "auto_merge"
 
-        elif match_type == "flagged_review":
-            # FLAGGED FOR REVIEW: Create ScraperFlag for admin approval
-            logger.info(
-                f"Flagging '{name_for_matching}' for review "
-                f"(confidence: {confidence:.0%})"
-            )
-
-            flag = ScraperFlag(
-                original_name=name_for_matching,  # Store clean name in flag
-                original_thc=scraped_product.thc_percentage,
-                original_cbd=scraped_product.cbd_percentage,
-                original_thc_content=scraped_product.thc_content,
-                original_cbd_content=scraped_product.cbd_content,
-                brand_name=scraped_product.brand or "Unknown",  # Handle None brand
-                dispensary_id=dispensary_id,
-                matched_product_id=best_match["id"] if best_match else None,
-                confidence_score=confidence,
-                status="pending",
-                merge_reason=f"Confidence {confidence:.0%} requires manual review",
-                original_weight=scraped_product.weight,
-                original_price=scraped_product.price,
-                original_category=scraped_product.category,
-                original_url=scraped_product.url
-            )
-            db.add(flag)
-            db.flush()
-            return None, "flagged_review"
-
         else:
-            # NEW PRODUCT: Create parent + variant
+            # NEW PRODUCT: Always create parent + variant (replaces both
+            # the old "flagged_review" and "new_product" branches)
             logger.info(
                 f"Creating new product for '{name_for_matching}' "
                 f"(confidence: {confidence:.0%})"
@@ -236,7 +222,16 @@ class ConfidenceScorer:
                 db, scraped_product.brand
             )
 
+            # Check data quality to decide if product needs admin cleanup.
+            # Pass junk_cleaned (after junk removal, before weight extraction)
+            # so the reduction-ratio check doesn't false-positive on weights.
+            from services.normalization.data_quality import check_data_quality
+            is_dirty, issue_tags = check_data_quality(
+                scraped_product, junk_cleaned
+            )
+
             # Create parent product (is_master=True, no weight in name)
+            # Dirty products are inactive until admin cleans them up
             parent = Product(
                 name=name_for_matching,  # Use clean name without weight
                 product_type=scraped_product.category,
@@ -247,6 +242,7 @@ class ConfidenceScorer:
                 thc_content=scraped_product.thc_content,
                 cbd_content=scraped_product.cbd_content,
                 is_master=True,
+                is_active=not is_dirty,
                 normalization_confidence=1.0
             )
             db.add(parent)
@@ -266,6 +262,31 @@ class ConfidenceScorer:
                 "brand": scraped_product.brand,
                 "thc_percentage": scraped_product.thc_percentage
             })
+
+            # If dirty data, create a data_cleanup flag for admin
+            if is_dirty:
+                flag = ScraperFlag(
+                    original_name=name_for_matching,
+                    original_thc=scraped_product.thc_percentage,
+                    original_cbd=scraped_product.cbd_percentage,
+                    original_thc_content=scraped_product.thc_content,
+                    original_cbd_content=scraped_product.cbd_content,
+                    brand_name=scraped_product.brand or "Unknown",
+                    dispensary_id=dispensary_id,
+                    matched_product_id=parent.id,  # Points to CREATED product
+                    confidence_score=confidence,
+                    status="pending",
+                    flag_type="data_cleanup",
+                    merge_reason=f"Data quality issues: {', '.join(issue_tags)}",
+                    original_weight=scraped_product.weight,
+                    original_price=scraped_product.price,
+                    original_category=scraped_product.category,
+                    original_url=scraped_product.url,
+                    issue_tags=issue_tags,
+                )
+                db.add(flag)
+                db.flush()
+                return variant.id, "new_product_flagged"
 
             return variant.id, "new_product"
 

@@ -16,8 +16,30 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 import logging
+import re
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Helpers for potential-duplicate scoring
+# ---------------------------------------------------------------------------
+
+_WEIGHT_SUFFIX_RE = re.compile(r'\s+[–\-]\s+\d')
+
+
+def _base_name(name: str) -> str:
+    """Strip weight/type suffix for pairwise duplicate scoring only.
+
+    Examples:
+        'Cheese – 1 gr Vape Cartridge'       → 'Cheese'
+        'Blue Dream – 3.5 g Indoor Flower'   → 'Blue Dream'
+        'Wedding Cake – 7 g Tops Indoor'     → 'Wedding Cake'
+
+    If no suffix is found the original name is returned unchanged.  The full
+    name is still used for display — this is only for computing similarity.
+    """
+    m = _WEIGHT_SUFFIX_RE.search(name)
+    return name[: m.start()].strip() if m else name
 
 from database import get_db
 from models import ScraperFlag, Product, Price, Brand, Dispensary
@@ -791,7 +813,20 @@ async def merge_products(
     if not target:
         raise HTTPException(status_code=404, detail="Target product not found")
 
-    # Update all prices from source to target
+    # Re-parent source's child variants to target so they remain reachable
+    # under the surviving master product. Without this, after demoting source
+    # the variants become orphaned (master_product_id points to a non-master).
+    variant_count = (
+        db.query(Product)
+        .filter(
+            Product.master_product_id == request.source_product_id,
+            Product.is_master.is_(False),
+        )
+        .update({Product.master_product_id: request.target_product_id})
+    )
+
+    # Move any prices directly on source to target (prices should be on variants,
+    # but this is a safety net in case of legacy data).
     price_count = (
         db.query(Price)
         .filter(Price.product_id == request.source_product_id)
@@ -806,8 +841,63 @@ async def merge_products(
     return {
         "status": "merged",
         "target_id": request.target_product_id,
+        "variants_reparented": variant_count,
         "prices_moved": price_count,
     }
+
+
+@router.post("/products/repair-orphaned-variants")
+async def repair_orphaned_variants(
+    db: Session = Depends(get_db),
+    admin_id: str = Depends(verify_admin),
+):
+    """
+    One-time repair for variants orphaned by pre-fix merges.
+
+    Before the variant re-parenting fix was added to merge_products, merging
+    product A into product B would demote A to a non-master without updating A's
+    child variants — leaving those variants with master_product_id pointing to the
+    now-non-master A.  The cross_dispensary_products query only follows chains that
+    end at is_master=True, so those variants (and their prices) became invisible.
+
+    This endpoint finds every such orphaned variant, walks the chain upward to the
+    true root master, and re-sets master_product_id accordingly.
+    Returns {"repaired": N} where N is the number of variants fixed.
+    """
+    from sqlalchemy.orm import aliased as sa_aliased
+
+    ParentAlias = sa_aliased(Product)
+
+    # Load all orphans: variants whose immediate parent is also a non-master
+    orphans = (
+        db.query(Product)
+        .join(ParentAlias, ParentAlias.id == Product.master_product_id)
+        .filter(
+            Product.is_master.is_(False),
+            ParentAlias.is_master.is_(False),
+        )
+        .all()
+    )
+
+    repaired = 0
+    for orphan in orphans:
+        # Walk the parent chain until we reach a true master
+        current_id = orphan.master_product_id
+        seen = {orphan.id}  # guard against cycles
+        while current_id and current_id not in seen:
+            current = db.query(Product).filter(Product.id == current_id).first()
+            if not current:
+                break
+            if current.is_master:
+                orphan.master_product_id = current.id
+                repaired += 1
+                break
+            seen.add(current_id)
+            current_id = current.master_product_id
+
+    db.commit()
+    logger.info(f"repair_orphaned_variants: fixed {repaired} orphaned variants")
+    return {"repaired": repaired}
 
 
 @router.post("/products/{product_id}/split")
@@ -852,6 +942,286 @@ async def get_price_outliers(
     """Get price outliers across all products."""
     outliers = OutlierDetector.get_all_outliers(db=db, limit=limit)
     return {"count": len(outliers), "outliers": outliers}
+
+
+@router.get("/products/cross-dispensary")
+async def get_cross_dispensary_products(
+    db: Session = Depends(get_db),
+    min_dispensaries: int = Query(2, ge=2, le=10),
+    limit: int = Query(200, ge=1, le=500),
+):
+    """
+    Get all active parent products that have prices at multiple dispensaries.
+
+    Returns products sorted by dispensary count descending, useful for auditing
+    what the ConfidenceScorer has auto-merged across dispensaries.
+
+    Uses ORM-based queries to stay compatible with both SQLite (dev) and
+    PostgreSQL (production).
+    """
+    from sqlalchemy import distinct as sa_distinct
+    from sqlalchemy.orm import aliased
+    from collections import defaultdict
+
+    Variant = aliased(Product)
+
+    # Query 1: parent products with >=N distinct dispensaries
+    rows = (
+        db.query(
+            Product.id,
+            Product.name,
+            Product.product_type,
+            Brand.name.label("brand_name"),
+            func.count(sa_distinct(Price.dispensary_id)).label("disp_count"),
+            func.count(sa_distinct(Variant.id)).label("variant_count"),
+        )
+        .outerjoin(Brand, Brand.id == Product.brand_id)
+        .join(Variant, Variant.master_product_id == Product.id)
+        .join(Price, Price.product_id == Variant.id)
+        .filter(
+            Product.is_master.is_(True),
+            Product.is_active.is_(True),
+            Variant.is_master.is_(False),
+        )
+        .group_by(Product.id, Product.name, Product.product_type, Brand.name)
+        .having(func.count(sa_distinct(Price.dispensary_id)) >= min_dispensaries)
+        .order_by(func.count(sa_distinct(Price.dispensary_id)).desc(), Product.name)
+        .limit(limit)
+        .all()
+    )
+
+    parent_ids = [r.id for r in rows]
+
+    # Query 2: dispensary names for these parents (separate query avoids array_agg)
+    disp_map: dict = defaultdict(list)
+    if parent_ids:
+        VariantD = aliased(Product)
+        disp_rows = (
+            db.query(VariantD.master_product_id, Dispensary.name)
+            .join(Price, Price.product_id == VariantD.id)
+            .join(Dispensary, Dispensary.id == Price.dispensary_id)
+            .filter(
+                VariantD.master_product_id.in_(parent_ids),
+                VariantD.is_master.is_(False),
+            )
+            .distinct()
+            .order_by(VariantD.master_product_id, Dispensary.name)
+            .all()
+        )
+        for parent_id, disp_name in disp_rows:
+            disp_map[parent_id].append(disp_name)
+
+    products = [
+        {
+            "id": r.id,
+            "name": r.name,
+            "product_type": r.product_type,
+            "brand": r.brand_name,
+            "dispensary_count": r.disp_count,
+            "variant_count": r.variant_count,
+            "dispensaries": disp_map.get(r.id, []),
+        }
+        for r in rows
+    ]
+
+    return {"products": products, "total": len(products)}
+
+
+@router.get("/products/dispensary-coverage")
+async def get_dispensary_coverage(db: Session = Depends(get_db)):
+    """
+    Summary of how many active parent products are covered by how many dispensaries.
+
+    Returns counts for: 0 dispensaries (orphans), 1, 2, 3, 4+ dispensaries.
+    Useful for understanding how much cross-dispensary linking has occurred.
+    """
+    from sqlalchemy import text
+
+    row = db.execute(text("""
+        SELECT
+            COUNT(*) FILTER (WHERE disp_count = 0) AS orphans,
+            COUNT(*) FILTER (WHERE disp_count = 1) AS single_dispensary,
+            COUNT(*) FILTER (WHERE disp_count = 2) AS two_dispensaries,
+            COUNT(*) FILTER (WHERE disp_count = 3) AS three_dispensaries,
+            COUNT(*) FILTER (WHERE disp_count >= 4) AS four_plus_dispensaries,
+            COUNT(*) AS total_active
+        FROM (
+            SELECT
+                p.id,
+                COUNT(DISTINCT pr.dispensary_id) AS disp_count
+            FROM products p
+            LEFT JOIN products v ON v.master_product_id = p.id AND v.is_master = false
+            LEFT JOIN prices pr ON pr.product_id = v.id
+            WHERE p.is_master = true AND p.is_active = true
+            GROUP BY p.id
+        ) sub
+    """)).fetchone()
+
+    return {
+        "total_active": row.total_active,
+        "orphans": row.orphans,
+        "single_dispensary": row.single_dispensary,
+        "two_dispensaries": row.two_dispensaries,
+        "three_dispensaries": row.three_dispensaries,
+        "four_plus_dispensaries": row.four_plus_dispensaries,
+        "multi_dispensary": row.two_dispensaries + row.three_dispensaries + row.four_plus_dispensaries,
+    }
+
+
+@router.get("/products/potential-duplicates")
+async def get_potential_duplicates(
+    db: Session = Depends(get_db),
+    limit: int = Query(100, ge=1, le=500),
+):
+    """
+    Surface potential duplicate products by running pairwise fuzzy matching
+    across all active master products within the same product_type.
+
+    Only includes pairs where the two products are carried by at least one
+    DIFFERENT dispensary — same-dispensary near-misses (e.g. two similarly
+    named WholesomeCo vaporizers) are skipped as the admin doesn't need to
+    review them.
+
+    Returns pairs with 65–84% confidence sorted by confidence descending.
+    Caps at `limit` pairs. This is O(n²) — ~5–15 seconds for 1,344 products.
+    Only call on demand.
+    """
+    from collections import defaultdict
+    from sqlalchemy.orm import aliased
+    from services.normalization.matcher import ProductMatcher
+
+    # Load all active master products with brands
+    masters = (
+        db.query(Product)
+        .outerjoin(Brand, Brand.id == Product.brand_id)
+        .filter(Product.is_master.is_(True), Product.is_active.is_(True))
+        .all()
+    )
+
+    master_ids = [m.id for m in masters]
+
+    # Build dispensary ID map upfront for ALL master products.
+    # This lets us skip same-dispensary pairs during the pairwise loop
+    # without an extra per-pair DB hit.
+    VariantD = aliased(Product)
+    all_disp_rows = (
+        db.query(VariantD.master_product_id, Price.dispensary_id, Price.product_url)
+        .join(Price, Price.product_id == VariantD.id)
+        .filter(
+            VariantD.master_product_id.in_(master_ids),
+            VariantD.is_master.is_(False),
+        )
+        .all()
+    )
+    product_disp_ids: dict = defaultdict(set)
+    # (master_product_id, dispensary_id) → first non-null product_url found
+    product_disp_urls: dict = {}
+    for pid, did, url in all_disp_rows:
+        product_disp_ids[pid].add(did)
+        if url and (pid, did) not in product_disp_urls:
+            product_disp_urls[(pid, did)] = url
+
+    # Also build a name map for display (dispensary_id → dispensary name)
+    disp_name_map: dict = {}
+    disp_name_rows = db.query(Dispensary.id, Dispensary.name).all()
+    for did, dname in disp_name_rows:
+        disp_name_map[did] = dname
+
+    candidates = [
+        {
+            "id": m.id,
+            "name": m.name,
+            # base_name strips the weight/type format suffix (e.g. "– 1 gr Vape Cartridge")
+            # so that fuzzy scoring compares only the meaningful strain/product name.
+            # Full name is preserved for display; base_name is only used in score_match.
+            "base_name": _base_name(m.name),
+            "brand": m.brand.name if m.brand else "",
+            "product_type": (m.product_type or "").lower(),
+            "thc_percentage": m.thc_percentage,
+            "disp_ids": product_disp_ids.get(m.id, set()),
+        }
+        for m in masters
+    ]
+
+    # Group candidates by product_type to minimize O(n²) comparisons
+    type_groups: dict = defaultdict(list)
+    for c in candidates:
+        pt = c["product_type"]
+        if pt and pt not in ("other", "unknown"):
+            type_groups[pt].append(c)
+
+    # Run pairwise comparison within each type group
+    pairs = []
+    for group in type_groups.values():
+        n = len(group)
+        for i in range(n):
+            for j in range(i + 1, n):
+                a = group[i]
+                b = group[j]
+
+                # Skip pairs from the same set of dispensaries — those are
+                # same-chain near-misses the admin doesn't need to review.
+                if a["disp_ids"] == b["disp_ids"]:
+                    continue
+
+                score, _ = ProductMatcher.score_match(
+                    # Use base_name (suffix-stripped) so that shared weight/type
+                    # strings like "– 1 gr Vape Cartridge" don't inflate the score.
+                    scraped_name=a["base_name"],
+                    master_name=b["base_name"],
+                    scraped_brand=a["brand"],
+                    master_brand=b["brand"],
+                    scraped_thc=a["thc_percentage"],
+                    master_thc=b["thc_percentage"],
+                )
+                if ProductMatcher.REVIEW_THRESHOLD <= score < ProductMatcher.AUTO_MERGE_THRESHOLD:
+                    pairs.append({
+                        "product_a_id": a["id"],
+                        "product_a_name": a["name"],
+                        "product_a_brand": a["brand"],
+                        "product_a_dispensaries": sorted(
+                            disp_name_map.get(did, did) for did in a["disp_ids"]
+                        ),
+                        "product_a_dispensary_urls": {
+                            disp_name_map.get(did, str(did)): product_disp_urls[(a["id"], did)]
+                            for did in a["disp_ids"]
+                            if (a["id"], did) in product_disp_urls
+                        },
+                        "product_b_id": b["id"],
+                        "product_b_name": b["name"],
+                        "product_b_brand": b["brand"],
+                        "product_b_dispensaries": sorted(
+                            disp_name_map.get(did, did) for did in b["disp_ids"]
+                        ),
+                        "product_b_dispensary_urls": {
+                            disp_name_map.get(did, str(did)): product_disp_urls[(b["id"], did)]
+                            for did in b["disp_ids"]
+                            if (b["id"], did) in product_disp_urls
+                        },
+                        "product_type": a["product_type"],
+                        "confidence": round(score, 3),
+                    })
+
+    # Sort by confidence descending
+    pairs.sort(key=lambda x: x["confidence"], reverse=True)
+
+    # Deduplicate pairs with the same product names.
+    # The 3 Curaleaf locations each create a separate master product for the same
+    # item, so without this we'd get N_curaleaf × N_wholesomeco duplicate rows.
+    # Keep only the highest-confidence pair (first after sort) per name-set.
+    seen_name_pairs: set = set()
+    deduped: list = []
+    for pair in pairs:
+        name_key = frozenset({
+            pair["product_a_name"].lower().strip(),
+            pair["product_b_name"].lower().strip(),
+        })
+        if name_key not in seen_name_pairs:
+            seen_name_pairs.add(name_key)
+            deduped.append(pair)
+    pairs = deduped
+
+    return {"pairs": pairs[:limit], "total": len(pairs)}
 
 
 @router.get("/dashboard")

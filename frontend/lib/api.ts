@@ -203,6 +203,15 @@ export const api = {
       metrics: () => apiClient.get('/api/admin/scrapers/quality/metrics'),
       freshness: () => apiClient.get('/api/admin/scrapers/dispensaries/freshness'),
       outliers: (limit = 50) => apiClient.get('/api/admin/outliers', { params: { limit } }),
+      crossDispensaryProducts: (params?: { min_dispensaries?: number; limit?: number }) =>
+        apiClient.get('/api/admin/products/cross-dispensary', { params }),
+      dispensaryCoverage: () => apiClient.get('/api/admin/products/dispensary-coverage'),
+      potentialDuplicates: (params?: { limit?: number }) =>
+        apiClient.get('/api/admin/products/potential-duplicates', { params }),
+      mergeProducts: (sourceId: string, targetId: string) =>
+        apiClient.post('/api/admin/products/merge', { source_product_id: sourceId, target_product_id: targetId }),
+      repairOrphanedVariants: () =>
+        apiClient.post('/api/admin/products/repair-orphaned-variants'),
     },
   },
 

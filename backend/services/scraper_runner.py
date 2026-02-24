@@ -130,17 +130,41 @@ class ScraperRunner:
             run_log.dispensary_id = dispensary.id
 
             # 3. Pre-load master product candidates for fuzzy matching
+            from collections import defaultdict
+            from sqlalchemy.orm import aliased as _aliased
+
             master_products = (
                 self.db.query(Product)
                 .filter(Product.is_master.is_(True))
                 .all()
             )
+
+            # Build a map of master_product_id → set of dispensary_ids it already has prices at.
+            # Used by ConfidenceScorer to restrict near-miss flags to cross-dispensary pairs only.
+            master_ids = [m.id for m in master_products]
+            _VariantAlias = _aliased(Product)
+            _disp_rows = (
+                self.db.query(_VariantAlias.master_product_id, Price.dispensary_id)
+                .join(Price, Price.product_id == _VariantAlias.id)
+                .filter(
+                    _VariantAlias.master_product_id.in_(master_ids),
+                    _VariantAlias.is_master.is_(False),
+                )
+                .distinct()
+                .all()
+            )
+            _product_disp_ids: dict = defaultdict(set)
+            for _pid, _did in _disp_rows:
+                _product_disp_ids[_pid].add(_did)
+
             candidates = [
                 {
                     "id": m.id,
                     "name": m.name,
                     "brand": m.brand.name if m.brand else "",
-                    "thc_percentage": m.thc_percentage
+                    "product_type": m.product_type,
+                    "thc_percentage": m.thc_percentage,
+                    "dispensary_ids": _product_disp_ids.get(m.id, set()),
                 }
                 for m in master_products
             ]
@@ -161,7 +185,7 @@ class ScraperRunner:
                         candidates=candidates
                     )
 
-                    if action == "new_product_flagged":
+                    if action in ("new_product_flagged", "review_flag_created"):
                         flags_created += 1
 
                     if product_id:

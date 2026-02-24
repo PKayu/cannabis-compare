@@ -144,7 +144,8 @@ class ConfidenceScorer:
                     "id": master.id,
                     "name": master.name,
                     "brand": master.brand.name if master.brand else "",
-                    "thc_percentage": master.thc_percentage
+                    "thc_percentage": master.thc_percentage,
+                    "dispensary_ids": set(),  # Fallback — dispensary_ids unknown in this path
                 })
 
         # Clean name first (remove cart text, junk), then extract weight
@@ -161,12 +162,15 @@ class ConfidenceScorer:
         if scraped_product.category == "hardware":
             best_match, confidence, match_type = None, 0.0, "new_product"
         else:
-            # Find best match using clean name
+            # Find best match using clean name + product_type pre-filter.
+            # Passing product_type narrows candidates to the same category before
+            # scoring, making the 0.85 threshold safer (flower won't match edibles).
             best_match, confidence, match_type = ProductMatcher.find_best_match(
                 scraped_name=name_for_matching,
                 scraped_brand=scraped_product.brand,
                 candidates=candidates,
-                scraped_thc=scraped_product.thc_percentage
+                scraped_thc=scraped_product.thc_percentage,
+                product_type=scraped_product.category
             )
 
         if match_type == "auto_merge" and best_match:
@@ -216,6 +220,91 @@ class ConfidenceScorer:
 
             return variant.id, "auto_merge"
 
+        elif match_type == "review_flag" and best_match:
+            # NEAR-MISS (65–84%): Create product normally so prices are immediately
+            # visible, but record an "auto_missed" audit flag so the admin can see
+            # that this product almost-merged with an existing one.
+            logger.info(
+                f"Near-miss: '{name_for_matching}' scored {confidence:.0%} against "
+                f"'{best_match['name']}' — creating product + auto_missed flag"
+            )
+            brand_id = ConfidenceScorer._get_or_create_brand(db, scraped_product.brand)
+            parent = Product(
+                name=name_for_matching,
+                product_type=scraped_product.category,
+                brand_id=brand_id,
+                thc_percentage=scraped_product.thc_percentage,
+                cbd_percentage=scraped_product.cbd_percentage,
+                cbg_percentage=scraped_product.cbg_percentage,
+                thc_content=scraped_product.thc_content,
+                cbd_content=scraped_product.cbd_content,
+                is_master=True,
+                is_active=True,
+                normalization_confidence=confidence
+            )
+            db.add(parent)
+            db.flush()
+
+            weight_to_use = scraped_product.weight or extracted_weight_label
+            variant = find_or_create_variant(db, parent.id, weight_to_use, scraped_product)
+
+            # Add to candidates cache for future products in this scraper run.
+            # New product starts with this dispensary in its set (will get a price below).
+            candidates.append({
+                "id": parent.id,
+                "name": parent.name,
+                "brand": scraped_product.brand,
+                "product_type": scraped_product.category,
+                "thc_percentage": scraped_product.thc_percentage,
+                "dispensary_ids": {dispensary_id},
+            })
+
+            # Only create an auto_missed audit flag if the incoming product is from
+            # a DIFFERENT dispensary than the best-match candidate.  Same-dispensary
+            # near-misses (e.g. two similar WholesomeCo vaporizers) are noise that
+            # the admin doesn't need to review.
+            best_match_disp_ids = best_match.get("dispensary_ids", set())
+            if dispensary_id not in best_match_disp_ids:
+                # Create audit flag only if one doesn't already exist for this
+                # dispensary + name + candidate combination (avoids flooding on re-runs)
+                existing_missed_flag = (
+                    db.query(ScraperFlag)
+                    .filter(
+                        ScraperFlag.dispensary_id == dispensary_id,
+                        ScraperFlag.original_name == name_for_matching,
+                        ScraperFlag.matched_product_id == best_match["id"],
+                        ScraperFlag.status == "auto_missed",
+                    )
+                    .first()
+                )
+                if not existing_missed_flag:
+                    missed_flag = ScraperFlag(
+                        original_name=name_for_matching,
+                        original_thc=scraped_product.thc_percentage,
+                        original_cbd=scraped_product.cbd_percentage,
+                        original_thc_content=scraped_product.thc_content,
+                        original_cbd_content=scraped_product.cbd_content,
+                        brand_name=scraped_product.brand or "Unknown",
+                        dispensary_id=dispensary_id,
+                        matched_product_id=best_match["id"],
+                        confidence_score=confidence,
+                        status="auto_missed",
+                        flag_type="match_review",
+                        merge_reason=(
+                            f"Near-miss at {confidence:.0%} confidence — "
+                            f"below auto-merge threshold. "
+                            f"New product id: {parent.id}"
+                        ),
+                        original_weight=scraped_product.weight,
+                        original_price=scraped_product.price,
+                        original_category=scraped_product.category,
+                        original_url=scraped_product.url,
+                    )
+                    db.add(missed_flag)
+                    db.flush()
+
+            return variant.id, "review_flag_created"
+
         else:
             # NEW PRODUCT: Always create parent + variant (replaces both
             # the old "flagged_review" and "new_product" branches)
@@ -262,12 +351,15 @@ class ConfidenceScorer:
                 db, parent.id, weight_to_use, scraped_product
             )
 
-            # Add parent to candidates cache so subsequent products can match
+            # Add parent to candidates cache so subsequent products can match.
+            # New product starts with this dispensary in its set (will get a price below).
             candidates.append({
                 "id": parent.id,
                 "name": parent.name,  # Clean name for future matching
                 "brand": scraped_product.brand,
-                "thc_percentage": scraped_product.thc_percentage
+                "product_type": scraped_product.category,
+                "thc_percentage": scraped_product.thc_percentage,
+                "dispensary_ids": {dispensary_id},
             })
 
             # If dirty data, create a data_cleanup flag for admin

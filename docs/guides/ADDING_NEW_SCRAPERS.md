@@ -802,6 +802,10 @@ if thc_percentage and thc_percentage > 100:
     thc_percentage = None
 ```
 
+> **Note**: Some platforms (Dutchie) return mg totals for edibles/topicals with `unit="PERCENTAGE"` in their API response — a platform data error. Always apply this guard in the Python parser as well, not just in JavaScript. The value 492 in `THCContent.range` for a topical is 492 mg total, not 492% THC.
+>
+> Also note: `scorer.py` creates variants with `thc_percentage = scraped.thc_percentage or parent.thc_percentage`. If the scraper correctly returns `None`, but the parent product already has a corrupted value from a previous run, the variant will inherit the bad value. Manual DB cleanup is required to reset corrupted parents: `UPDATE products SET thc_percentage = NULL WHERE thc_percentage > 100`.
+
 ### 6. Strain Type from Accessibility Labels
 
 **Problem**: Strain type badges often show only a single letter ("H", "I", "S") but the full name is in the `aria-label`.
@@ -880,6 +884,48 @@ db.close()
 - Transaction rollbacks (all data lost)
 - SQL operator errors (filter clause issues)
 
+## Known Platforms
+
+When a dispensary uses a known SaaS menu platform, skip Firecrawl discovery and go straight to writing the scraper using the platform's documented schema.
+
+### Dutchie (White-Label Storefront)
+
+**Used by**: Beehive Farmacy (both locations), potentially other Utah dispensaries.
+
+**Detection**: URL pattern `*.beehivefarmacy.com/stores/...` or any Next.js storefront with `window.reactEnv.retailerId`.
+
+**API endpoint**: NOT `api.dutchie.com` — the GraphQL endpoint is on the storefront's own domain: `{storefront-origin}/api-2/graphql`. Intercept network traffic to confirm.
+
+**Products are fully client-side rendered** — Playwright required. Use the three-layer extraction strategy:
+1. Patch `window.fetch` via `page.add_init_script()` to capture all responses into `window.__dutchieCaptures`
+2. `page.on("response")` listener for any JSON response (not domain-filtered)
+3. DOM extraction fallback via `page.evaluate()` if network layers yield nothing
+
+**Wait strategy**: After age gate dismissal, use `wait_for_function` rather than a fixed timeout:
+```python
+await page.wait_for_function(
+    "() => window.__dutchieCaptures && window.__dutchieCaptures.length > 0",
+    timeout=15_000,
+)
+```
+
+**Actual API field names** (GraphQL `FilteredProducts` operation):
+
+| Field | Key | Type | Notes |
+|-------|-----|------|-------|
+| Name | `Name` | string | Capital N |
+| Prices | `medicalPrices` or `Prices` | `[int]` | Parallel array with Options; prefer medicalPrices (Utah is medical-only) |
+| Weights | `Options` | `[string]` | e.g. `["1/8oz", "1/4oz"]` — parallel with Prices |
+| Category | `type` | string | e.g. `"Flower"`, `"Vaporizers"` |
+| THC potency | `THCContent` | `{unit, range, __typename}` | `unit="PERCENTAGE"` for flower; `unit="MILLIGRAMS"` for edibles — **but some edibles are mislabeled as PERCENTAGE with mg values >100. Always guard `v <= 100` before storing as percentage.** |
+| CBD potency | `CBDContent` | same shape | Same caveat |
+| Brand | `brandName` | string | Flat string; also available as `brand.name` nested dict |
+| Stock | `Status` | string | `"Active"` = in stock |
+| Stock threshold | `isBelowThreshold` | bool | `True` = below min threshold |
+| URL slug | `cName` | string | e.g. `"og18"` — construct URL as `{store_url}/product/{cName}` |
+
+**Reference implementation**: `backend/services/scrapers/beehive_farmacy_scraper.py`
+
 ## Examples
 
 ### Example 1: WholesomeCo (Single Page)
@@ -923,6 +969,26 @@ python scripts/discover_dispensary.py \
 # (CuraleafScraper class with CATEGORIES list)
 ```
 
+### Example 3: Beehive Farmacy (Dutchie — API Network Interception)
+
+- **Platform**: Dutchie white-label Next.js storefront
+- **Locations**: Brigham City (`brigham-city.beehivefarmacy.com`) + SLC (`shop.beehivefarmacy.com`)
+- **Key finding**: API is at `{storefront-origin}/api-2/graphql`, not `api.dutchie.com`
+- **Products per run**: ~115–200 depending on location inventory
+- **Flag rate**: ~46% on first run (expected — no masters exist yet), drops to <2% on second run
+
+```python
+# Each location gets its own unique dispensary_name — critical for multi-location dispensaries
+@register_scraper(
+    id="beehive-brigham-city",
+    dispensary_name="Beehive Farmacy Brigham City",  # NOT "Beehive Farmacy"
+    dispensary_location="Brigham City, UT",
+    ...
+)
+```
+
+**Scraper implementation**: `backend/services/scrapers/beehive_farmacy_scraper.py`
+
 ## Further Reading
 
 - [Backend README](../../backend/README.md) - Scraper architecture
@@ -932,6 +998,6 @@ python scripts/discover_dispensary.py \
 
 ---
 
-**Last Updated**: 2026-02-13
+**Last Updated**: 2026-02-24
 **Framework Version**: 1.0
 **Questions?** Check CLAUDE.md for project guidance

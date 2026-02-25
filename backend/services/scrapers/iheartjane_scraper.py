@@ -401,16 +401,3 @@ def create_wholesomeco_scraper() -> IHeartJaneScraper:
         store_id="WHOLESOMECO_STORE_ID",  # TODO: Fill this in!
         dispensary_name="WholesomeCo"
     )
-
-
-def create_beehive_scraper() -> IHeartJaneScraper:
-    """
-    Create scraper for Beehive Farmacy
-
-    TODO: Replace BEEHIVE_STORE_ID with actual ID from API inspection
-          See FIND_IHEARTJANE_API.md for instructions
-    """
-    return IHeartJaneScraper(
-        store_id="BEEHIVE_STORE_ID",  # TODO: Fill this in!
-        dispensary_name="Beehive Farmacy"
-    )

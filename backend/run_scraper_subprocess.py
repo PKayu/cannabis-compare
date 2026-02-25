@@ -18,14 +18,15 @@ from services.scraper_runner import ScraperRunner
 # Import all scrapers to trigger self-registration via decorators
 # This must happen before any scraper execution
 from services.scrapers.iheartjane_scraper import IHeartJaneScraper  # noqa: F401
-from services.scrapers.playwright_scraper import (  # noqa: F401
-    WholesomeCoScraper,
-    BeehiveScraper
-)
+from services.scrapers.playwright_scraper import WholesomeCoScraper  # noqa: F401
 from services.scrapers.curaleaf_scraper import (  # noqa: F401
     CuraleafScraper,
     CuraleafProvoScraper,
     CuraleafSpringvilleScraper
+)
+from services.scrapers.beehive_farmacy_scraper import (  # noqa: F401
+    BeehiveFarmacyBrighamScraper,
+    BeehiveFarmacySLCScraper,
 )
 
 # Configure logging

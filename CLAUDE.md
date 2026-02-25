@@ -95,6 +95,8 @@ from services.scrapers.new_dispensary_scraper import NewDispennaryScraper  # noq
 - Always populate `weight` AND `url` fields on `ScrapedProduct`
 - Never rollback inside the product processing loop — use `continue`
 - Admin-triggered runs: fire-and-forget via `asyncio.create_task()`, returns `{"status":"started"}`, frontend polls every 5s
+- Multi-location dispensaries: each physical location needs a **unique `dispensary_name`** — `_get_or_create_dispensary()` matches by name only, so two scrapers sharing the same `dispensary_name` write to the same DB record and mix pricing across locations
+- Guard `thc_percentage` against values >100: some platforms (Dutchie) mislabel mg totals as `unit="PERCENTAGE"`. Use `if is_pct and v <= 100` before setting `thc_pct`. Note: `scorer.py` uses `scraped.thc_percentage or parent.thc_percentage` — if a corrupted parent value exists, None from the scraper will still inherit the bad value until the parent is manually corrected.
 - See `docs/guides/ADDING_NEW_SCRAPERS.md` for the LLM-assisted discovery workflow (manually verify CSS selectors!)
 
 ### Authentication: Dual-System

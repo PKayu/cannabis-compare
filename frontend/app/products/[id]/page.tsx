@@ -30,6 +30,18 @@ interface Product {
   updated_at: string | null
 }
 
+interface RelatedProduct {
+  id: string
+  name: string
+  brand: string | null
+  product_type: string
+  thc_percentage: number | null
+  cbd_percentage: number | null
+  min_price: number | null
+  max_price: number | null
+  similarity_score?: number
+}
+
 interface PriceData {
   dispensary_id: string
   dispensary_name: string
@@ -64,6 +76,7 @@ export default function ProductDetailPage() {
   const productId = params.id as string
   const [product, setProduct] = useState<Product | null>(null)
   const [weightGroups, setWeightGroups] = useState<WeightGroup[]>([])
+  const [relatedProducts, setRelatedProducts] = useState<RelatedProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -78,13 +91,15 @@ export default function ProductDetailPage() {
       setLoading(true)
       setError(null)
 
-      const [productRes, pricesRes] = await Promise.all([
+      const [productRes, pricesRes, relatedRes] = await Promise.all([
         api.products.get(productId),
-        api.products.getPrices(productId)
+        api.products.getPrices(productId),
+        api.products.getRelated(productId, 8).catch(() => ({ data: [] }))
       ])
 
       setProduct(productRes.data)
       setWeightGroups(pricesRes.data)
+      setRelatedProducts(relatedRes.data)
     } catch (err: any) {
       console.error('Failed to load product:', err)
       setError(err.response?.status === 404 ? 'Product not found' : 'Failed to load product data')
@@ -258,13 +273,46 @@ export default function ProductDetailPage() {
           <ReviewsSection productId={productId} />
         </section>
 
-        {/* Related Products - placeholder for now */}
-        <section>
-          <h2 className="text-2xl font-bold mb-4 text-gray-800">Related Products</h2>
-          <p className="text-gray-600 text-center py-8 bg-white rounded-lg shadow">
-            Related products feature coming soon.
-          </p>
-        </section>
+        {/* Similar Products */}
+        {relatedProducts.length > 0 && (
+          <section>
+            <h2 className="text-2xl font-bold mb-4 text-gray-800">Similar Products</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {relatedProducts.map((rp) => (
+                <Link
+                  key={rp.id}
+                  href={`/products/${rp.id}`}
+                  className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow"
+                >
+                  <h3 className="font-semibold text-gray-900 text-sm leading-tight line-clamp-2">
+                    {rp.name}
+                  </h3>
+                  {rp.brand && (
+                    <p className="text-xs text-gray-500 mt-1 truncate">{rp.brand}</p>
+                  )}
+                  <span className="inline-block mt-2 px-2 py-0.5 bg-cannabis-100 text-cannabis-800 rounded-full text-xs">
+                    {rp.product_type}
+                  </span>
+                  <div className="mt-2 flex items-center gap-2 text-xs text-gray-600">
+                    {rp.thc_percentage != null && (
+                      <span>THC {rp.thc_percentage}%</span>
+                    )}
+                    {rp.cbd_percentage != null && (
+                      <span>CBD {rp.cbd_percentage}%</span>
+                    )}
+                  </div>
+                  {rp.min_price != null && (
+                    <p className="mt-2 text-sm font-semibold text-green-600">
+                      {rp.min_price === rp.max_price
+                        ? `$${rp.min_price.toFixed(2)}`
+                        : `$${rp.min_price.toFixed(2)}–$${rp.max_price!.toFixed(2)}`}
+                    </p>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </div>
   )

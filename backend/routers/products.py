@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_
 from database import get_db
 from models import Product, Price, Dispensary, Promotion
+from rapidfuzz import fuzz
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 
@@ -228,57 +229,81 @@ async def get_price_comparison(
 @router.get("/{product_id}/related")
 async def get_related_products(
     product_id: str,
-    limit: int = 5,
+    limit: int = Query(8, ge=1, le=20, description="Maximum number of related products"),
     db: Session = Depends(get_db)
 ) -> List[Dict[str, Any]]:
     """
-    Get related products based on brand and product type.
+    Get similar products using fuzzy name matching within the same product type.
+
+    Scores all same-type products against the target using WRatio fuzzy matching,
+    returning the most similar products sorted by similarity score.
 
     Args:
         product_id: UUID of the product
-        limit: Maximum number of related products
+        limit: Maximum number of related products (default 8)
         db: Database session
 
     Returns:
-        List of related products
+        List of similar products with similarity scores and pricing
 
     Raises:
         HTTPException: 404 if product not found
     """
 
-    product = db.query(Product).filter(Product.id == product_id).first()
+    product = (
+        db.query(Product)
+        .options(joinedload(Product.brand))
+        .filter(Product.id == product_id)
+        .first()
+    )
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    # Find products from same brand or same type
-    related = (
+    # Resolve to master product if this is a variant
+    target = product
+    if not product.is_master and product.master_product_id:
+        master = db.query(Product).options(joinedload(Product.brand)).filter(
+            Product.id == product.master_product_id
+        ).first()
+        if master:
+            target = master
+
+    # Load all master products of the same type (excluding the target)
+    candidates = (
         db.query(Product)
         .options(joinedload(Product.brand))
         .filter(
-            Product.is_master == True,
-            Product.id != product_id,
-            or_(
-                Product.brand_id == product.brand_id,
-                Product.product_type == product.product_type
-            )
+            Product.is_master.is_(True),
+            Product.id != target.id,
+            Product.product_type == target.product_type,
         )
-        .limit(limit)
         .all()
     )
 
+    # Score each candidate by fuzzy name similarity
+    target_name = target.name.lower()
+    scored = []
+    for c in candidates:
+        score = fuzz.WRatio(target_name, c.name.lower()) / 100.0
+        if score >= 0.60:
+            scored.append((c, score))
+
+    # Sort by similarity descending, take top N
+    scored.sort(key=lambda x: x[1], reverse=True)
+    top = scored[:limit]
+
     results = []
-    for p in related:
+    for p, similarity in top:
         # Get price range across all variants
         variant_ids = [
             v.id for v in
             db.query(Product.id).filter(Product.master_product_id == p.id).all()
         ]
-        # Include parent ID as fallback
         price_product_ids = variant_ids if variant_ids else [p.id]
 
         prices = db.query(Price).filter(
             Price.product_id.in_(price_product_ids),
-            Price.in_stock == True
+            Price.in_stock.is_(True)
         ).all()
 
         if prices:
@@ -296,7 +321,8 @@ async def get_related_products(
             "thc_percentage": p.thc_percentage,
             "cbd_percentage": p.cbd_percentage,
             "min_price": float(min_price) if min_price else None,
-            "max_price": float(max_price) if max_price else None
+            "max_price": float(max_price) if max_price else None,
+            "similarity_score": round(similarity, 2),
         })
 
     return results

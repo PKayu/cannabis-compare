@@ -1,6 +1,7 @@
 """Product search and autocomplete endpoints with fuzzy matching"""
 from fastapi import APIRouter, Query, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import or_
 from database import get_db
 from models import Product, Brand, Price, Dispensary
 from rapidfuzz import fuzz
@@ -26,7 +27,8 @@ async def search_products(
     """
     Search products with fuzzy matching and filtering.
 
-    Performance target: <200ms response time
+    Uses ILIKE pre-filtering to narrow candidates, then WRatio multi-strategy
+    fuzzy scoring with an exact-substring bonus for precise relevancy.
 
     Args:
         q: Search query string (minimum 2 characters)
@@ -45,28 +47,55 @@ async def search_products(
         List of product dictionaries with pricing and relevance info
     """
 
-    # Query master products with eager loading of related data
-    products = (
+    query_lower = q.strip().lower()
+
+    # Pre-filter: only load products whose name contains at least one query word.
+    # This dramatically reduces the candidate pool before expensive fuzzy matching.
+    # Falls back to all products if the pre-filter yields no candidates (handles
+    # plural/singular mismatches like "gummies" vs "gummy").
+    words = [w for w in query_lower.split() if len(w) >= 2]
+    base_query = (
         db.query(Product)
         .options(joinedload(Product.brand))
         .filter(Product.is_master.is_(True))
-        .all()
     )
+    if words:
+        ilike_filters = []
+        for w in words:
+            ilike_filters.append(Product.name.ilike(f"%{w}%"))
+        filtered_query = base_query.filter(or_(*ilike_filters))
+        products = filtered_query.all()
 
-    # Score each product by relevance using fuzzy matching
+        # Fallback: if ILIKE pre-filter is too strict (e.g. plural/singular mismatch),
+        # load all products and let fuzzy matching handle it
+        if not products:
+            products = base_query.all()
+    else:
+        products = base_query.all()
+
+    # Score each product using WRatio (best-of multiple fuzzy strategies)
     scored_products = []
-    query_lower = q.lower()
 
     for product in products:
-        # Calculate fuzzy match scores
-        name_score = fuzz.token_sort_ratio(query_lower, product.name.lower()) / 100.0
-        brand_score = fuzz.token_sort_ratio(query_lower, product.brand.name.lower()) / 100.0 if product.brand else 0.0
+        product_name_lower = product.name.lower()
+
+        # WRatio automatically picks the best of ratio, partial_ratio,
+        # token_sort_ratio, and token_set_ratio per comparison
+        name_score = fuzz.WRatio(query_lower, product_name_lower) / 100.0
+        brand_score = (
+            fuzz.WRatio(query_lower, product.brand.name.lower()) / 100.0
+            if product.brand else 0.0
+        )
 
         # Weighted relevance: 80% product name, 20% brand name
         relevance_score = (name_score * 0.8) + (brand_score * 0.2)
 
-        # Only include products with >=30% similarity (lowered for better partial matches)
-        if relevance_score >= 0.3:
+        # Exact-substring bonus: if the query appears verbatim in the product name
+        if query_lower in product_name_lower:
+            relevance_score = min(relevance_score + 0.15, 1.0)
+
+        # Threshold: 40% minimum to reduce false positives
+        if relevance_score >= 0.4:
             scored_products.append((product, relevance_score))
 
     # Sort by relevance initially

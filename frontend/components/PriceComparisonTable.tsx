@@ -65,6 +65,11 @@ function generateOrderLink(
 }
 
 export default function PriceComparisonTable({ prices, productId, productName }: PriceComparisonTableProps) {
+  const effectivePrice = (p: PriceData) => p.deal_price ?? p.msrp
+  const minPrice = Math.min(...prices.map(effectivePrice))
+  const allSamePrice = prices.every(p => effectivePrice(p) === minPrice)
+  const bestPriceIndex = allSamePrice ? -1 : prices.findIndex(p => effectivePrice(p) === minPrice)
+
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
       {/* Desktop Table View */}
@@ -83,13 +88,13 @@ export default function PriceComparisonTable({ prices, productId, productName }:
             {prices.map((price, index) => (
               <tr
                 key={price.dispensary_id}
-                className={`hover:bg-gray-50 transition-colors ${index === 0 ? 'bg-green-50' : ''}`}
+                className={`hover:bg-gray-50 transition-colors ${index === bestPriceIndex ? 'bg-green-50' : ''}`}
               >
                 <td className="px-4 py-4">
                   <div>
                     <p className="font-semibold text-gray-900">
                       {price.dispensary_name}
-                      {index === 0 && (
+                      {index === bestPriceIndex && (
                         <span className="ml-2 px-2 py-0.5 bg-green-500 text-white text-xs rounded-full">
                           Best Price
                         </span>
@@ -159,13 +164,13 @@ export default function PriceComparisonTable({ prices, productId, productName }:
         {prices.map((price, index) => (
           <div
             key={price.dispensary_id}
-            className={`p-4 ${index === 0 ? 'bg-green-50' : ''}`}
+            className={`p-4 ${index === bestPriceIndex ? 'bg-green-50' : ''}`}
           >
             <div className="flex justify-between items-start mb-3">
               <div>
                 <p className="font-semibold text-gray-900">
                   {price.dispensary_name}
-                  {index === 0 && (
+                  {index === bestPriceIndex && (
                     <span className="ml-2 px-2 py-0.5 bg-green-500 text-white text-xs rounded-full">
                       Best
                     </span>

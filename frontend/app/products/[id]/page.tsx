@@ -145,7 +145,16 @@ export default function ProductDetailPage() {
       })
     : null
   const inStockCount = allPrices.filter(p => p.in_stock).length
-  const hasMultipleWeights = weightGroups.length > 1 || (weightGroups.length === 1 && weightGroups[0].weight != null)
+
+  // Merge weight groups into display groups — null weights are merged with the sole non-null weight
+  const nonNullWeights = [...new Set(weightGroups.map(g => g.weight).filter((w): w is string => w !== null))]
+  const hasMultipleWeights = nonNullWeights.length > 1
+  const displayGroups = hasMultipleWeights
+    ? nonNullWeights.map(w => ({
+        weight: w,
+        prices: weightGroups.filter(g => g.weight === w || g.weight === null).flatMap(g => g.prices),
+      }))
+    : [{ weight: nonNullWeights[0] ?? null, prices: allPrices }]
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -237,10 +246,10 @@ export default function ProductDetailPage() {
         {/* Price Comparison */}
         <section className="mb-12">
           <h2 className="text-2xl font-bold mb-4 text-gray-800">Prices Across Dispensaries</h2>
-          {weightGroups.length > 0 ? (
+          {displayGroups.length > 0 && allPrices.length > 0 ? (
             <div className="space-y-6">
-              {weightGroups.map((group) => (
-                <div key={group.variant_id}>
+              {displayGroups.map((group, i) => (
+                <div key={group.weight ?? i}>
                   {hasMultipleWeights && group.weight && (
                     <h3 className="text-lg font-semibold text-gray-700 mb-2 px-1">
                       {group.weight}

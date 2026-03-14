@@ -212,6 +212,10 @@ export const api = {
         apiClient.post('/api/admin/products/merge', { source_product_id: sourceId, target_product_id: targetId }),
       repairOrphanedVariants: () =>
         apiClient.post('/api/admin/products/repair-orphaned-variants'),
+      dispensaryDuplicates: (threshold?: number) =>
+        apiClient.get('/api/admin/dispensaries/potential-duplicates', { params: threshold ? { threshold } : undefined }),
+      mergeDispensaries: (sourceIds: string[], targetId: string) =>
+        apiClient.post('/api/admin/dispensaries/merge', { source_ids: sourceIds, target_id: targetId }),
     },
   },
 

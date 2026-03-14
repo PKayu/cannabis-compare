@@ -90,10 +90,17 @@ class CuraleafScraper(PlaywrightScraper):
                 page = await browser.new_page()
                 page.set_default_timeout(60000)  # 60 second timeout for all operations
 
-                # First, navigate to main page and handle age gate
-                logger.info(f"Loading {self.menu_url}...")
-                await page.goto(self.menu_url, wait_until="domcontentloaded")
+                # Dismiss age gate first — it now navigates directly to /age-gate and handles the redirect
                 await self._dismiss_age_gate(page)
+
+                # Verify we're on the store page, not still stuck on the age gate
+                await page.goto(self.menu_url, wait_until="networkidle", timeout=30000)
+                await page.wait_for_timeout(1000)
+                if "age-gate" in page.url:
+                    logger.error("Still on age gate after dismissal attempt — aborting scrape")
+                    return all_products
+
+                logger.info(f"On store page: {page.url}")
 
                 # Now visit each category page
                 total_categories = len(self.CATEGORIES)
@@ -103,8 +110,15 @@ class CuraleafScraper(PlaywrightScraper):
 
                     try:
                         logger.info(f"  Loading {category_url}...")
-                        await page.goto(category_url, wait_until="domcontentloaded", timeout=30000)
+                        await page.goto(category_url, wait_until="networkidle", timeout=30000)
                         await page.wait_for_timeout(2000)
+
+                        # Age gate sometimes re-appears on category pages — re-dismiss if needed
+                        if "age-gate" in page.url:
+                            logger.warning(f"  Age gate re-appeared for category {category}, re-dismissing...")
+                            await self._dismiss_age_gate(page)
+                            await page.goto(category_url, wait_until="networkidle", timeout=30000)
+                            await page.wait_for_timeout(2000)
 
                         # Wait for products to load on this category page
                         logger.info(f"  Waiting for products to load...")
@@ -156,52 +170,51 @@ class CuraleafScraper(PlaywrightScraper):
 
     async def _dismiss_age_gate(self, page: "Page"):
         """
-        Dismiss Curaleaf's age verification modal
+        Dismiss Curaleaf's age verification page.
 
-        Curaleaf shows "Hey, Welcome to Curaleaf" age gate with an "I'm over 18" button.
-        Note: The site uses "18" but Utah's legal age is 21+.
+        As of Mar 2026, Curaleaf changed from a modal overlay to a full-page redirect:
+        every URL (including category pages) redirects to /age-gate?returnurl=...
+        The confirm button is rendered by AgeVerificationClient (client-side React),
+        so we must wait for networkidle + extra hydration time before looking for it.
         """
-        logger.info("Checking for Curaleaf age gate...")
+        from urllib.parse import quote
+        logger.info("Handling Curaleaf age gate (full-page redirect pattern)...")
 
-        # Curaleaf uses "I'm over 18" button (site-wide, not Utah-specific)
+        # Navigate directly to the age gate page with networkidle so React fully hydrates
+        age_gate_url = f"https://ut.curaleaf.com/age-gate?returnurl={quote(self.menu_url, safe='')}"
+        await page.goto(age_gate_url, wait_until="networkidle", timeout=30000)
+        await page.wait_for_timeout(2000)  # Extra wait for client-side hydration
+
         age_gate_selectors = [
-            'button:has-text("I\'m over 18")',  # Curaleaf's actual button text
+            'button:has-text("I\'m over 18")',
             'button:has-text("I am over 18")',
-            'button:has-text("Enter")',
-            'button:has-text("Yes")',
-            'button:has-text("I am 21")',
+            'button:has-text("Yes, I\'m 18")',
             'button:has-text("I\'m 21")',
-            'button:has-text("I am 21 or older")',
+            'button:has-text("I am 21")',
             'button:has-text("I\'m 21 or older")',
-            '[data-testid*="age"] button',
-            '[data-testid*="verify"] button',
-            '.age-gate-yes',
-            '#age-gate-yes',
+            'button:has-text("Yes")',
+            'button:has-text("Enter")',
+            'button:has-text("I\'m of legal age")',
+            # Fallback: any button that is not the "Exit" button
+            # The age gate has exactly two buttons: confirm and Exit (links to google.com)
+            'button:not(:has-text("Exit"))',
         ]
 
         for selector in age_gate_selectors:
             try:
-                button = await page.wait_for_selector(selector, timeout=3000)
-                if button:
-                    logger.info(f"Dismissing age gate with selector: {selector}")
+                button = await page.wait_for_selector(selector, timeout=5000)
+                if button and await button.is_visible():
+                    logger.info(f"Clicking age gate button with selector: {selector}")
                     await button.click()
-                    # Wait for navigation to complete - check if URL changed
-                    await page.wait_for_timeout(5000)
-
-                    # Also dismiss cookie consent if present
-                    await self._dismiss_cookies(page)
-
-                    # Additional wait for products to load
                     await page.wait_for_timeout(3000)
-
-                    return
+                    if "age-gate" not in page.url:
+                        logger.info("Age gate dismissed successfully")
+                        await self._dismiss_cookies(page)
+                        return
             except Exception:
                 continue
 
-        logger.info("No age gate found or already dismissed")
-
-        # Even if no age gate, wait for page to load
-        await page.wait_for_timeout(3000)
+        logger.warning("Could not dismiss Curaleaf age gate — scraping will likely return 0 products")
 
     async def _dismiss_cookies(self, page: "Page"):
         """Dismiss cookie consent dialog if present"""
@@ -271,10 +284,10 @@ class CuraleafScraper(PlaywrightScraper):
         max_attempts = 15  # Further reduced from 30 to match WholesomeCo and prevent timeouts
 
         # Try to determine which product selector to use for this page
-        # Category pages use product-item-list, main page uses product-carousel
         product_selectors = [
-            '[class*="product-item-list"]',  # Category pages
-            '[class*="product-carousel"]',   # Main page
+            '[class*="ProductCard"]',        # Current Curaleaf site (Mar 2026+)
+            '[class*="product-item-list"]',  # Legacy: category pages
+            '[class*="product-carousel"]',   # Legacy: main page
             '.product-card',
             '.product-item',
         ]
@@ -347,19 +360,13 @@ class CuraleafScraper(PlaywrightScraper):
 
     async def _extract_products(self, page: "Page") -> List[ScrapedProduct]:
         """
-        Extract products from Curaleaf's DOM structure
+        Extract products from Curaleaf's DOM structure.
 
-        Curaleaf product format (from text content):
-        "Grape Cakes Whole FlowerDGTHybridTHC: 15.4%$94.50$135.0030% offAdd to cart"
-        "Elite Clementine CartridgeSelectSativaTHC: 83.59%$48.00$60.0020% offAdd to cart"
+        As of Mar 2026, each product is a <div class="*ProductCard*"> containing:
+          <a aria-label="Cap Junky Whole Flower, Flower. 7g | 251215H - $55.00" href="/shop/...">
 
-        Pattern:
-        - Product name (first part)
-        - Brand (DGT, Select, Find., etc.)
-        - Strain type (Hybrid, Sativa, Indica)
-        - THC/CBD info (THC: XX% or THC: XX mg for edibles)
-        - Price ($XX.XX)
-        - Sometimes discount price and %
+        The aria-label is the authoritative source for name / type / weight / price.
+        Text content is used for THC/CBD and brand (brands appear as "by Find." in the text).
         """
         logger.info("Extracting Curaleaf products...")
 
@@ -368,328 +375,132 @@ class CuraleafScraper(PlaywrightScraper):
             () => {
                 const products = [];
 
-                // Curaleaf uses different class patterns:
-                // - Main page: product-carousel
-                // - Category pages: product-item-list
-                // Try both patterns
-                let elements = document.querySelectorAll('[class*="product-item-list"]');
+                // Curaleaf class patterns (current first, then legacy fallbacks)
+                let elements = document.querySelectorAll('[class*="ProductCard"]');
+                if (elements.length === 0) {
+                    elements = document.querySelectorAll('[class*="product-item-list"]');
+                }
                 if (elements.length === 0) {
                     elements = document.querySelectorAll('[class*="product-carousel"]');
                 }
                 console.log(`Found ${elements.length} product elements`);
 
+                // Known Curaleaf brands for text-based brand detection
+                const knownBrands = [
+                    'Curaleaf', 'Grassroots', 'Select', 'DGT', 'Find.', 'Jams',
+                    'Chief', 'Incredibles', 'Mindseye', 'BCD', 'AbsoluteXtracts',
+                    'Care By Design', 'Guild', 'Lowell', 'Floyds of Leadville',
+                    'CBD Clinic', 'CBD For Life', 'Platinum', 'Dixie',
+                    'Canna Pros', 'Green Therapies', 'Utah Cannabis',
+                    'WholesomeCo', 'Tryke', 'Standard', 'Dragonfly',
+                    'Boojum', 'Hoodoo', 'Riverside Farm', 'Hi Variety',
+                    'Surplus', 'Element', 'Cresco', 'Bazelet',
+                    'Floweer', 'Plus', 'Loud', 'Connected',
+                    'Stiiizy', 'RYTHM', 'Justice', 'Moxie', 'Origins',
+                    'Hilight', 'HiLight', 'Buzz', 'Hygge', 'Gummiez',
+                    // Utah-specific craft brands
+                    'San Juan Squish Co.', 'San Juan Squish', 'HighWire',
+                    // Hardware / accessory brands
+                    'Rokin', 'Puffco', 'PAX', 'DynaVap', 'Storz & Bickel',
+                    'Volcano', 'Yocan', 'Boundless', 'Arizer',
+                ];
+
                 elements.forEach(el => {
                     try {
                         const fullText = el.textContent || '';
+                        if (!fullText.includes('$') || fullText.length < 20) return;
 
-                        // Skip empty or non-product elements
-                        if (!fullText.includes('$') || fullText.length < 20) {
-                            return;
-                        }
+                        // PRIMARY: aria-label on the product <a> tag
+                        // Format: "Product Name, Category. Weight | LotNum - $Price"
+                        // Example: "Cap Junky Whole Flower, Flower. 7g | 251215H - $55.00"
+                        const linkEl = el.querySelector('a[aria-label]');
+                        if (!linkEl) return;
 
-                        // Extract product URL (WholesomeCo pattern)
-                        const linkEl = el.querySelector('a[href]');
-                        let url = null;
-                        if (linkEl) {
-                            url = linkEl.href;
-                            if (url && !url.startsWith('http')) {
-                                url = new URL(url, window.location.origin).href;
-                            }
-                        }
+                        const ariaLabel = linkEl.getAttribute('aria-label') || '';
+                        const url = linkEl.href
+                            ? (linkEl.href.startsWith('http') ? linkEl.href : new URL(linkEl.href, window.location.origin).href)
+                            : null;
 
-                        // Parse Curaleaf's specific format
-                        // Example: "Grape Cakes Whole FlowerDGTHybridTHC: 15.4%$94.50$135.0030% offAdd to cart"
+                        // Parse: "Name, Type. Weight | Lot - $Price"
+                        const ariaMatch = ariaLabel.match(/^(.+?),\\s*(.+?)\\.\\s*(\\S+)\\s*\\|[^-]*-\\s*\\$(\\d+\\.?\\d*)/);
+                        if (!ariaMatch) return;
 
-                        // Extract price (first $XX.XX is current price)
-                        let price = null;
-                        const priceMatches = fullText.match(/\\$\\s*(\\d+\\.\\d{2})/g);
-                        if (priceMatches && priceMatches.length > 0) {
-                            // First price is the current price (sometimes there's a discount)
-                            price = priceMatches[0].replace(/\\$\\s*/, '');
-                        }
+                        const name = ariaMatch[1].trim();
+                        const categoryRaw = ariaMatch[2].toLowerCase();
+                        const weight = ariaMatch[3].trim();
+                        const price = ariaMatch[4];
 
-                        // Extract THC (format: "THC: 15.4%" or "THC: 134 mg")
-                        let thc = null;
-                        let thcUnit = null;
-                        const thcPercentMatch = fullText.match(/THC:\\s*(\\d+\\.?\\d*)%/i);
-                        if (thcPercentMatch) {
-                            thc = thcPercentMatch[1];
-                            thcUnit = '%';
-                        } else {
-                            const thcMgMatch = fullText.match(/THC:\\s*(\\d+\\.?\\d*)\\s*mg/i);
-                            if (thcMgMatch) { thc = thcMgMatch[1]; thcUnit = 'mg'; }
-                        }
+                        if (!name || !price || name.length < 3) return;
 
-                        // Extract CBD (format: "CBD: 203.98 mg" or "CBD: 0.23%")
-                        let cbd = null;
-                        let cbdUnit = null;
-                        const cbdPercentMatch = fullText.match(/CBD:\\s*(\\d+\\.?\\d*)%/i);
-                        if (cbdPercentMatch) {
-                            cbd = cbdPercentMatch[1];
-                            cbdUnit = '%';
-                        } else {
-                            const cbdMgMatch = fullText.match(/CBD:\\s*(\\d+\\.?\\d*)\\s*mg/i);
-                            if (cbdMgMatch) { cbd = cbdMgMatch[1]; cbdUnit = 'mg'; }
-                        }
-
-                        // Extract CBG (WholesomeCo pattern - supports percentage and milligram)
-                        let cbg = null;
-                        const cbgPercentMatch = fullText.match(/CBG:\\s*(\\d+\\.?\\d*)%/i);
-                        if (cbgPercentMatch) {
-                            cbg = cbgPercentMatch[1];
-                        } else {
-                            const cbgMgMatch = fullText.match(/CBG:\\s*(\\d+\\.?\\d*)\\s*mg/i);
-                            if (cbgMgMatch) cbg = cbgMgMatch[1];
-                        }
-
-                        // Extract CBN (WholesomeCo pattern - supports percentage and milligram, stored in raw_data)
-                        let cbn = null;
-                        const cbnPercentMatch = fullText.match(/CBN:\\s*(\\d+\\.?\\d*)%/i);
-                        if (cbnPercentMatch) {
-                            cbn = cbnPercentMatch[1];
-                        } else {
-                            const cbnMgMatch = fullText.match(/CBN:\\s*(\\d+\\.?\\d*)\\s*mg/i);
-                            if (cbnMgMatch) cbn = cbnMgMatch[1];
-                        }
-
-                        // Determine category from product name/text
+                        // Map category from the type field in the aria-label
                         let category = 'other';
-                        const lowerText = fullText.toLowerCase();
+                        if (categoryRaw.includes('flower')) category = 'flower';
+                        else if (categoryRaw.includes('vaporizer') || categoryRaw.includes('cartridge') || categoryRaw.includes('vape')) category = 'vaporizer';
+                        else if (categoryRaw.includes('edible') || categoryRaw.includes('gummy') || categoryRaw.includes('infusion') || categoryRaw.includes('capsule') || categoryRaw.includes('tablet')) category = 'edible';
+                        else if (categoryRaw.includes('concentrate') || categoryRaw.includes('rosin') || categoryRaw.includes('resin') || categoryRaw.includes('wax') || categoryRaw.includes('badder') || categoryRaw.includes('sugar') || categoryRaw.includes('shatter')) category = 'concentrate';
+                        else if (categoryRaw.includes('tincture') || categoryRaw.includes('drop') || categoryRaw.includes('sublingual')) category = 'tincture';
+                        else if (categoryRaw.includes('topical') || categoryRaw.includes('lotion') || categoryRaw.includes('balm') || categoryRaw.includes('cream') || categoryRaw.includes('patch')) category = 'topical';
+                        else if (categoryRaw.includes('pre-roll') || categoryRaw.includes('preroll')) category = 'pre-roll';
 
-                        if (lowerText.includes('whole flower') || lowerText.includes(' flower') ||
-                            lowerText.includes('bud') || lowerText.includes('indoor')) {
-                            category = 'flower';
-                        } else if (lowerText.includes('cartridge') || lowerText.includes('vape') ||
-                                   lowerText.includes('stiq') || lowerText.includes('briq')) {
-                            category = 'vaporizer';
-                        } else if (lowerText.includes('infusion') || lowerText.includes('gummy') ||
-                                   lowerText.includes('edible') || lowerText.includes('chocolate') ||
-                                   lowerText.includes('x-bites') || lowerText.includes('chewable') ||
-                                   lowerText.includes('gummies') || lowerText.includes('capsule') ||
-                                   lowerText.includes('tablet')) {
-                            category = 'edible';
-                        } else if (lowerText.includes('concentrate') || lowerText.includes('rosin') ||
-                                   lowerText.includes('resin')) {
-                            category = 'concentrate';
-                        } else if (lowerText.includes('tincture') || lowerText.includes('drops') ||
-                                   lowerText.includes('sublingual') || lowerText.includes('elixir')) {
-                            category = 'tincture';
-                        } else if (lowerText.includes('topical') || lowerText.includes('lotion') ||
-                                   lowerText.includes('balm') || lowerText.includes('cream') ||
-                                   lowerText.includes('salve') || lowerText.includes('ointment') ||
-                                   lowerText.includes('patch') || lowerText.includes('transdermal') ||
-                                   lowerText.includes('gel') || lowerText.includes('rub') ||
-                                   lowerText.includes('stick')) {
-                            category = 'topical';
-                        } else if (lowerText.includes('pre-roll') || lowerText.includes('preroll')) {
-                            category = 'pre-roll';
-                        }
-
-                        // Extract strain type (Indica, Sativa, Hybrid)
+                        // Strain type from text content
                         let strainType = null;
                         if (fullText.includes('Indica')) strainType = 'Indica';
                         else if (fullText.includes('Sativa')) strainType = 'Sativa';
                         else if (fullText.includes('Hybrid')) strainType = 'Hybrid';
 
-                        // Extract brand from original fullText BEFORE processing
-                        // Curaleaf brands - comprehensive list based on their inventory
-                        const knownBrands = [
-                            'Curaleaf', 'Grassroots', 'Select', 'DGT', 'Find.', 'Jams',
-                            'Chief', 'Incredibles', 'Mindseye', 'BCD', 'AbsoluteXtracts',
-                            'Care By Design', 'Guild', 'Lowell', 'Floyds of Leadville',
-                            'CBD Clinic', 'CBD For Life', 'Platinum', 'Dixie',
-                            'Canna Pros', 'Green Therapies', 'Utah Cannabis',
-                            'WholesomeCo', 'Tryke', 'Standard', 'Dragonfly',
-                            'Boojum', 'Hoodoo', 'Riverside Farm', 'Hi Variety',
-                            'Surplus', 'Element', 'Cresco', 'Bazelet',
-                            'Floweer', 'Plus', 'Loud', 'Connected',
-                            'Stiiizy', 'RYTHM', 'Justice', 'Moxie',
-                            // Utah-specific craft brands
-                            'San Juan Squish Co.', 'San Juan Squish', 'HighWire',
-                            // Hardware / accessory brands
-                            'Rokin', 'Puffco', 'PAX', 'DynaVap', 'Storz & Bickel',
-                            'Volcano', 'Yocan', 'Boundless', 'Arizer',
-                        ];
+                        // THC / CBD from text (may or may not be present in the new layout)
+                        let thc = null, thcUnit = null, cbd = null, cbdUnit = null;
+                        const thcPctM = fullText.match(/THC:\\s*(\\d+\\.?\\d*)%/i);
+                        if (thcPctM) { thc = thcPctM[1]; thcUnit = '%'; }
+                        else { const thcMgM = fullText.match(/THC:\\s*(\\d+\\.?\\d*)\\s*mg/i); if (thcMgM) { thc = thcMgM[1]; thcUnit = 'mg'; } }
 
+                        const cbdPctM = fullText.match(/CBD:\\s*(\\d+\\.?\\d*)%/i);
+                        if (cbdPctM) { cbd = cbdPctM[1]; cbdUnit = '%'; }
+                        else { const cbdMgM = fullText.match(/CBD:\\s*(\\d+\\.?\\d*)\\s*mg/i); if (cbdMgM) { cbd = cbdMgM[1]; cbdUnit = 'mg'; } }
+
+                        const cbgM = fullText.match(/CBG:\\s*(\\d+\\.?\\d*)(%|\\s*mg)?/i);
+                        const cbg = cbgM ? cbgM[1] : null;
+
+                        const cbnM = fullText.match(/CBN:\\s*(\\d+\\.?\\d*)(%|\\s*mg)?/i);
+                        const cbn = cbnM ? cbnM[1] : null;
+
+                        // Brand: check known brands list, then try "by BrandName" pattern
                         let brand = null;
-                        // Search in original fullText for brand names
-                        // Use word boundaries where possible, but also handle concatenated text
+                        const lowerText = fullText.toLowerCase();
                         for (const b of knownBrands) {
-                            // First try simple string matching (handles special chars like . in "Find.")
-                            if (fullText.includes(b)) {
-                                brand = b;
-                                break;
-                            }
-                            // Also try case-insensitive search
-                            const lowerText = fullText.toLowerCase();
-                            const lowerBrand = b.toLowerCase();
-                            if (lowerText.includes(lowerBrand)) {
+                            if (fullText.includes(b) || lowerText.includes(b.toLowerCase())) {
                                 brand = b;
                                 break;
                             }
                         }
-
-                        // Fallback: Try to extract brand using position patterns
-                        // Brands often appear right before strain type or product type
                         if (!brand) {
-                            // Words that should never be treated as brands
-                            const nonBrandWords = [
-                                'Flower', 'Whole', 'Cartridge', 'Vape', 'Edible', 'Tincture',
-                                'Topical', 'Concentrate', 'Preroll', 'Infusion', 'Gummies',
-                                'Balm', 'Cream', 'Salve', 'Patch', 'Tablet', 'Tablets',
-                                'Capsule', 'Capsules', 'Pod', 'Pods', 'Pen', 'Pens',
-                                'Add', 'Buy', 'Cart', 'Off', 'Each', 'Pack', 'mg',
-                                'THC', 'CBD', 'Sativa', 'Indica', 'Hybrid', 'or'
-                            ];
-
-                            // Pattern 1: Extract text between product type and strain type
-                            // This is where brands typically appear in Curaleaf's format
-                            const productTypes = ['Whole Flower', 'Cartridge', 'Infusion', 'Gummies', 'Tincture', 'Balm', 'Tablet'];
-                            for (const prodType of productTypes) {
-                                if (fullText.includes(prodType) && strainType) {
-                                    // Find text between product type and strain type
-                                    const parts = fullText.split(prodType);
-                                    if (parts.length > 1) {
-                                        const afterType = parts[1];
-                                        // Find where strain type appears
-                                        const strainIndex = afterType.indexOf(strainType);
-                                        if (strainIndex > 0) {
-                                            let potentialBrand = afterType.substring(0, strainIndex).trim();
-                                            // Clean up - remove common non-brand words
-                                            potentialBrand = potentialBrand.replace(/\\d+\\.?\\d*mg?/gi, '');
-                                            potentialBrand = potentialBrand.replace(/\\s+/g, ' ').trim();
-                                            // Only use if it looks reasonable
-                                            if (potentialBrand.length > 1 && potentialBrand.length < 30 &&
-                                                potentialBrand.length > 2 &&
-                                                !nonBrandWords.includes(potentialBrand) &&
-                                                !/\\d/.test(potentialBrand)) {
-                                                brand = potentialBrand;
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Pattern 2: Text before "Indica", "Sativa", or "Hybrid" might be brand
-                            if (!brand) {
-                                const strainPattern = /([A-Z][a-z]+)\\s*(Indica|Sativa|Hybrid)/i;
-                                const strainMatch = fullText.match(strainPattern);
-                                if (strainMatch) {
-                                    const potentialBrand = strainMatch[1].trim();
-                                    if (potentialBrand.length > 2 && potentialBrand.length < 30 &&
-                                        !nonBrandWords.includes(potentialBrand)) {
-                                        brand = potentialBrand;
-                                    }
-                                }
-                            }
-
-                            // Pattern 3: Text before "Whole Flower" might be brand
-                            if (!brand) {
-                                const flowerPattern = /([A-Z][A-Za-z]+)\\s+Whole Flower/i;
-                                const flowerMatch = fullText.match(flowerPattern);
-                                if (flowerMatch && flowerMatch[1].length > 2) {
-                                    const potentialBrand = flowerMatch[1].trim();
-                                    if (!nonBrandWords.includes(potentialBrand)) {
-                                        brand = potentialBrand;
-                                    }
-                                }
-                            }
+                            // "by Origins", "by Find.", etc. appear in the new text layout
+                            const byMatch = fullText.match(/\\bby\\s+([A-Z][A-Za-z.&\\s]{1,25}?)(?=[A-Z][a-z]|\\d|\\s*$)/);
+                            if (byMatch) brand = byMatch[1].trim();
                         }
 
-                        // Parse product name and brand
-                        // Curaleaf format: "ProductNameBrandStrainTypeTHC: XX%$Price"
-                        // We need to extract the actual product name
+                        // Stock status
+                        const outOfStock = lowerText.includes('out of stock') || lowerText.includes('sold out')
+                            || el.classList.contains('out-of-stock') || el.classList.contains('sold-out');
+                        const lowStockM = fullText.match(/Only (\\d+) left/i);
+                        const stockStatus = outOfStock ? 'out_of_stock' : (lowStockM ? 'low_stock' : 'in_stock');
 
-                        // Remove common suffixes to isolate name
-                        let name = fullText;
-
-                        // Remove strain type
-                        if (strainType) {
-                            name = name.replace(strainType, ' ');
-                        }
-
-                        // Remove THC/CBD info
-                        name = name.replace(/THC:\\s*\\d+\\.?\\d*%?/gi, ' ');
-                        name = name.replace(/CBD:\\s*\\d+\\.?\\d*%?/gi, ' ');
-
-                        // Remove prices
-                        name = name.replace(/\\$\\d+\\.\\d{2}/g, ' ');
-                        name = name.replace(/\\d+%/g, ' ');  // Remove discount percentages
-
-                        // Remove "Add to cart" variants:
-                        // "Add to cart", "Add N/A to cart", "Add 1g to cart", "Add 30g to cart"
-                        name = name.replace(/Add\\s+(?:\\S+\\s+)?to\\s+cart/gi, '');
-
-                        // Remove promotional / badge text
-                        name = name.replace(/VALUE VAULT[^\\n]*/gi, '');    // "VALUE VAULT - BOGO FOR..."
-                        name = name.replace(/BOGO\\s+FOR[^\\n]*/gi, '');    // "BOGO FOR Assorted Items!"
-                        name = name.replace(/\\d+\\s*%\\s*OFF[^\\n]*/gi, ''); // "30% OFF ALL..."
-                        name = name.replace(/BUY \\(\\d+\\)[^+]+/g, ' ');   // "BUY (4) SELECT..."
-
-                        // Remove the brand we found from the name (if found)
-                        if (brand) {
-                            // Simple case-insensitive replace
-                            const brandRegex = new RegExp(brand, 'gi');
-                            name = name.replace(brandRegex, ' ');
-                        }
-
-                        // Clean up name
-                        name = name.replace(/\\s+/g, ' ').trim();
-                        // Remove trailing descriptors that aren't part of name
-                        name = name.replace(/\\s+(Whole Flower|Cartridge|Infusion|Gummies).*$/, '');
-                        name = name.trim();
-
-                        // Extract weight from name or text
-                        let weight = null;
-                        const weightMatch = fullText.match(/(\\d+\\.?\\d*)\\s*(gr?|g|oz|ml|mg)/i);
-                        if (weightMatch) {
-                            weight = weightMatch[1] + weightMatch[2];
-                        }
-
-                        // Check stock status and extract urgency messages (WholesomeCo pattern)
-                        let stockStatus = 'in_stock';
-                        let stockQuantity = null;
-
-                        const outOfStock =
-                            el.classList.contains('out-of-stock') ||
-                            el.classList.contains('sold-out') ||
-                            lowerText.includes('out of stock') ||
-                            lowerText.includes('sold out');
-
-                        if (outOfStock) {
-                            stockStatus = 'out_of_stock';
-                        } else {
-                            // Check for low stock urgency message
-                            const stockMatch = fullText.match(/Only (\\d+) left/i);
-                            if (stockMatch) {
-                                stockStatus = 'low_stock';
-                                stockQuantity = parseInt(stockMatch[1]);
-                            }
-                        }
-
-                        // Only include products with name and price
-                        if (name && price && name.length > 3) {
-                            products.push({
-                                name: name,
-                                brand: brand,
-                                category: category,
-                                price: price,
-                                thc: thc,
-                                thcUnit: thcUnit,
-                                cbd: cbd,
-                                cbdUnit: cbdUnit,
-                                cbg: cbg,  // WholesomeCo learning: CBG extraction
-                                cbn: cbn,  // WholesomeCo learning: CBN for raw_data
-                                weight: weight,
-                                strainType: strainType,
-                                inStock: stockStatus === 'in_stock',
-                                stockStatus: stockStatus,  // WholesomeCo learning: detailed stock status
-                                stockQuantity: stockQuantity,  // WholesomeCo learning: urgency detection
-                                url: url,  // WholesomeCo learning: product URL for direct links
-                                html: el.outerHTML.substring(0, 500)
-                            });
-                        }
+                        products.push({
+                            name,
+                            brand,
+                            category,
+                            price,
+                            weight,
+                            strainType,
+                            thc, thcUnit,
+                            cbd, cbdUnit,
+                            cbg, cbn,
+                            inStock: !outOfStock,
+                            stockStatus,
+                            stockQuantity: lowStockM ? parseInt(lowStockM[1]) : null,
+                            url,
+                            html: el.outerHTML.substring(0, 500),
+                        });
                     } catch (e) {
                         console.error('Error parsing Curaleaf product:', e);
                     }

@@ -52,6 +52,18 @@ interface DispensaryCoverage {
   multi_dispensary: number
 }
 
+interface DispensaryDuplicateEntry {
+  id: string
+  name: string
+  location: string
+  product_count: number
+}
+
+interface DispensaryDuplicateGroup {
+  canonical: DispensaryDuplicateEntry
+  duplicates: DispensaryDuplicateEntry[]
+}
+
 interface PotentialDuplicatePair {
   product_a_id: string
   product_a_name: string
@@ -104,6 +116,13 @@ export default function QualityPage() {
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null)
   const [repairing, setRepairing] = useState(false)
   const [repairResult, setRepairResult] = useState<string | null>(null)
+
+  // Duplicate dispensary state
+  const [dispDupGroups, setDispDupGroups] = useState<DispensaryDuplicateGroup[]>([])
+  const [dispDupLoading, setDispDupLoading] = useState(false)
+  const [dispDupLoaded, setDispDupLoaded] = useState(false)
+  const [dispDupError, setDispDupError] = useState<string | null>(null)
+  const [mergingDisp, setMergingDisp] = useState<string | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -248,6 +267,36 @@ export default function QualityPage() {
       setRepairResult('Repair failed — check server logs.')
     } finally {
       setRepairing(false)
+    }
+  }
+
+  function loadDispensaryDuplicates() {
+    setDispDupLoading(true)
+    setDispDupError(null)
+    api.admin.quality.dispensaryDuplicates()
+      .then((res) => {
+        setDispDupGroups(res.data?.groups ?? [])
+        setDispDupLoaded(true)
+      })
+      .catch((err) => {
+        setDispDupError(err?.response?.data?.detail ?? 'Failed to load duplicate dispensaries.')
+      })
+      .finally(() => setDispDupLoading(false))
+  }
+
+  async function mergeDispensaryGroup(group: DispensaryDuplicateGroup) {
+    const key = group.canonical.id
+    setMergingDisp(key)
+    try {
+      const sourceIds = group.duplicates.map((d) => d.id)
+      await api.admin.quality.mergeDispensaries(sourceIds, group.canonical.id)
+      // Refresh the list and cross-dispensary data
+      loadDispensaryDuplicates()
+      fetchCrossData()
+    } catch (err: any) {
+      alert(err?.response?.data?.detail ?? 'Dispensary merge failed.')
+    } finally {
+      setMergingDisp(null)
     }
   }
 
@@ -725,6 +774,103 @@ export default function QualityPage() {
                                       Keep Separate
                                     </button>
                                   </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
+                )}
+              </div>
+
+              {/* Duplicate Dispensaries */}
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">Duplicate Dispensary Records</h2>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Dispensary DB records with similar names that likely represent the same physical store.
+                      Merging consolidates all prices and scraper logs under the canonical record.
+                    </p>
+                  </div>
+                  {!dispDupLoaded && (
+                    <button
+                      onClick={loadDispensaryDuplicates}
+                      disabled={dispDupLoading}
+                      className="px-4 py-2 text-sm font-medium bg-cannabis-600 text-white rounded-lg hover:bg-cannabis-700 disabled:opacity-50"
+                    >
+                      {dispDupLoading ? 'Scanning…' : 'Scan for Duplicates'}
+                    </button>
+                  )}
+                  {dispDupLoaded && (
+                    <button
+                      onClick={loadDispensaryDuplicates}
+                      disabled={dispDupLoading}
+                      className="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+                    >
+                      {dispDupLoading ? 'Refreshing…' : 'Refresh'}
+                    </button>
+                  )}
+                </div>
+
+                {dispDupError && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
+                    {dispDupError}
+                  </div>
+                )}
+
+                {dispDupLoading && (
+                  <div className="text-gray-500 py-8 text-center text-sm">Scanning dispensary names…</div>
+                )}
+
+                {!dispDupLoading && dispDupLoaded && (
+                  dispDupGroups.length === 0 ? (
+                    <div className="bg-white rounded-lg border p-6 text-center text-gray-500 text-sm">
+                      No duplicate dispensary records detected.
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-lg border overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 border-b">
+                          <tr>
+                            <th className="text-left px-4 py-2 font-medium text-gray-700">Canonical (keep)</th>
+                            <th className="text-left px-4 py-2 font-medium text-gray-700">Duplicates (merge away)</th>
+                            <th className="text-right px-4 py-2 font-medium text-gray-700">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {dispDupGroups.map((group) => {
+                            const isMerging = mergingDisp === group.canonical.id
+                            return (
+                              <tr key={group.canonical.id} className="hover:bg-gray-50">
+                                <td className="px-4 py-3">
+                                  <span className="font-medium text-gray-900">{group.canonical.name}</span>
+                                  {group.canonical.location && (
+                                    <span className="ml-1 text-xs text-gray-400">({group.canonical.location})</span>
+                                  )}
+                                  <span className="ml-2 text-xs text-gray-400">{group.canonical.product_count} products</span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex flex-wrap gap-1">
+                                    {group.duplicates.map((d) => (
+                                      <span key={d.id} className="px-2 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded text-xs">
+                                        {d.name}
+                                        <span className="ml-1 text-red-400">({d.product_count})</span>
+                                      </span>
+                                    ))}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <button
+                                    onClick={() => mergeDispensaryGroup(group)}
+                                    disabled={isMerging || mergingDisp !== null}
+                                    className="px-3 py-1 text-xs font-medium bg-cannabis-50 text-cannabis-700 border border-cannabis-200 rounded hover:bg-cannabis-100 disabled:opacity-50"
+                                    title={`Merge ${group.duplicates.length} duplicate(s) into "${group.canonical.name}"`}
+                                  >
+                                    {isMerging ? 'Merging…' : 'Merge into Canonical'}
+                                  </button>
                                 </td>
                               </tr>
                             )

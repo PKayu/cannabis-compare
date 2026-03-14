@@ -42,7 +42,7 @@ def _base_name(name: str) -> str:
     return name[: m.start()].strip() if m else name
 
 from database import get_db
-from models import ScraperFlag, Product, Price, Brand, Dispensary
+from models import ScraperFlag, Product, Price, Brand, Dispensary, ScraperRun
 from services.normalization.flag_processor import ScraperFlagProcessor
 from services.quality.outlier_detection import OutlierDetector
 from services.admin.flag_analyzer import (
@@ -1077,10 +1077,10 @@ async def get_potential_duplicates(
     Surface potential duplicate products by running pairwise fuzzy matching
     across all active master products within the same product_type.
 
-    Only includes pairs where the two products are carried by at least one
-    DIFFERENT dispensary — same-dispensary near-misses (e.g. two similarly
-    named WholesomeCo vaporizers) are skipped as the admin doesn't need to
-    review them.
+    Only includes pairs where the two products share NO dispensary in common —
+    same-dispensary near-misses (e.g. two similarly named WholesomeCo vaporizers,
+    or a product that already appears at both Beehive Farmington and SLC) are
+    skipped as the admin doesn't need to review them.
 
     Returns pairs with 65–84% confidence sorted by confidence descending.
     Caps at `limit` pairs. This is O(n²) — ~5–15 seconds for 1,344 products.
@@ -1159,9 +1159,11 @@ async def get_potential_duplicates(
                 a = group[i]
                 b = group[j]
 
-                # Skip pairs from the same set of dispensaries — those are
-                # same-chain near-misses the admin doesn't need to review.
-                if a["disp_ids"] == b["disp_ids"]:
+                # Skip pairs that share ANY dispensary — if both products are
+                # already available at the same store (even if each also appears
+                # elsewhere), the admin doesn't need to review them as a
+                # cross-dispensary duplicate.
+                if a["disp_ids"] & b["disp_ids"]:
                     continue
 
                 score, _ = ProductMatcher.score_match(
@@ -1205,23 +1207,162 @@ async def get_potential_duplicates(
     # Sort by confidence descending
     pairs.sort(key=lambda x: x["confidence"], reverse=True)
 
-    # Deduplicate pairs with the same product names.
-    # The 3 Curaleaf locations each create a separate master product for the same
-    # item, so without this we'd get N_curaleaf × N_wholesomeco duplicate rows.
-    # Keep only the highest-confidence pair (first after sort) per name-set.
+    # Deduplicate pairs by both product-ID pair and product name pair.
+    # ID-based: guards against the same two masters appearing more than once
+    # (defensive — the i<j loop already prevents it within a type group, but
+    # this is a belt-and-suspenders safeguard).
+    # Name-based: multiple near-identical masters (e.g. one per Curaleaf location)
+    # that each pair against WholesomeCo would otherwise produce N rows with the
+    # same visible names. Keep only the highest-confidence entry per name-set.
+    seen_id_pairs: set = set()
     seen_name_pairs: set = set()
     deduped: list = []
     for pair in pairs:
+        id_key = frozenset({pair["product_a_id"], pair["product_b_id"]})
         name_key = frozenset({
             pair["product_a_name"].lower().strip(),
             pair["product_b_name"].lower().strip(),
         })
-        if name_key not in seen_name_pairs:
+        if id_key not in seen_id_pairs and name_key not in seen_name_pairs:
+            seen_id_pairs.add(id_key)
             seen_name_pairs.add(name_key)
             deduped.append(pair)
     pairs = deduped
 
     return {"pairs": pairs[:limit], "total": len(pairs)}
+
+
+@router.get("/dispensaries/potential-duplicates")
+async def get_duplicate_dispensaries(
+    db: Session = Depends(get_db),
+    threshold: float = Query(80.0, ge=50.0, le=99.0),
+):
+    """
+    Detect dispensary records that are likely duplicates of each other by fuzzy-
+    matching their names. Returns groups of 2+ dispensaries whose names score
+    above `threshold` (default 80%) similarity.
+
+    Each group contains a 'canonical' dispensary (highest product count) and a
+    list of likely-duplicate records. Use POST /dispensaries/merge to consolidate
+    them.
+    """
+    from rapidfuzz import fuzz
+
+    # Load all dispensaries
+    dispensaries = db.query(Dispensary).all()
+
+    # Count master products per dispensary (via Price → variant → master)
+    from collections import defaultdict
+    from sqlalchemy.orm import aliased
+
+    VariantAlias = aliased(Product)
+    disp_product_counts: dict = defaultdict(int)
+    count_rows = (
+        db.query(Price.dispensary_id, func.count(func.distinct(VariantAlias.master_product_id)))
+        .join(VariantAlias, VariantAlias.id == Price.product_id)
+        .filter(VariantAlias.master_product_id.isnot(None))
+        .group_by(Price.dispensary_id)
+        .all()
+    )
+    for did, cnt in count_rows:
+        disp_product_counts[did] = cnt
+
+    disp_list = [
+        {"id": d.id, "name": d.name, "location": d.location or "", "product_count": disp_product_counts[d.id]}
+        for d in dispensaries
+    ]
+
+    # Pairwise fuzzy name matching — group clusters
+    n = len(disp_list)
+    visited: set = set()
+    groups = []
+
+    for i in range(n):
+        if disp_list[i]["id"] in visited:
+            continue
+        cluster = [disp_list[i]]
+        visited.add(disp_list[i]["id"])
+        for j in range(i + 1, n):
+            if disp_list[j]["id"] in visited:
+                continue
+            score = fuzz.token_sort_ratio(disp_list[i]["name"], disp_list[j]["name"])
+            if score >= threshold:
+                cluster.append(disp_list[j])
+                visited.add(disp_list[j]["id"])
+        if len(cluster) >= 2:
+            # Sort so the entry with the most products is the canonical choice
+            cluster.sort(key=lambda x: x["product_count"], reverse=True)
+            groups.append({
+                "canonical": cluster[0],
+                "duplicates": cluster[1:],
+            })
+
+    return {"groups": groups, "total": len(groups)}
+
+
+class DispensaryMergeRequest(BaseModel):
+    """Request body for merging duplicate dispensary records."""
+    source_ids: List[str]
+    target_id: str
+
+
+@router.post("/dispensaries/merge")
+async def merge_dispensaries(
+    body: DispensaryMergeRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Merge one or more source dispensary records into a target dispensary.
+
+    Reassigns all Price and ScraperRun rows from the source dispensaries to the
+    target, then deletes the now-empty source records. This is safe to run
+    multiple times; re-running after a partial failure will pick up where it
+    left off.
+    """
+    target = db.query(Dispensary).filter(Dispensary.id == body.target_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail=f"Target dispensary '{body.target_id}' not found")
+
+    results = []
+    for source_id in body.source_ids:
+        if source_id == body.target_id:
+            results.append({"source_id": source_id, "skipped": True, "reason": "same as target"})
+            continue
+
+        source = db.query(Dispensary).filter(Dispensary.id == source_id).first()
+        if not source:
+            results.append({"source_id": source_id, "skipped": True, "reason": "not found"})
+            continue
+
+        # Reassign prices
+        prices_updated = (
+            db.query(Price)
+            .filter(Price.dispensary_id == source_id)
+            .update({"dispensary_id": body.target_id}, synchronize_session=False)
+        )
+
+        # Reassign scraper run logs
+        runs_updated = (
+            db.query(ScraperRun)
+            .filter(ScraperRun.dispensary_id == source_id)
+            .update({"dispensary_id": body.target_id}, synchronize_session=False)
+        )
+
+        db.delete(source)
+        results.append({
+            "source_id": source_id,
+            "source_name": source.name,
+            "skipped": False,
+            "prices_reassigned": prices_updated,
+            "runs_reassigned": runs_updated,
+        })
+
+    db.commit()
+    return {
+        "target_id": body.target_id,
+        "target_name": target.name,
+        "results": results,
+    }
 
 
 @router.get("/dashboard")

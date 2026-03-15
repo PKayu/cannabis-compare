@@ -44,6 +44,8 @@ from services.scrapers.beehive_farmacy_scraper import (  # noqa: F401
     BeehiveFarmacyBrighamScraper,
     BeehiveFarmacySLCScraper,
 )
+from services.scrapers.zion_medicinal_scraper import ZionMedicinalScraper  # noqa: F401
+from services.scrapers.dragonfly_wellness_scraper import DragonFlyWellnessSLCScraper  # noqa: F401
 
 from services.scrapers.registry import ScraperRegistry
 

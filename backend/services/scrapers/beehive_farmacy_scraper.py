@@ -193,8 +193,30 @@ class BeehiveFarmacyBaseScraper(BaseScraper):
 
     store_url: str = ""  # Overridden by each location subclass
 
+    # Standard Dutchie embedded-menu categories — subclasses can use these
+    # in _get_urls_to_scrape() to iterate over category pages.
+    DUTCHIE_CATEGORIES: List[str] = [
+        "flower",
+        "pre-rolls",
+        "vaporizers",
+        "edibles",
+        "concentrates",
+        "tinctures",
+        "topicals",
+        "accessories",
+    ]
+
     def __init__(self, dispensary_id: str):
         super().__init__(dispensary_id=dispensary_id)
+
+    def _get_urls_to_scrape(self) -> List[str]:
+        """Return the list of URLs to scrape.
+
+        Default: single store URL.  Subclasses can override to return
+        per-category URLs for Dutchie embedded menus that don't load all
+        products on a single page.
+        """
+        return [self.store_url]
 
     async def scrape_products(self) -> List[ScrapedProduct]:
         """
@@ -218,14 +240,16 @@ class BeehiveFarmacyBaseScraper(BaseScraper):
                 "playwright install chromium"
             )
 
+        urls_to_scrape = self._get_urls_to_scrape()
+
         # Accumulates captures from Playwright response listener and JS fetch patch
         network_captured: List[Dict[str, Any]] = []
         js_captured: List[Dict[str, Any]] = []
         dom_result: Optional[Dict[str, Any]] = None
 
         logger.info(
-            f"Scraping Beehive Farmacy ({self.store_url}) — "
-            "JS intercept + network listener + DOM fallback"
+            f"Scraping Dutchie store ({self.store_url}) — "
+            f"{len(urls_to_scrape)} URL(s) to visit"
         )
 
         async with async_playwright() as p:
@@ -269,40 +293,72 @@ class BeehiveFarmacyBaseScraper(BaseScraper):
             page.on("response", handle_response)
 
             try:
-                logger.info(f"Navigating to {self.store_url}")
-                await page.goto(
-                    self.store_url,
-                    wait_until="domcontentloaded",
-                    timeout=60_000,
-                )
-                await page.wait_for_timeout(3_000)
+                age_gate_dismissed = False
 
-                await self._dismiss_age_gate(page)
-                # Wait until JS fetch interception has captured at least one
-                # response OR fall through after 15s (Cloudflare / slow CDN).
-                try:
-                    await page.wait_for_function(
-                        "() => window.__dutchieCaptures && window.__dutchieCaptures.length > 0",
-                        timeout=15_000,
+                for url_idx, scrape_url in enumerate(urls_to_scrape):
+                    logger.info(
+                        f"Navigating to URL {url_idx + 1}/{len(urls_to_scrape)}: "
+                        f"{scrape_url}"
                     )
-                    logger.info("JS captures arrived — proceeding to scroll")
-                except Exception:
-                    logger.warning(
-                        "No JS captures within 15s; proceeding anyway "
-                        "(may rely on network listener or DOM fallback)"
-                    )
-                await self._scroll_to_load_all(page)
-                await page.wait_for_timeout(2_000)
 
-                # --- Read JS-captured fetch responses -------------------------
-                js_raw = await page.evaluate("() => window.__dutchieCaptures || []")
-                logger.info(
-                    f"JS fetch interception captured {len(js_raw)} responses"
-                )
-                js_captured = [
-                    {"url": item.get("url", ""), "data": item.get("data", {})}
-                    for item in (js_raw or [])
-                ]
+                    # Clear JS captures before each navigation to avoid
+                    # double-counting responses from a previous page.
+                    if url_idx > 0:
+                        await page.evaluate(
+                            "() => { window.__dutchieCaptures = []; }"
+                        )
+
+                    try:
+                        await page.goto(
+                            scrape_url,
+                            wait_until="domcontentloaded",
+                            timeout=60_000,
+                        )
+                    except Exception as nav_exc:
+                        logger.warning(
+                            f"Failed to navigate to {scrape_url}: {nav_exc} "
+                            "— skipping"
+                        )
+                        continue
+
+                    await page.wait_for_timeout(3_000)
+
+                    # Dismiss age gate only on the first successful page load;
+                    # Dutchie persists the verification in the browser context.
+                    if not age_gate_dismissed:
+                        await self._dismiss_age_gate(page)
+                        age_gate_dismissed = True
+
+                    # Wait until JS fetch interception has captured at least one
+                    # response OR fall through after 15s.
+                    try:
+                        await page.wait_for_function(
+                            "() => window.__dutchieCaptures && "
+                            "window.__dutchieCaptures.length > 0",
+                            timeout=15_000,
+                        )
+                        logger.info("JS captures arrived — proceeding to scroll")
+                    except Exception:
+                        logger.warning(
+                            "No JS captures within 15s; proceeding anyway "
+                            "(may rely on network listener or DOM fallback)"
+                        )
+
+                    await self._scroll_to_load_all(page)
+                    await page.wait_for_timeout(2_000)
+
+                    # --- Read JS-captured fetch responses for this URL --------
+                    js_raw = await page.evaluate(
+                        "() => window.__dutchieCaptures || []"
+                    )
+                    logger.info(
+                        f"URL {url_idx + 1}: JS fetch interception captured "
+                        f"{len(js_raw)} responses"
+                    )
+                    js_captured.extend(
+                        {"url": item.get("url", ""), "data": item.get("data", {})}
+                        for item in (js_raw or [])
+                    )
 
                 # --- DOM fallback if no API responses found -------------------
                 all_captured = js_captured + network_captured
@@ -328,7 +384,7 @@ class BeehiveFarmacyBaseScraper(BaseScraper):
 
             except Exception as e:
                 logger.error(
-                    f"Error loading Beehive Farmacy page: {e}", exc_info=True
+                    f"Error loading Dutchie page: {e}", exc_info=True
                 )
                 raise
             finally:
@@ -368,7 +424,7 @@ class BeehiveFarmacyBaseScraper(BaseScraper):
                 unique.append(product)
 
         logger.info(
-            f"Scraped {len(unique)} unique products from Beehive Farmacy "
+            f"Scraped {len(unique)} unique products from Dutchie store "
             f"({self.store_url})"
         )
         return unique

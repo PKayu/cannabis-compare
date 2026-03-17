@@ -46,6 +46,15 @@ from services.scrapers.beehive_farmacy_scraper import (  # noqa: F401
 )
 from services.scrapers.zion_medicinal_scraper import ZionMedicinalScraper  # noqa: F401
 from services.scrapers.dragonfly_wellness_scraper import DragonFlyWellnessSLCScraper  # noqa: F401
+from services.scrapers.bloc_pharmacy_scraper import (  # noqa: F401
+    BlocPharmacySouthJordanScraper,
+    BlocPharmacyStGeorgeScraper,
+)
+from services.scrapers.flower_shop_scraper import (  # noqa: F401
+    FlowerShopLoganScraper,
+    FlowerShopOgdenScraper,
+)
+from services.scrapers.the_forest_scraper import TheForestMurrayScraper  # noqa: F401
 
 from services.scrapers.registry import ScraperRegistry
 

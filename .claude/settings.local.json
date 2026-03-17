@@ -148,7 +148,25 @@
       "Bash(wc:*)",
       "Bash(venv/Scripts/alembic.exe history:*)",
       "Bash(venv/Scripts/alembic.exe upgrade:*)",
-      "Bash(venv/Scripts/python:*)"
+      "Bash(venv/Scripts/python:*)",
+      "Bash(cat:*)",
+      "Bash(c:/python313/python.exe:*)",
+      "WebFetch(domain:brigham-city.beehivefarmacy.com)",
+      "WebFetch(domain:beehivefarmacy.com)",
+      "WebFetch(domain:shop.beehivefarmacy.com)",
+      "WebFetch(domain:api.dutchie.com)",
+      "WebFetch(domain:www.leafly.com)",
+      "WebFetch(domain:ut.curaleaf.com)",
+      "Bash(python -c \":*)",
+      "mcp__scheduled-tasks__list_scheduled_tasks",
+      "WebFetch(domain:medicalcannabis.utah.gov)",
+      "WebFetch(domain:blocpharmacy.com)",
+      "WebFetch(domain:www.theflowershopusa.com)",
+      "WebFetch(domain:www.theforestutah.com)",
+      "WebFetch(domain:dutchie.com)",
+      "WebFetch(domain:apitracker.io)",
+      "WebFetch(domain:support.dutchie.com)",
+      "WebFetch(domain:localhost)"
     ]
   },
   "hooks": {

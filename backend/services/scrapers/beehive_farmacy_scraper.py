@@ -574,6 +574,19 @@ class BeehiveFarmacyBaseScraper(BaseScraper):
         if not name or not str(name).strip():
             return []
         name = str(name).strip()
+        # Strip Dutchie's inline medical-tier indicator ("Product m STRAIN" → "Product STRAIN")
+        name = re.sub(r'\s+\bm\b\s+', ' ', name).strip()
+        # Strip trailing empty pipe sections from Dutchie (e.g. "Strain | Type |" → "Strain | Type")
+        name = re.sub(r'\s*\|\s*$', '', name).strip()
+        # Strip Dutchie embedded-menu category labels appended after "|"
+        # (e.g. "White Runtz | Tincture" → "White Runtz", "Menthol Calm | Balm" → "Menthol Calm")
+        name = re.sub(
+            r'\s*\|\s*(?:Topical|Tincture|Balm|Patches?|Cream|Lotion|Flower|Concentrate|'
+            r'Pre-?Rolls?|Vape|Vaporizer|Cartridge|Edibles?|Accessory|Accessories|Gear)\s*$',
+            '',
+            name,
+            flags=re.IGNORECASE,
+        ).strip()
 
         # --- Brand -----------------------------------------------------------
         brand_name_flat = item.get("brandName") or ""
@@ -708,14 +721,23 @@ class BeehiveFarmacyBaseScraper(BaseScraper):
                     qty = fv.get("unitQuantity") or fv.get("quantity") or ""
                     if qty and unit:
                         if "gram" in unit:
-                            unit = "g"
+                            try:
+                                qty_float = float(qty)
+                            except (ValueError, TypeError):
+                                qty_float = 0
+                            if 0 < qty_float < 1:
+                                # Sub-gram edible/tincture dosage — convert to mg
+                                weight = f"{qty_float * 1000:.4g}mg"
+                            else:
+                                weight = f"{qty}g"
                         elif "oz" in unit or "ounce" in unit:
-                            unit = "oz"
+                            weight = f"{qty}oz"
                         elif "mg" in unit or "milligram" in unit:
-                            unit = "mg"
+                            weight = f"{qty}mg"
                         elif "ml" in unit or "milliliter" in unit:
-                            unit = "ml"
-                        weight = f"{qty}{unit}"
+                            weight = f"{qty}ml"
+                        else:
+                            weight = f"{qty}{unit}"
                     else:
                         weight = None
 
@@ -787,14 +809,22 @@ class BeehiveFarmacyBaseScraper(BaseScraper):
                 weight = None
                 if qty and unit:
                     if "gram" in unit:
-                        unit = "g"
+                        try:
+                            qty_float = float(qty)
+                        except (ValueError, TypeError):
+                            qty_float = 0
+                        if 0 < qty_float < 1:
+                            weight = f"{qty_float * 1000:.4g}mg"
+                        else:
+                            weight = f"{qty}g"
                     elif "oz" in unit or "ounce" in unit:
-                        unit = "oz"
+                        weight = f"{qty}oz"
                     elif "mg" in unit or "milligram" in unit:
-                        unit = "mg"
+                        weight = f"{qty}mg"
                     elif "ml" in unit or "milliliter" in unit:
-                        unit = "ml"
-                    weight = f"{qty}{unit}"
+                        weight = f"{qty}ml"
+                    else:
+                        weight = f"{qty}{unit}"
                 fp_in_stock = bool(fp.get("inStock", fp.get("in_stock", global_in_stock)))
                 products.append(ScrapedProduct(
                     name=name, brand=brand, category=category, price=price,
@@ -877,6 +907,21 @@ class BeehiveFarmacyBaseScraper(BaseScraper):
             name = lines[0] if lines else text[:60].strip()
         if not name:
             return None
+
+        # Apply the same Dutchie name cleanups used in the API path so that
+        # DOM-extracted names match existing products with acceptable confidence.
+        # Strip Dutchie medical-tier indicator (e.g. "Vape m STRAIN" → "Vape STRAIN")
+        name = re.sub(r'\s+\bm\b\s+', ' ', name).strip()
+        # Strip trailing empty pipe sections (e.g. "Strain | Type |" → "Strain | Type")
+        name = re.sub(r'\s*\|\s*$', '', name).strip()
+        # Strip Dutchie category labels appended after "|"
+        name = re.sub(
+            r'\s*\|\s*(?:Topical|Tincture|Balm|Patches?|Cream|Lotion|Flower|Concentrate|'
+            r'Pre-?Rolls?|Vape|Vaporizer|Cartridge|Edibles?|Accessory|Accessories|Gear)\s*$',
+            '',
+            name,
+            flags=re.IGNORECASE,
+        ).strip()
 
         # Brand
         brand = (item.get("brandText") or "").strip() or "Unknown"

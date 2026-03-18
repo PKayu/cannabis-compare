@@ -1,0 +1,16 @@
+project:
+  name: "cannabis-compare"
+  description: "Initialized by FIRE orchestrator"
+  created: "2026-03-15T00:00:00Z"
+  fire_version: "0.1.8"
+
+workspace:
+  type: "brownfield"
+  structure: "multi-part"
+  autonomy_bias: "balanced"
+
+intents: []
+
+runs:
+  active: []
+  completed: []

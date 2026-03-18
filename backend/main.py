@@ -55,6 +55,7 @@ from services.scrapers.flower_shop_scraper import (  # noqa: F401
     FlowerShopOgdenScraper,
 )
 from services.scrapers.the_forest_scraper import TheForestMurrayScraper  # noqa: F401
+from services.scrapers.dragonfly_price_scraper import DragonFlyWellnessPriceScraper  # noqa: F401
 
 from services.scrapers.registry import ScraperRegistry
 

@@ -675,6 +675,12 @@ class WholesomeCoScraper(PlaywrightScraper):
         products = []
         for item in product_data:
             try:
+                # Skip non-product pages (e.g. promo banners linking to /app)
+                item_url = item.get("url")
+                if item_url and "/shop/" not in item_url:
+                    logger.debug(f"Skipping non-shop URL: {item_url} (name: {item.get('name', '')[:40]})")
+                    continue
+
                 product = ScrapedProduct(
                     name=item["name"],
                     brand=item.get("brand"),

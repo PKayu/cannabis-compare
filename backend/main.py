@@ -32,13 +32,13 @@ from routers import (
 # iHeartJane: not pointed at a live website yet — disabled to reduce noise
 # from services.scrapers.iheartjane_scraper import IHeartJaneScraper  # noqa: F401
 from services.scrapers.playwright_scraper import (  # noqa: F401
-    PlaywrightScraper,
     WholesomeCoScraper as WholesomeCoPlaywrightScraper,
 )
 from services.scrapers.curaleaf_scraper import (  # noqa: F401
     CuraleafScraper,
     CuraleafProvoScraper,
-    CuraleafSpringvilleScraper
+    CuraleafSpringvilleScraper,
+    CuraleafPaysonScraper,
 )
 from services.scrapers.beehive_farmacy_scraper import (  # noqa: F401
     BeehiveFarmacyBrighamScraper,
@@ -56,6 +56,7 @@ from services.scrapers.flower_shop_scraper import (  # noqa: F401
 )
 from services.scrapers.the_forest_scraper import TheForestMurrayScraper  # noqa: F401
 from services.scrapers.dragonfly_price_scraper import DragonFlyWellnessPriceScraper  # noqa: F401
+from services.scrapers.curaleaf_park_city_scraper import CuraleafParkCityScraper  # noqa: F401
 
 from services.scrapers.registry import ScraperRegistry
 
@@ -82,6 +83,30 @@ async def lifespan(_app: FastAPI):
     1. Log all registered scrapers
     2. Optionally start the scheduler with auto-registered scrapers
     """
+    # Clean up zombie "running" ScraperRun entries from previous sessions
+    from datetime import datetime, timedelta, timezone
+    from database import SessionLocal
+    from models import ScraperRun
+    _db = SessionLocal()
+    try:
+        stale_cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+        stale_runs = (
+            _db.query(ScraperRun)
+            .filter(ScraperRun.status == "running", ScraperRun.started_at < stale_cutoff)
+            .all()
+        )
+        for run in stale_runs:
+            run.complete(
+                status="error",
+                error_message="Marked stale on server startup (was still 'running' after 1 hour)",
+                error_type="StaleRunCleanup",
+            )
+        if stale_runs:
+            _db.commit()
+            logger.info(f"Cleaned up {len(stale_runs)} stale 'running' scraper entries")
+    finally:
+        _db.close()
+
     # Log registered scrapers at startup
     scrapers = ScraperRegistry.get_all()
     logger.info(f"Registered {len(scrapers)} scrapers:")

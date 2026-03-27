@@ -96,6 +96,9 @@ _WEIGHT_PRICE_FIELDS = {
     "each": "price_each",
 }
 
+# iHeartJane promotional/non-product items that should be filtered out
+_PROMO_KEYWORDS = {"your first app order", "first time order", "app order discount"}
+
 
 # ---------------------------------------------------------------------------
 # Base scraper
@@ -229,6 +232,10 @@ class FlowerShopBaseScraper(BaseScraper):
         if not name:
             return []
 
+        # Filter out promotional/non-product items from iHeartJane
+        if name.lower() in _PROMO_KEYWORDS:
+            return []
+
         brand = (sa.get("brand") or "").strip() or None
         category = _CATEGORY_MAP.get(sa.get("kind") or kind, "other")
 
@@ -302,6 +309,12 @@ class FlowerShopBaseScraper(BaseScraper):
                 try:
                     price = float(bucket)
                     if price > 0:
+                        # Default to "each" for edibles/tinctures/topicals (unit-dosed products)
+                        fallback_weight = (
+                            "each"
+                            if category in ("edible", "tincture", "topical")
+                            else None
+                        )
                         products.append(ScrapedProduct(
                             name=name,
                             brand=brand,
@@ -310,7 +323,7 @@ class FlowerShopBaseScraper(BaseScraper):
                             thc_content=thc_content,
                             price=price,
                             in_stock=True,
-                            weight=None,
+                            weight=fallback_weight,
                             url=product_url,
                             raw_data=sa,
                         ))

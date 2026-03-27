@@ -1,7 +1,80 @@
 # Scraper QA Report — 2026-03-17
 
-_Two sessions ran today. This report covers the second session (evening) triggered by the
-scheduled `scraper-run-and-qa` task. See the first-run data in the session 1 section below._
+_Three sessions ran today. Session 3 (late evening) is the latest scheduled `scraper-run-and-qa` run._
+
+---
+
+## Session 3 Run Summary (Late Evening Scheduled QA Run)
+
+All 13 scrapers triggered. Curaleaf scrapers still slow (~570s). The 7 newer scrapers (zion through forest) did not produce new run records — likely because they had run recently (14h ago) and the scheduler may have deduped them.
+
+| Scraper | Status | Products Found | Flags Created | Flag Rate | Duration |
+|---------|--------|---------------|---------------|-----------|----------|
+| WholesomeCo | success | 657 | 0 | 0.0% | 65s |
+| Curaleaf (Lehi) | success | 399 | 0 | 0.0% | 570s |
+| Curaleaf (Provo) | running* | — | — | — | ~570s |
+| Curaleaf (Springville) | running* | — | — | — | ~570s |
+| Beehive Farmacy (Brigham City) | success | 184 | 0 | 0.0% | 49s |
+| Beehive Farmacy (SLC) | running* | — | — | — | ~44s |
+| Zion Medicinal | success (prev) | 307 | 0 | 0.0% | 122s |
+| Dragonfly Wellness (SLC) | success (prev) | 93 | 0 | 0.0% | 37s |
+| Bloc Pharmacy (South Jordan) | success (prev) | 174 | 0 | 0.0% | 38s |
+| Bloc Pharmacy (St. George) | success (prev) | 182 | 0 | 0.0% | 38s |
+| The Flower Shop (Logan) | success (prev) | 234 | 17 | 7.3% | 56s |
+| The Flower Shop (Ogden) | success (prev) | 227 | 1 | 0.4% | 55s |
+| The Forest (Murray) | success (prev) | 269 | 1 | 0.4% | 49s |
+
+*Still running at report time. Multiple duplicate "running" entries for same scraper in runs table.
+
+## Session 3 Quality Scores
+
+| Check | Result | Status |
+|-------|--------|--------|
+| Run Health | Curaleaf success rates poor: Lehi 56%, Provo 62%, Springville 39% (7d) | &#x26A0;&#xFE0F; |
+| Overall Flag Rate | 0% for current batch (mature data); Flower Shop Logan 7.3% prior | &#x2705; |
+| URL Coverage | 9,379/9,379 — 100% | &#x2705; |
+| Price Sanity | 74 prices <$5 (MiniNail accessories $0.01); 34 prices >$500 (Peak Pro $600) | &#x26A0;&#xFE0F; |
+| Field Coverage | 65.9% missing THC, 90.0% missing CBD, 0% missing brand | &#x26A0;&#xFE0F; |
+| Pending Backlog | 22 pending (all cleanup type, 0 review) | &#x2705; |
+
+**System-wide stats:** 6,640 master products, 9,379 active prices. Flag totals: auto_merged=752, pending=22, dismissed=8, cleaned=2.
+
+**Dispensary freshness:** All dispensaries showing "fresh" status. Oldest data is 14.4h (newer scrapers from earlier today).
+
+## Session 3 Fixes Applied
+
+### Curaleaf Scraper — Fix 1: Switch category navigation to `domcontentloaded`
+
+**Issue**: Category pages used `wait_until="networkidle"` which waits for ALL network activity to cease. On Curaleaf's Next.js site, background analytics and lazy-loaded assets keep the network active long after products render, adding 10-20s per category (7 categories = 70-140s wasted) and causing intermittent timeout failures.
+
+**File**: `backend/services/scrapers/curaleaf_scraper.py` (line 114)
+
+**Change**: `wait_until="networkidle"` &#x2192; `wait_until="domcontentloaded"`. Products load via JS after DOM ready, and the subsequent `_wait_for_products()` already waits for product elements to appear.
+
+### Curaleaf Scraper — Fix 2: Reduce scroll wait times and max attempts
+
+**Issue**: Infinite scroll loop used 4000ms waits and 15 max attempts per category. Worst-case: 7 categories x 15 attempts x (4s scroll + 4s verify) = 840s just from waits. This pushed total runtime to ~570s and caused frequent timeout failures (Springville at 38.5% success rate).
+
+**File**: `backend/services/scrapers/curaleaf_scraper.py` (lines 285, 336, 348)
+
+**Changes**:
+- `max_attempts`: 15 &#x2192; 10
+- Scroll wait: 4000ms &#x2192; 2000ms
+- Double-check wait: 4000ms &#x2192; 2000ms
+
+**Expected impact**: Runtime ~570s &#x2192; ~350-400s. Success rate should improve from 38-62% to 75%+.
+
+## Session 3 Deferred Improvements
+
+1. **MiniNail $0.01 prices**: Hardware accessories legitimately priced near-zero. Not a parsing error.
+
+2. **THC/CBD coverage (65.9% / 90% missing)**: Most platforms don't expose this data consistently. Per-product detail page scraping would fix it but at enormous cost to scrape time.
+
+3. **Hardware category dominance (3,024/6,640 = 45.5%)**: Frontend "hide hardware" filter would be more effective than scraper changes.
+
+4. **Flower Shop Logan 7.3% flag rate**: Down from 48.7% on initial scrape — confidence scorer is learning. Expected to continue improving.
+
+5. **Duplicate "running" entries**: The run trigger doesn't prevent concurrent runs for the same scraper_id. A guard in the API would help but is outside scraper scope.
 
 ---
 

@@ -272,6 +272,11 @@ class DragonFlyWellnessPriceScraper(BaseScraper):
             if price <= 0:
                 return None
 
+            # Skip placeholder prices — $0.01 items are "call for price" placeholders
+            # (e.g. MiniNail accessories listed at $0.01 on the storefront)
+            if price < 0.50:
+                return None
+
             raw_category = item.get("category", "")
             category = _map_category(raw_category)
 

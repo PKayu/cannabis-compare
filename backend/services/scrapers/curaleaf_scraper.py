@@ -4,6 +4,7 @@ Curaleaf Utah Scraper
 Scrapes Curaleaf dispensary locations in Utah using Playwright browser automation.
 Handles age gate verification, infinite scroll, and product extraction.
 """
+import asyncio
 import logging
 from typing import List, TYPE_CHECKING
 
@@ -42,6 +43,7 @@ class CuraleafScraper(PlaywrightScraper):
         "provo": "https://ut.curaleaf.com/stores/curaleaf-ut-provo",
         "springville": "https://ut.curaleaf.com/stores/curaleaf-ut-springville",
         "park-city": "https://ut.curaleaf.com/stores/curaleaf-ut-park-city",
+        "payson": "https://ut.curaleaf.com/stores/curaleaf-ut-payson",
     }
 
     def __init__(self, dispensary_id: str = "curaleaf-lehi", location: str = "lehi"):
@@ -50,7 +52,7 @@ class CuraleafScraper(PlaywrightScraper):
 
         Args:
             dispensary_id: Unique ID for this dispensary
-            location: Which location to scrape (lehi, provo, springville, park-city)
+            location: Which location to scrape (lehi, provo, springville, park-city, payson)
         """
         url = self.LOCATIONS.get(location, self.LOCATIONS["lehi"])
         location_name = location.replace("-", " ").title()
@@ -110,7 +112,7 @@ class CuraleafScraper(PlaywrightScraper):
 
                     try:
                         logger.info(f"  Loading {category_url}...")
-                        await page.goto(category_url, wait_until="networkidle", timeout=30000)
+                        await page.goto(category_url, wait_until="domcontentloaded", timeout=30000)
                         await page.wait_for_timeout(2000)
 
                         # Age gate sometimes re-appears on category pages — re-dismiss if needed
@@ -145,6 +147,19 @@ class CuraleafScraper(PlaywrightScraper):
 
                     except Exception as e:
                         logger.warning(f"Error scraping category {category}: {e}")
+                        if "Page crashed" in str(e):
+                            logger.warning(f"  Page crashed on category {category} — attempting recovery with a fresh page")
+                            try:
+                                await page.close()
+                            except Exception:
+                                pass
+                            try:
+                                page = await browser.new_page()
+                                page.set_default_timeout(60000)
+                                await self._dismiss_age_gate(page)
+                            except Exception as recovery_err:
+                                logger.error(f"  Could not open fresh page after crash: {recovery_err} — returning partial results")
+                                break
                         continue
 
                 logger.info(f"Successfully scraped {len(all_products)} products from Curaleaf {self.location}")
@@ -158,7 +173,10 @@ class CuraleafScraper(PlaywrightScraper):
 
         finally:
             if browser:
-                await browser.close()
+                try:
+                    await asyncio.wait_for(browser.close(), timeout=10.0)
+                except Exception:
+                    logger.warning(f"browser.close() did not complete cleanly for Curaleaf {self.location} — continuing")
 
         logger.info(f"Returning {len(all_products)} products from Curaleaf scraper")
         return all_products
@@ -281,7 +299,7 @@ class CuraleafScraper(PlaywrightScraper):
 
         last_count = 0
         attempts = 0
-        max_attempts = 15  # Further reduced from 30 to match WholesomeCo and prevent timeouts
+        max_attempts = 10  # Reduced from 15 — 7 categories × 10 attempts × 2s = 140s scroll budget
 
         # Try to determine which product selector to use for this page
         product_selectors = [
@@ -332,7 +350,7 @@ class CuraleafScraper(PlaywrightScraper):
 
             # Scroll to bottom to trigger infinite scroll
             await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            await page.wait_for_timeout(4000)  # WholesomeCo learning: increased from 2000ms for better lazy loading
+            await page.wait_for_timeout(2000)  # Reduced from 4000ms — Curaleaf loads faster than WholesomeCo
 
             # Check if product count has changed
             try:
@@ -343,8 +361,8 @@ class CuraleafScraper(PlaywrightScraper):
             logger.info(f"Scroll attempt {attempts + 1}/{max_attempts}: {current_count} products")
 
             if current_count == last_count and current_count > 0:
-                # WholesomeCo pattern: Double-check with 4-second wait to ensure all products loaded
-                await page.wait_for_timeout(4000)
+                # Double-check with a shorter wait to confirm products are fully loaded
+                await page.wait_for_timeout(1000)
                 try:
                     new_count = await page.locator(product_selector).count()
                     if new_count == last_count:
@@ -435,7 +453,7 @@ class CuraleafScraper(PlaywrightScraper):
                         // Map category from the type field in the aria-label
                         let category = 'other';
                         if (categoryRaw.includes('flower')) category = 'flower';
-                        else if (categoryRaw.includes('vaporizer') || categoryRaw.includes('cartridge') || categoryRaw.includes('vape')) category = 'vaporizer';
+                        else if (categoryRaw.includes('vaporizer') || categoryRaw.includes('cartridge') || categoryRaw.includes('vape')) category = 'vape';
                         else if (categoryRaw.includes('edible') || categoryRaw.includes('gummy') || categoryRaw.includes('infusion') || categoryRaw.includes('capsule') || categoryRaw.includes('tablet')) category = 'edible';
                         else if (categoryRaw.includes('concentrate') || categoryRaw.includes('rosin') || categoryRaw.includes('resin') || categoryRaw.includes('wax') || categoryRaw.includes('badder') || categoryRaw.includes('sugar') || categoryRaw.includes('shatter')) category = 'concentrate';
                         else if (categoryRaw.includes('tincture') || categoryRaw.includes('drop') || categoryRaw.includes('sublingual')) category = 'tincture';
@@ -609,6 +627,28 @@ class CuraleafSpringvilleScraper(CuraleafScraper):
 
     def __init__(self, dispensary_id: str = "curaleaf-springville"):
         super().__init__(dispensary_id=dispensary_id, location="springville")
+
+
+@register_scraper(
+    id="curaleaf-payson",
+    name="Curaleaf Utah - Payson",
+    dispensary_name="Curaleaf Payson",
+    dispensary_location="Payson, UT",
+    schedule_minutes=120,
+    description="Playwright-based scraper for Curaleaf Utah Payson location"
+)
+class CuraleafPaysonScraper(CuraleafScraper):
+    """
+    Scraper for Curaleaf Payson location.
+
+    Address: 757 S 1040 W, Payson, UT 84651
+    Menu: https://ut.curaleaf.com/stores/curaleaf-ut-payson
+
+    Uses the same Dutchie-backed /stores/ path as Lehi, Provo, and Springville.
+    """
+
+    def __init__(self, dispensary_id: str = "curaleaf-payson"):
+        super().__init__(dispensary_id=dispensary_id, location="payson")
 
 
 # Note: Park City location exists (1351 Kearns Blvd, Park City, UT 84060)

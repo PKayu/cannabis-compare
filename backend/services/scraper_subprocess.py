@@ -76,8 +76,7 @@ def run_scraper_subprocess(scraper_id: str, timeout: int = 600) -> dict:
         logger.debug(f"Partial stdout: {e.stdout}")
         logger.debug(f"Partial stderr: {e.stderr}")
 
-        # Mark the scraper run as timeout in the database
-        # This will be done by checking the ScraperRun status
+        _mark_stuck_runs_as_error(scraper_id, f"Subprocess timed out after {timeout}s")
         return {
             "status": "timeout",
             "scraper_id": scraper_id,
@@ -89,6 +88,7 @@ def run_scraper_subprocess(scraper_id: str, timeout: int = 600) -> dict:
         logger.error(f"Stdout: {e.stdout}")
         logger.error(f"Stderr: {e.stderr}")
 
+        _mark_stuck_runs_as_error(scraper_id, f"Process exited with code {e.returncode}")
         return {
             "status": "error",
             "scraper_id": scraper_id,
@@ -99,11 +99,51 @@ def run_scraper_subprocess(scraper_id: str, timeout: int = 600) -> dict:
     except Exception as e:
         logger.error(f"Unexpected error running scraper '{scraper_id}': {e}", exc_info=True)
 
+        _mark_stuck_runs_as_error(scraper_id, str(e))
         return {
             "status": "error",
             "scraper_id": scraper_id,
             "message": f"Unexpected error: {str(e)}"
         }
+
+
+def _mark_stuck_runs_as_error(scraper_id: str, error_message: str) -> None:
+    """Mark any 'running' ScraperRun entries for this scraper as 'error'.
+
+    When a subprocess times out or crashes, the ScraperRun record it created
+    stays in 'running' status forever. This function cleans up those orphaned
+    entries so the admin dashboard shows accurate status.
+    """
+    try:
+        from database import SessionLocal
+        from models import ScraperRun
+
+        db = SessionLocal()
+        try:
+            stuck_runs = (
+                db.query(ScraperRun)
+                .filter(
+                    ScraperRun.scraper_id == scraper_id,
+                    ScraperRun.status == "running",
+                )
+                .all()
+            )
+            for run in stuck_runs:
+                run.complete(
+                    status="error",
+                    error_message=error_message,
+                    error_type="SubprocessFailure",
+                )
+            if stuck_runs:
+                db.commit()
+                logger.info(
+                    f"Marked {len(stuck_runs)} stuck 'running' entries for "
+                    f"'{scraper_id}' as 'error'"
+                )
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning(f"Failed to clean up stuck runs for '{scraper_id}': {exc}")
 
 
 async def run_scraper_subprocess_async(scraper_id: str, timeout: int = 600) -> dict:

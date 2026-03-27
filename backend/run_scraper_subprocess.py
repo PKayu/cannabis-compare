@@ -16,18 +16,33 @@ from database import SessionLocal
 from services.scraper_runner import ScraperRunner
 
 # Import all scrapers to trigger self-registration via decorators
-# This must happen before any scraper execution
-from services.scrapers.iheartjane_scraper import IHeartJaneScraper  # noqa: F401
-from services.scrapers.playwright_scraper import WholesomeCoScraper  # noqa: F401
+# This must happen before any scraper execution — keep in sync with main.py
+from services.scrapers.playwright_scraper import (  # noqa: F401
+    WholesomeCoScraper,
+)
 from services.scrapers.curaleaf_scraper import (  # noqa: F401
     CuraleafScraper,
     CuraleafProvoScraper,
-    CuraleafSpringvilleScraper
+    CuraleafSpringvilleScraper,
+    CuraleafPaysonScraper,
 )
 from services.scrapers.beehive_farmacy_scraper import (  # noqa: F401
     BeehiveFarmacyBrighamScraper,
     BeehiveFarmacySLCScraper,
 )
+from services.scrapers.zion_medicinal_scraper import ZionMedicinalScraper  # noqa: F401
+from services.scrapers.dragonfly_wellness_scraper import DragonFlyWellnessSLCScraper  # noqa: F401
+from services.scrapers.bloc_pharmacy_scraper import (  # noqa: F401
+    BlocPharmacySouthJordanScraper,
+    BlocPharmacyStGeorgeScraper,
+)
+from services.scrapers.flower_shop_scraper import (  # noqa: F401
+    FlowerShopLoganScraper,
+    FlowerShopOgdenScraper,
+)
+from services.scrapers.the_forest_scraper import TheForestMurrayScraper  # noqa: F401
+from services.scrapers.dragonfly_price_scraper import DragonFlyWellnessPriceScraper  # noqa: F401
+from services.scrapers.curaleaf_park_city_scraper import CuraleafParkCityScraper  # noqa: F401
 
 # Configure logging
 logging.basicConfig(

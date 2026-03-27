@@ -21,6 +21,7 @@ import time
 
 from database import get_db
 from services.scraper_runner import ScraperRunner
+from services.scraper_subprocess import run_scraper_subprocess_async
 from services.scrapers.registry import ScraperRegistry
 from services.scrapers.base_scraper import BaseScraper, ScrapedProduct
 from models import Product, Price, Dispensary
@@ -256,29 +257,30 @@ async def list_scrapers():
 
 
 @router.post("/run/{scraper_id}")
-async def run_scraper(scraper_id: str, db: Session = Depends(get_db)):
+async def run_scraper(scraper_id: str):
     """
-    Run a specific scraper by ID and save results to database.
+    Run a specific scraper by ID in a subprocess with timeout protection.
 
-    This endpoint works with any registered scraper. The scraper
-    is instantiated from the registry, executed, and results are
-    saved to the database.
+    Uses the subprocess wrapper to prevent zombie runs — if the scraper
+    hangs (e.g., Playwright timeout), the subprocess is killed after 600s
+    and the ScraperRun record is marked as error.
 
     Args:
         scraper_id: The scraper's registry ID (e.g., "wholesomeco", "beehive")
-        db: Database session
 
     Returns:
         Result of the scrape including product count and status
     """
-    runner = ScraperRunner(db)
-    try:
-        result = await runner.run_by_id(scraper_id)
-        return result
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Scraper failed: {str(e)}")
+    config = ScraperRegistry.get(scraper_id)
+    if not config:
+        raise HTTPException(status_code=404, detail=f"Scraper '{scraper_id}' not found")
+
+    result = await run_scraper_subprocess_async(scraper_id, timeout=600)
+
+    if result["status"] == "error":
+        raise HTTPException(status_code=500, detail=result.get("message", "Scraper failed"))
+
+    return result
 
 
 @router.post("/run/all")

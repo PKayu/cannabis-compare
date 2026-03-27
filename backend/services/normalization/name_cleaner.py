@@ -40,6 +40,10 @@ _CLEANING_RULES: list[tuple[str, str]] = [
     # "Add" left alone at end of string (artifact after cart text removal)
     (r'\bAdd\s*$', ''),
 
+    # Dutchie inline medical-tier indicator ("Product m STRAIN" → "Product STRAIN")
+    # This appears as a standalone lowercase "m" between words in Dutchie product names
+    (r'\s+\bm\b\s+', ' '),
+
     # HTML entities
     # (handled via html.unescape below, but catch common ones first)
     (r'&amp;', '&'),

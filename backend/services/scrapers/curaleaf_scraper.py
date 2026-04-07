@@ -95,8 +95,20 @@ class CuraleafScraper(PlaywrightScraper):
                 # Dismiss age gate first — it now navigates directly to /age-gate and handles the redirect
                 await self._dismiss_age_gate(page)
 
-                # Verify we're on the store page, not still stuck on the age gate
-                await page.goto(self.menu_url, wait_until="networkidle", timeout=30000)
+                # Verify we're on the store page, not still stuck on the age gate.
+                # After age-gate dismissal, the page may already be navigating to
+                # the store URL — a second goto to the same URL causes
+                # "navigation interrupted" errors.  Skip if already there.
+                current = page.url
+                if "age-gate" in current or self.menu_url not in current:
+                    try:
+                        await page.goto(self.menu_url, wait_until="networkidle", timeout=30000)
+                    except Exception as nav_err:
+                        if "interrupted" in str(nav_err).lower():
+                            logger.info(f"Navigation interrupted (likely redirect in progress) — waiting for page to settle")
+                            await page.wait_for_timeout(3000)
+                        else:
+                            raise
                 await page.wait_for_timeout(1000)
                 if "age-gate" in page.url:
                     logger.error("Still on age gate after dismissal attempt — aborting scrape")

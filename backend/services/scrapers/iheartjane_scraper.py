@@ -153,8 +153,14 @@ class IHeartJaneScraper(BaseScraper):
             0
         )
 
-        # Get product name
+        # Get product name — strip bracketed weight/quantity suffixes (e.g. "[5g]",
+        # "[10 count]") that iHeartJane appends; these hurt fuzzy matching against
+        # canonical product names.
         name = item.get("name") or item.get("title") or ""
+        name = re.sub(
+            r'\s*\[\d+\.?\d*\s*(?:g|mg|ml|oz|count)\]\s*',
+            ' ', name, flags=re.IGNORECASE
+        ).strip()
 
         # Stock status
         in_stock = item.get("in_stock", True)

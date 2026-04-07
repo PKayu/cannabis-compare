@@ -43,6 +43,7 @@ Weight mapping (iHeartJane label → standard weight string):
 """
 
 import logging
+import re
 from typing import List, Optional
 
 from playwright.async_api import async_playwright
@@ -231,6 +232,12 @@ class FlowerShopBaseScraper(BaseScraper):
         name = (sa.get("name") or "").strip()
         if not name:
             return []
+        # Strip bracketed weight/quantity suffixes (e.g. "[5g]", "[10 count]")
+        # that iHeartJane appends — these hurt fuzzy matching against canonical names.
+        name = re.sub(
+            r'\s*\[\d+\.?\d*\s*(?:g|mg|ml|oz|count)\]\s*',
+            ' ', name, flags=re.IGNORECASE
+        ).strip()
 
         # Filter out promotional/non-product items from iHeartJane
         if name.lower() in _PROMO_KEYWORDS:

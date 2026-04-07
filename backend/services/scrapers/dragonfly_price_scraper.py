@@ -256,11 +256,23 @@ class DragonFlyWellnessPriceScraper(BaseScraper):
             resp.raise_for_status()
             return await resp.json()
 
+    # Non-product items that appear in the Dragonfly catalog — service fees,
+    # donations, and utility items that are not cannabis or hardware products.
+    _NON_PRODUCT_PATTERNS = re.compile(
+        r"(?i)^(rounding\s+donation|dept\s+of\s+health\s+transaction\s+fee"
+        r"|herbal\s+viewer|df\s+herbal\s+viewer)$"
+    )
+
     def _parse_product(self, item: Dict[str, Any]) -> Optional[ScrapedProduct]:
         """Convert a raw AppSync product item into a ScrapedProduct."""
         try:
             name = (item.get("name") or "").strip()
             if not name:
+                return None
+
+            # Skip non-product service items (donations, fees, etc.)
+            if self._NON_PRODUCT_PATTERNS.match(name):
+                logger.debug("Skipping non-product item: %s", name)
                 return None
 
             price_raw = item.get("price")

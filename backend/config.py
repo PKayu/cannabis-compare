@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     # Scraping
     scraper_timeout: int = 30
     max_retries: int = 3
+    max_concurrent_scrapers: int = 4
 
     # Logging
     log_level: str = "INFO"

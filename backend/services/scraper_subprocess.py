@@ -12,7 +12,20 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
+from config import settings
+
 logger = logging.getLogger(__name__)
+
+_scraper_semaphore: Optional[asyncio.Semaphore] = None
+
+
+def _get_semaphore() -> asyncio.Semaphore:
+    """Lazy-init semaphore on first use (must be called within a running event loop)."""
+    global _scraper_semaphore
+    if _scraper_semaphore is None:
+        _scraper_semaphore = asyncio.Semaphore(settings.max_concurrent_scrapers)
+        logger.info(f"Scraper semaphore initialized: max_concurrent={settings.max_concurrent_scrapers}")
+    return _scraper_semaphore
 
 
 def run_scraper_subprocess(scraper_id: str, timeout: int = 600) -> dict:
@@ -151,6 +164,8 @@ async def run_scraper_subprocess_async(scraper_id: str, timeout: int = 600) -> d
     Async wrapper for run_scraper_subprocess.
 
     Runs the subprocess in a thread pool executor to avoid blocking the event loop.
+    Limits concurrency via a process-wide semaphore to prevent SQLite lock errors
+    and Playwright resource exhaustion when many scrapers trigger simultaneously.
 
     Args:
         scraper_id: The scraper ID to run
@@ -159,14 +174,18 @@ async def run_scraper_subprocess_async(scraper_id: str, timeout: int = 600) -> d
     Returns:
         dict with status and details of the scraper run
     """
-    loop = asyncio.get_event_loop()
+    semaphore = _get_semaphore()
+    logger.debug(f"Scraper '{scraper_id}' waiting for semaphore slot")
 
-    # Run the blocking subprocess call in a thread pool
-    result = await loop.run_in_executor(
-        None,  # Use default executor
-        run_scraper_subprocess,
-        scraper_id,
-        timeout
-    )
+    async with semaphore:
+        logger.info(f"Scraper '{scraper_id}' acquired semaphore slot")
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            run_scraper_subprocess,
+            scraper_id,
+            timeout
+        )
 
+    logger.debug(f"Scraper '{scraper_id}' released semaphore slot")
     return result

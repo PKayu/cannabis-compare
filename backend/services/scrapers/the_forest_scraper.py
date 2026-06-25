@@ -1,37 +1,29 @@
 """
-The Forest Utah Scraper — iHeartJane / dmerch Platform
+The Forest Utah Scraper — Dutchie Platform
 
-The Forest operates two Utah locations (Murray and Springville), both sharing
-a single iHeartJane store ID (3196) and a single website (theforestutah.com).
-The product catalog is the same for both locations, so one scraper covers both.
+The Forest Murray location switched from iHeartJane to a Dutchie white-label
+storefront in June 2026.
 
 Location:
-  Murray     — 6041 State St, Murray, UT 84107
-  Springville — 484 S 1750 W, Springville, UT
+  Murray — 6041 State St, Murray, UT 84107
 
 Platform:
-  iHeartJane "frameless boost" embed, identical architecture to The Flower Shop.
+  Dutchie embedded Next.js storefront (same architecture as Beehive Farmacy).
+  Dispensary ID: 69cd22a84028784c6f7ecf8a
+  GraphQL API:   https://theforestutah.com/api-1/graphql
 
-Scraping strategy (same as flower_shop_scraper.py):
-  1. Navigate to each category page:
-       https://theforestutah.com/shop/menu/{kind}/
-  2. Intercept POST response from dmerch.iheartjane.com/v2/multi
-     (placement="menu_inline_table") to get all products for that category.
-  3. Parse product attributes from search_attributes dict.
-
-iHeartJane store ID: 3196
-
-Category URL pattern:
-  https://theforestutah.com/shop/menu/{kind}/
-
-Product URL pattern:
-  https://theforestutah.com/shop/products/{url_slug}
+Scraping strategy (same as beehive_farmacy_scraper.py):
+  1. Iterate over per-category URLs:
+       https://theforestutah.com/stores/the-forest-murray/products/{category}
+  2. Intercept fetch() responses (JS patch + Playwright response listener).
+  3. Parse Dutchie JSON payloads via BeehiveFarmacyBaseScraper._parse_dutchie_response().
+  4. DOM extraction fallback if no API responses captured.
 """
 
 from typing import List
 
 from .base_scraper import ScrapedPromotion
-from .flower_shop_scraper import FlowerShopBaseScraper
+from .beehive_farmacy_scraper import BeehiveFarmacyBaseScraper
 from .registry import register_scraper
 
 import logging
@@ -46,26 +38,28 @@ logger = logging.getLogger(__name__)
     dispensary_location="Murray, UT",
     schedule_minutes=120,
     description=(
-        "Playwright scraper for The Forest Utah (iHeartJane frameless embed; "
-        "store_id=3196). Covers the Murray location at 6041 State St."
+        "Playwright scraper for The Forest Utah — Murray location "
+        "(Dutchie platform; dispensary ID 69cd22a84028784c6f7ecf8a)."
     ),
 )
-class TheForestMurrayScraper(FlowerShopBaseScraper):
+class TheForestMurrayScraper(BeehiveFarmacyBaseScraper):
     """
     The Forest — Murray, Utah (6041 State St, Murray, UT 84107).
 
-    iHeartJane frameless embed at theforestutah.com/shop/menu/{kind}/.
-    Both Murray and Springville share store ID 3196; this scraper covers both.
+    Dutchie white-label storefront at theforestutah.com.
     """
 
-    store_id = 3196
-    location_slug = "shop"
-    location_name = "The Forest Murray"
-    BASE_URL = "https://theforestutah.com"
+    store_url = "https://theforestutah.com/stores/the-forest-murray"
 
     def __init__(self, dispensary_id: str = "the-forest-murray"):
         super().__init__(dispensary_id=dispensary_id)
 
+    def _get_urls_to_scrape(self) -> List[str]:
+        """Return per-category product URLs (Dutchie doesn't load all on one page)."""
+        return [
+            f"{self.store_url}/products/{cat}"
+            for cat in self.DUTCHIE_CATEGORIES
+        ]
+
     async def scrape_promotions(self) -> List[ScrapedPromotion]:
-        """Promotions not currently implemented for The Forest."""
         return []

@@ -28,7 +28,6 @@ interface PriceComparisonTableProps {
   productName?: string
 }
 
-// Deep link patterns for Utah dispensaries
 const DISPENSARY_LINKS: Record<string, string> = {
   'wholesome-co': 'https://www.wholesomeco.com/search?q=',
   'dragonfly': 'https://dragonflywellness.com/search?q=',
@@ -42,25 +41,16 @@ function generateOrderLink(
   productUrl: string | null,
   productName?: string
 ): string {
-  // 1. PRIORITY: Use product-specific URL if available
   if (productUrl && productUrl.trim() !== '') {
     const url = productUrl.trim()
     return url.startsWith('http') ? url : `https://${url}`
   }
-
-  // 2. FALLBACK: Dispensary website (homepage)
   if (dispensaryWebsite && dispensaryWebsite.trim() !== '') {
     const url = dispensaryWebsite.trim()
     return url.startsWith('http') ? url : `https://${url}`
   }
-
-  // 3. Check if we have a known search pattern for this dispensary
   const pattern = DISPENSARY_LINKS[dispensaryId.toLowerCase()]
-  if (pattern && productName) {
-    return pattern + encodeURIComponent(productName)
-  }
-
-  // 4. Last resort: return empty href to prevent navigation
+  if (pattern && productName) return pattern + encodeURIComponent(productName)
   return '#'
 }
 
@@ -71,82 +61,85 @@ export default function PriceComparisonTable({ prices, productId, productName }:
   const bestPriceIndex = allSamePrice ? -1 : prices.findIndex(p => effectivePrice(p) === minPrice)
 
   return (
-    <div className="bg-white rounded-lg shadow overflow-hidden">
-      {/* Desktop Table View */}
+    <div className="bg-groovy-cream border-2 border-groovy-ink rounded-2xl shadow-sticker overflow-hidden">
+
+      {/* Desktop Table */}
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full">
-          <thead className="bg-gray-50 border-b">
+          <thead className="bg-groovy-teal border-b-2 border-groovy-ink">
             <tr>
-              <th className="text-left px-4 py-3 text-sm font-semibold text-gray-700">Dispensary</th>
-              <th className="text-right px-4 py-3 text-sm font-semibold text-gray-700">MSRP</th>
-              <th className="text-right px-4 py-3 text-sm font-semibold text-gray-700">Deal Price</th>
-              <th className="text-center px-4 py-3 text-sm font-semibold text-gray-700">Stock</th>
-              <th className="text-center px-4 py-3 text-sm font-semibold text-gray-700">Action</th>
+              <th className="text-left px-5 py-3 text-xs font-display font-bold text-white uppercase tracking-wider">Dispensary</th>
+              <th className="text-right px-5 py-3 text-xs font-display font-bold text-white uppercase tracking-wider">MSRP</th>
+              <th className="text-right px-5 py-3 text-xs font-display font-bold text-white uppercase tracking-wider">Deal Price</th>
+              <th className="text-center px-5 py-3 text-xs font-display font-bold text-white uppercase tracking-wider">Stock</th>
+              <th className="text-center px-5 py-3 text-xs font-display font-bold text-white uppercase tracking-wider">Action</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y-2 divide-stone-200">
             {prices.map((price, index) => (
               <tr
                 key={price.dispensary_id}
-                className={`hover:bg-gray-50 transition-colors ${index === bestPriceIndex ? 'bg-green-50' : ''}`}
+                className={`transition-colors ${
+                  index === bestPriceIndex ? 'bg-amber-50' : 'hover:bg-stone-50'
+                }`}
               >
-                <td className="px-4 py-4">
+                <td className="px-5 py-4">
                   <div>
-                    <p className="font-semibold text-gray-900">
+                    <p className="font-display font-bold text-groovy-ink flex items-center gap-2">
                       {price.dispensary_name}
                       {index === bestPriceIndex && (
-                        <span className="ml-2 px-2 py-0.5 bg-green-500 text-white text-xs rounded-full">
+                        <span className="px-2 py-0.5 bg-groovy-sun text-groovy-ink text-xs font-display font-bold rounded-full border-2 border-groovy-ink shadow-[2px_2px_0px_#1C1917]">
                           Best Price
                         </span>
                       )}
                     </p>
-                    <p className="text-sm text-gray-600">{price.dispensary_location}</p>
+                    <p className="font-body text-sm text-stone-500">{price.dispensary_location}</p>
                     {price.dispensary_hours && (
-                      <p className="text-xs text-gray-500 mt-1">{price.dispensary_hours}</p>
+                      <p className="font-body text-xs text-stone-400 mt-0.5">{price.dispensary_hours}</p>
                     )}
                   </div>
                 </td>
-                <td className="text-right px-4 py-4">
-                  <span className={price.deal_price ? 'line-through text-gray-400' : 'font-semibold text-gray-900'}>
+                <td className="text-right px-5 py-4">
+                  <span className={`font-body ${price.deal_price ? 'line-through text-stone-400 text-sm' : 'font-semibold text-groovy-ink'}`}>
                     ${price.msrp.toFixed(2)}
                   </span>
                 </td>
-                <td className="text-right px-4 py-4">
+                <td className="text-right px-5 py-4">
                   {price.deal_price ? (
                     <div>
-                      <p className="text-lg font-bold text-green-600">${price.deal_price.toFixed(2)}</p>
+                      <p className="font-display font-bold text-lg text-groovy-teal">${price.deal_price.toFixed(2)}</p>
                       {price.promotion && (
-                        <p className="text-xs text-green-600">
-                          {price.savings_percentage}% off - {price.promotion.title}
+                        <p className="font-body text-xs text-groovy-teal mt-0.5">
+                          {price.savings_percentage}% off — {price.promotion.title}
                         </p>
                       )}
                     </div>
                   ) : (
-                    <span className="text-gray-400">—</span>
+                    <span className="font-body text-stone-300">—</span>
                   )}
                 </td>
-                <td className="text-center px-4 py-4">
+                <td className="text-center px-5 py-4">
                   {price.in_stock ? (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5"></span>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-display font-bold bg-teal-50 text-groovy-teal border-2 border-groovy-teal">
+                      <span className="w-1.5 h-1.5 bg-groovy-teal rounded-full"></span>
                       In Stock
                     </span>
                   ) : (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full mr-1.5"></span>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-display font-bold bg-stone-100 text-stone-500 border-2 border-stone-300">
+                      <span className="w-1.5 h-1.5 bg-stone-400 rounded-full"></span>
                       Out of Stock
                     </span>
                   )}
                 </td>
-                <td className="text-center px-4 py-4">
+                <td className="text-center px-5 py-4">
                   <a
                     href={generateOrderLink(price.dispensary_id, price.dispensary_website, price.product_url, productName)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`inline-block px-4 py-2 rounded text-sm font-medium transition-colors ${
+                    className={`inline-block px-4 py-2 rounded-xl text-sm font-display font-bold border-2 transition-all duration-150 ${
                       price.in_stock
-                        ? 'bg-cannabis-600 text-white hover:bg-cannabis-700'
-                        : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                        ? 'bg-groovy-amber text-white border-groovy-ink shadow-[2px_2px_0px_#1C1917] hover:-translate-y-0.5 hover:shadow-[3px_3px_0px_#1C1917]'
+                        : 'bg-stone-100 text-stone-400 border-stone-300 cursor-not-allowed'
                     }`}
                     onClick={(e) => !price.in_stock && e.preventDefault()}
                   >
@@ -159,31 +152,31 @@ export default function PriceComparisonTable({ prices, productId, productName }:
         </table>
       </div>
 
-      {/* Mobile Card View */}
-      <div className="md:hidden divide-y divide-gray-200">
+      {/* Mobile Cards */}
+      <div className="md:hidden divide-y-2 divide-stone-200">
         {prices.map((price, index) => (
           <div
             key={price.dispensary_id}
-            className={`p-4 ${index === bestPriceIndex ? 'bg-green-50' : ''}`}
+            className={`p-4 ${index === bestPriceIndex ? 'bg-amber-50' : ''}`}
           >
             <div className="flex justify-between items-start mb-3">
               <div>
-                <p className="font-semibold text-gray-900">
+                <p className="font-display font-bold text-groovy-ink">
                   {price.dispensary_name}
                   {index === bestPriceIndex && (
-                    <span className="ml-2 px-2 py-0.5 bg-green-500 text-white text-xs rounded-full">
+                    <span className="ml-2 px-2 py-0.5 bg-groovy-sun text-groovy-ink text-xs font-display font-bold rounded-full border border-groovy-ink">
                       Best
                     </span>
                   )}
                 </p>
-                <p className="text-sm text-gray-600">{price.dispensary_location}</p>
+                <p className="font-body text-sm text-stone-500">{price.dispensary_location}</p>
               </div>
               {price.in_stock ? (
-                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                <span className="px-2 py-0.5 rounded-full text-xs font-display font-bold bg-teal-50 text-groovy-teal border-2 border-groovy-teal">
                   In Stock
                 </span>
               ) : (
-                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                <span className="px-2 py-0.5 rounded-full text-xs font-display font-bold bg-stone-100 text-stone-500 border-2 border-stone-300">
                   Out of Stock
                 </span>
               )}
@@ -193,24 +186,24 @@ export default function PriceComparisonTable({ prices, productId, productName }:
               <div>
                 {price.deal_price ? (
                   <div>
-                    <span className="line-through text-gray-400 text-sm mr-2">${price.msrp.toFixed(2)}</span>
-                    <span className="text-lg font-bold text-green-600">${price.deal_price.toFixed(2)}</span>
+                    <span className="font-body line-through text-stone-400 text-sm mr-2">${price.msrp.toFixed(2)}</span>
+                    <span className="font-display font-bold text-lg text-groovy-teal">${price.deal_price.toFixed(2)}</span>
                     {price.savings_percentage && (
-                      <span className="ml-2 text-xs text-green-600">{price.savings_percentage}% off</span>
+                      <span className="ml-2 font-display text-xs font-bold text-groovy-teal">{price.savings_percentage}% off</span>
                     )}
                   </div>
                 ) : (
-                  <span className="text-lg font-semibold text-gray-900">${price.msrp.toFixed(2)}</span>
+                  <span className="font-display font-bold text-lg text-groovy-ink">${price.msrp.toFixed(2)}</span>
                 )}
               </div>
               <a
                 href={generateOrderLink(price.dispensary_id, price.dispensary_website, price.product_url, productName)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`px-4 py-2 rounded text-sm font-medium ${
+                className={`px-4 py-2 rounded-xl text-sm font-display font-bold border-2 ${
                   price.in_stock
-                    ? 'bg-cannabis-600 text-white'
-                    : 'bg-gray-200 text-gray-500'
+                    ? 'bg-groovy-amber text-white border-groovy-ink shadow-[2px_2px_0px_#1C1917]'
+                    : 'bg-stone-100 text-stone-400 border-stone-300'
                 }`}
                 onClick={(e) => !price.in_stock && e.preventDefault()}
               >
@@ -219,7 +212,7 @@ export default function PriceComparisonTable({ prices, productId, productName }:
             </div>
 
             {price.promotion && (
-              <p className="mt-2 text-xs text-green-600 bg-green-100 px-2 py-1 rounded">
+              <p className="mt-2 font-body text-xs text-groovy-teal bg-teal-50 border border-groovy-teal px-3 py-1 rounded-xl">
                 {price.promotion.title}
               </p>
             )}

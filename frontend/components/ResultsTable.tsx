@@ -1,6 +1,7 @@
 import React from 'react'
 import Link from 'next/link'
 import DealBadge from './DealBadge'
+import CannabisLeaf from './CannabisLeaf'
 
 interface Product {
   id: string
@@ -20,34 +21,44 @@ interface ResultsTableProps {
   products: Product[]
 }
 
+const TYPE_COLORS: Record<string, string> = {
+  flower: 'bg-green-100 text-green-800',
+  concentrate: 'bg-orange-100 text-orange-800',
+  edible: 'bg-yellow-100 text-yellow-800',
+  vaporizer: 'bg-blue-100 text-blue-800',
+  topical: 'bg-purple-100 text-purple-800',
+  tincture: 'bg-teal-100 text-teal-800',
+  'pre-roll': 'bg-amber-100 text-amber-800',
+  hardware: 'bg-stone-100 text-stone-700',
+}
+
 export default function ResultsTable({ products }: ResultsTableProps) {
-  // Mobile card layout
   const MobileCard = ({ product }: { product: Product }) => (
     <Link href={`/products/${product.id}`}>
-      <div className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow cursor-pointer border border-gray-200">
-        <div className="flex justify-between items-start mb-2">
-          <div className="flex-1">
-            <h3 className="font-semibold text-lg text-gray-900">{product.name}</h3>
+      <div className="bg-groovy-cream border-2 border-groovy-ink rounded-2xl shadow-sticker p-4 hover:-translate-y-0.5 hover:shadow-sticker-lg transition-all duration-150 cursor-pointer">
+        <div className="flex justify-between items-start mb-3">
+          <div className="flex-1 pr-2">
+            <h3 className="font-display font-bold text-base text-groovy-ink leading-tight">{product.name}</h3>
             {product.brand && (
-              <p className="text-sm text-gray-600">{product.brand}</p>
+              <p className="font-body text-sm text-stone-500 mt-0.5">{product.brand}</p>
             )}
           </div>
-          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded uppercase">
+          <span className={`text-xs font-display font-bold px-2 py-1 rounded-full border-2 border-groovy-ink flex-shrink-0 ${TYPE_COLORS[product.type] ?? 'bg-stone-100 text-stone-700'}`}>
             {product.type}
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
+        <div className="flex gap-4 mb-3 text-sm font-body">
           {product.thc !== null && (
             <div>
-              <span className="text-gray-500">THC:</span>
-              <span className="ml-1 font-medium text-gray-900">{product.thc}%</span>
+              <span className="text-stone-500">THC </span>
+              <span className="font-semibold text-groovy-ink">{product.thc}%</span>
             </div>
           )}
           {product.cbd !== null && (
             <div>
-              <span className="text-gray-500">CBD:</span>
-              <span className="ml-1 font-medium text-gray-900">{product.cbd}%</span>
+              <span className="text-stone-500">CBD </span>
+              <span className="font-semibold text-groovy-ink">{product.cbd}%</span>
             </div>
           )}
         </div>
@@ -55,86 +66,67 @@ export default function ResultsTable({ products }: ResultsTableProps) {
         {product.available_weights && product.available_weights.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-3">
             {product.available_weights.map((w) => (
-              <span key={w} className="px-2 py-0.5 bg-cannabis-50 text-cannabis-700 text-xs rounded-full border border-cannabis-200">
+              <span key={w} className="px-2 py-0.5 bg-amber-50 text-groovy-ink text-xs font-display font-semibold rounded-full border-2 border-groovy-ink">
                 {w}
               </span>
             ))}
           </div>
         )}
 
-        <div className="flex justify-between items-center pt-3 border-t border-gray-100">
+        <div className="flex justify-between items-center pt-3 border-t-2 border-stone-200">
           <div>
-            <div className="text-lg font-bold text-cannabis-700">
+            <div className="font-display font-bold text-lg text-groovy-teal">
               ${product.min_price.toFixed(2)}
               {product.min_price !== product.max_price && (
-                <span className="text-sm text-gray-500"> - ${product.max_price.toFixed(2)}</span>
+                <span className="text-sm text-stone-400 font-body font-normal"> – ${product.max_price.toFixed(2)}</span>
               )}
             </div>
-            <div className="text-xs text-gray-500">
+            <div className="font-body text-xs text-stone-500">
               {product.dispensary_count} {product.dispensary_count === 1 ? 'dispensary' : 'dispensaries'}
             </div>
           </div>
-          <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
+          <div className="text-groovy-amber font-display font-bold text-sm">View →</div>
         </div>
       </div>
     </Link>
   )
 
-  // Desktop table layout
   return (
     <>
-      {/* Mobile View */}
+      {/* Mobile */}
       <div className="lg:hidden space-y-3">
         {products.map((product) => (
           <MobileCard key={product.id} product={product} />
         ))}
       </div>
 
-      {/* Desktop View */}
-      <div className="hidden lg:block bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      {/* Desktop */}
+      <div className="hidden lg:block bg-groovy-cream border-2 border-groovy-ink rounded-2xl shadow-sticker overflow-hidden">
+        <table className="min-w-full">
+          <thead className="bg-groovy-teal border-b-2 border-groovy-ink">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Product
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Type
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                THC %
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                CBD %
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Price Range
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Locations
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-
-              </th>
+              {['Product', 'Type', 'THC %', 'CBD %', 'Price Range', 'Locations', ''].map((h) => (
+                <th key={h} className="px-5 py-3 text-left text-xs font-display font-bold text-white uppercase tracking-wider">
+                  {h}
+                </th>
+              ))}
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="divide-y-2 divide-stone-200">
             {products.map((product) => (
-              <tr key={product.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-6 py-4">
+              <tr key={product.id} className="hover:bg-amber-50 transition-colors group">
+                <td className="px-5 py-4">
                   <Link href={`/products/${product.id}`} className="block">
-                    <div className="font-medium text-gray-900 hover:text-cannabis-600">
+                    <div className="font-display font-bold text-groovy-ink group-hover:text-groovy-teal transition-colors">
                       {product.name}
                     </div>
                     {product.brand && (
-                      <div className="text-sm text-gray-500">{product.brand}</div>
+                      <div className="font-body text-sm text-stone-500">{product.brand}</div>
                     )}
                     {product.available_weights && product.available_weights.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1">
+                      <div className="flex flex-wrap gap-1 mt-1.5">
                         {product.available_weights.map((w) => (
-                          <span key={w} className="px-1.5 py-0.5 bg-cannabis-50 text-cannabis-700 text-xs rounded border border-cannabis-200">
+                          <span key={w} className="px-2 py-0.5 bg-amber-50 text-groovy-ink text-xs font-display font-semibold rounded-full border-2 border-groovy-ink">
                             {w}
                           </span>
                         ))}
@@ -142,38 +134,34 @@ export default function ResultsTable({ products }: ResultsTableProps) {
                     )}
                   </Link>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="text-sm text-gray-600">{product.type}</span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="text-sm text-gray-900">
-                    {product.thc !== null ? `${product.thc}%` : '-'}
+                <td className="px-5 py-4 whitespace-nowrap">
+                  <span className={`text-xs font-display font-bold px-2 py-1 rounded-full border-2 border-groovy-ink ${TYPE_COLORS[product.type] ?? 'bg-stone-100 text-stone-700'}`}>
+                    {product.type}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="text-sm text-gray-900">
-                    {product.cbd !== null ? `${product.cbd}%` : '-'}
-                  </span>
+                <td className="px-5 py-4 whitespace-nowrap font-body text-sm text-groovy-ink">
+                  {product.thc !== null ? `${product.thc}%` : '—'}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-semibold text-cannabis-700">
+                <td className="px-5 py-4 whitespace-nowrap font-body text-sm text-groovy-ink">
+                  {product.cbd !== null ? `${product.cbd}%` : '—'}
+                </td>
+                <td className="px-5 py-4 whitespace-nowrap">
+                  <div className="font-display font-bold text-groovy-teal">
                     ${product.min_price.toFixed(2)}
                     {product.min_price !== product.max_price && (
-                      <span className="text-gray-500"> - ${product.max_price.toFixed(2)}</span>
+                      <span className="text-stone-400 font-body font-normal text-sm"> – ${product.max_price.toFixed(2)}</span>
                     )}
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="text-sm text-gray-600">
-                    {product.dispensary_count} {product.dispensary_count === 1 ? 'location' : 'locations'}
-                  </span>
+                <td className="px-5 py-4 whitespace-nowrap font-body text-sm text-stone-600">
+                  {product.dispensary_count} {product.dispensary_count === 1 ? 'location' : 'locations'}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right">
+                <td className="px-5 py-4 whitespace-nowrap text-right">
                   <Link
                     href={`/products/${product.id}`}
-                    className="text-cannabis-600 hover:text-cannabis-700 font-medium text-sm"
+                    className="font-display font-bold text-sm text-groovy-amber hover:text-groovy-rust transition-colors"
                   >
-                    View Details →
+                    Details →
                   </Link>
                 </td>
               </tr>

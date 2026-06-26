@@ -252,8 +252,8 @@ class PlaywrightScraper(BaseScraper):
             "bud": "flower",
             "pre-roll": "pre-roll",
             "joint": "pre-roll",
-            "vape": "vaporizer",
-            "cartridge": "vaporizer",
+            "vape": "vape",
+            "cartridge": "vape",
             "concentrate": "concentrate",
             "extract": "concentrate",
             "edible": "edible",
@@ -594,7 +594,7 @@ class WholesomeCoScraper(PlaywrightScraper):
                         if (lowerText.includes('flower') || lowerText.includes('indoor') || lowerText.includes('outdoor') || lowerText.includes('greenhouse')) {
                             category = 'flower';
                         } else if (lowerText.includes('vape') || lowerText.includes('cartridge') || lowerText.includes('cart') || lowerText.includes('disposable pen') || lowerText.includes('pen')) {
-                            category = 'vaporizer';
+                            category = 'vape';
                         } else if (lowerText.includes('edible') || lowerText.includes('gummy') || lowerText.includes('chocolate') || lowerText.includes('caramel')) {
                             category = 'edible';
                         } else if (lowerText.includes('concentrate') || lowerText.includes('rosin') || lowerText.includes('badder') || lowerText.includes('shatter') || lowerText.includes('diamond')) {

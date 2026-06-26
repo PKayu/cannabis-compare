@@ -1,7 +1,7 @@
 """
 Database connection and session management
 """
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.ext.declarative import declarative_base
 from config import settings
@@ -9,19 +9,50 @@ from config import settings
 # Create database engine with conditional SSL config
 # PostgreSQL (Supabase) requires SSL, but local PostgreSQL doesn't
 is_postgres = settings.database_url.startswith("postgresql://")
+is_sqlite = settings.database_url.startswith("sqlite")
 is_supabase = "supabase" in settings.database_url.lower()
-connect_args = {"sslmode": "require"} if is_supabase else {}
+
+if is_supabase:
+    connect_args = {"sslmode": "require"}
+elif is_sqlite:
+    # busy_timeout (ms): wait up to 30s for a write lock instead of
+    # immediately raising "database is locked" when another process holds it.
+    connect_args = {"timeout": 30}
+else:
+    connect_args = {}
+
+engine_kwargs = dict(
+    echo=settings.debug,
+    future=True,
+)
+
+if is_sqlite:
+    # SQLite doesn't benefit from connection pooling; use NullPool-like
+    # settings and avoid pool_size/max_overflow which cause warnings.
+    engine_kwargs["pool_pre_ping"] = True
+else:
+    engine_kwargs.update(
+        pool_pre_ping=True,
+        pool_size=10,
+        max_overflow=20,
+        pool_recycle=3600,
+    )
 
 engine = create_engine(
     settings.database_url,
-    echo=settings.debug,
-    future=True,
-    pool_pre_ping=True,  # Auto-reconnect if connection drops
-    pool_size=10,        # Increased from default 5
-    max_overflow=20,     # Increased from default 10
-    pool_recycle=3600,   # Recycle connections after 1 hour
-    connect_args=connect_args
+    connect_args=connect_args,
+    **engine_kwargs,
 )
+
+# Enable WAL mode for SQLite — allows concurrent reads during writes and
+# dramatically reduces "database is locked" errors from scraper subprocesses.
+if is_sqlite:
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragma(dbapi_conn, connection_record):
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=30000")
+        cursor.close()
 
 # Create session factory
 SessionLocal = sessionmaker(

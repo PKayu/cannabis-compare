@@ -117,32 +117,48 @@ def _parse_weight(variant: Dict[str, Any], product_name: str) -> Optional[str]:
     return None
 
 
+def _extract_pct_from_display(display: Any) -> Optional[float]:
+    """Pull a percentage number out of a display string like '25.4%' or '25.4% THC'."""
+    if not display:
+        return None
+    m = re.search(r"(\d+\.?\d*)\s*%", str(display))
+    if not m:
+        return None
+    try:
+        pct = float(m.group(1))
+    except (TypeError, ValueError):
+        return None
+    return pct if 0 < pct <= 100 else None
+
+
 def _parse_thc(
     lab_tests: Optional[Dict[str, Any]]
 ) -> tuple[Optional[float], Optional[str]]:
     """Return (thc_percentage, thc_content_string) from labTests dict."""
     if not lab_tests:
         return None, None
-    thc = lab_tests.get("thc")
-    if not thc:
-        display = lab_tests.get("displayThc")
-        if display:
-            return None, str(display)
-        return None, None
-    values = thc.get("value") or []
-    unit = (thc.get("unitAbbr") or "").lower()
-    if not values:
-        return None, None
-    val = values[0] if isinstance(values, list) else values
-    try:
-        pct = float(val)
-    except (TypeError, ValueError):
-        return None, None
-    # Guard against mislabelled mg-as-% values (>100)
-    if unit == "%" and pct <= 100:
-        return round(pct, 2), f"{pct}%"
-    if unit == "mg":
-        return None, f"{pct} mg"
+    # Primary: structured thc / totalThc key
+    thc = lab_tests.get("thc") or lab_tests.get("totalThc") or lab_tests.get("THC")
+    if thc and isinstance(thc, dict):
+        values = thc.get("value") or []
+        unit = (thc.get("unitAbbr") or thc.get("unit") or "").lower()
+        val = values[0] if isinstance(values, list) and values else values
+        try:
+            pct = float(val)
+        except (TypeError, ValueError):
+            pct = None
+        if pct is not None:
+            if unit in ("%", "percentage") and pct <= 100:
+                return round(pct, 2), f"{pct}%"
+            if unit in ("mg", "milligram"):
+                return None, f"{pct} mg"
+    # Fallback: displayThc string — extract percentage if present
+    display = lab_tests.get("displayThc") or lab_tests.get("thcDisplay")
+    if display:
+        pct = _extract_pct_from_display(display)
+        if pct is not None:
+            return round(pct, 2), f"{pct}%"
+        return None, str(display)
     return None, None
 
 
@@ -152,22 +168,26 @@ def _parse_cbd(
     """Return (cbd_percentage, cbd_content_string) from labTests dict."""
     if not lab_tests:
         return None, None
-    cbd = lab_tests.get("cbd")
-    if not cbd:
-        return None, None
-    values = cbd.get("value") or []
-    unit = (cbd.get("unitAbbr") or "").lower()
-    if not values:
-        return None, None
-    val = values[0] if isinstance(values, list) else values
-    try:
-        pct = float(val)
-    except (TypeError, ValueError):
-        return None, None
-    if unit == "%" and pct <= 100:
-        return round(pct, 2), f"{pct}%"
-    if unit == "mg":
-        return None, f"{pct} mg"
+    cbd = lab_tests.get("cbd") or lab_tests.get("totalCbd") or lab_tests.get("CBD")
+    if cbd and isinstance(cbd, dict):
+        values = cbd.get("value") or []
+        unit = (cbd.get("unitAbbr") or cbd.get("unit") or "").lower()
+        val = values[0] if isinstance(values, list) and values else values
+        try:
+            pct = float(val)
+        except (TypeError, ValueError):
+            pct = None
+        if pct is not None:
+            if unit in ("%", "percentage") and pct <= 100:
+                return round(pct, 2), f"{pct}%"
+            if unit in ("mg", "milligram"):
+                return None, f"{pct} mg"
+    display = lab_tests.get("displayCbd") or lab_tests.get("cbdDisplay")
+    if display:
+        pct = _extract_pct_from_display(display)
+        if pct is not None:
+            return round(pct, 2), f"{pct}%"
+        return None, str(display)
     return None, None
 
 
@@ -283,7 +303,10 @@ class CuraleafParkCityScraper(BaseScraper):
 
                 weight = _parse_weight(variant, name)
 
-                lab_tests = variant.get("labTests")
+                # SweedPOS sometimes puts labTests on the variant and sometimes on
+                # the parent product — fall back to the product-level dict when
+                # the variant does not carry its own tests.
+                lab_tests = variant.get("labTests") or raw.get("labTests")
                 thc_pct, thc_content = _parse_thc(lab_tests)
                 cbd_pct, cbd_content = _parse_cbd(lab_tests)
 

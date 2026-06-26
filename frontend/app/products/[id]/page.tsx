@@ -8,6 +8,7 @@ import PriceComparisonTable from '@/components/PriceComparisonTable'
 import PricingChart from '@/components/PricingChart'
 import ReviewsSection from '@/components/ReviewsSection'
 import WatchlistButton from '@/components/WatchlistButton'
+import CannabisLeaf from '@/components/CannabisLeaf'
 
 interface Variant {
   id: string
@@ -81,27 +82,22 @@ export default function ProductDetailPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (productId) {
-      loadProductData()
-    }
+    if (productId) loadProductData()
   }, [productId])
 
   const loadProductData = async () => {
     try {
       setLoading(true)
       setError(null)
-
       const [productRes, pricesRes, relatedRes] = await Promise.all([
         api.products.get(productId),
         api.products.getPrices(productId),
         api.products.getRelated(productId, 8).catch(() => ({ data: [] }))
       ])
-
       setProduct(productRes.data)
       setWeightGroups(pricesRes.data)
       setRelatedProducts(relatedRes.data)
     } catch (err: any) {
-      console.error('Failed to load product:', err)
       setError(err.response?.status === 404 ? 'Product not found' : 'Failed to load product data')
     } finally {
       setLoading(false)
@@ -110,10 +106,10 @@ export default function ProductDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-groovy-cream flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-cannabis-600"></div>
-          <p className="mt-4 text-gray-600">Loading product...</p>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-groovy-teal border-t-transparent"></div>
+          <p className="mt-4 font-display font-semibold text-groovy-ink">Loading product…</p>
         </div>
       </div>
     )
@@ -121,13 +117,11 @@ export default function ProductDetailPage() {
 
   if (error || !product) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <svg className="mx-auto h-16 w-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h2 className="mt-4 text-xl font-semibold text-gray-700">{error || 'Product not found'}</h2>
-          <Link href="/products/search" className="mt-4 inline-block text-cannabis-600 hover:underline">
+      <div className="min-h-screen bg-groovy-cream flex items-center justify-center">
+        <div className="text-center card-sticker p-10 max-w-sm">
+          <CannabisLeaf size={56} color="#9CA3AF" className="mx-auto mb-4" />
+          <h2 className="font-display font-bold text-xl text-groovy-ink mb-2">{error || 'Product not found'}</h2>
+          <Link href="/products/search" className="btn-groovy-teal mt-4">
             ← Back to Search
           </Link>
         </div>
@@ -135,7 +129,6 @@ export default function ProductDetailPage() {
     )
   }
 
-  // Flatten all prices across weight groups for summary stats
   const allPrices = weightGroups.flatMap(g => g.prices)
   const bestPrice = allPrices.length > 0
     ? allPrices.reduce((best, p) => {
@@ -145,8 +138,6 @@ export default function ProductDetailPage() {
       })
     : null
   const inStockCount = allPrices.filter(p => p.in_stock).length
-
-  // Merge weight groups into display groups — null weights are merged with the sole non-null weight
   const nonNullWeights = [...new Set(weightGroups.map(g => g.weight).filter((w): w is string => w !== null))]
   const hasMultipleWeights = nonNullWeights.length > 1
   const displayGroups = hasMultipleWeights
@@ -157,57 +148,77 @@ export default function ProductDetailPage() {
     : [{ weight: nonNullWeights[0] ?? null, prices: allPrices }]
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Compliance Banner */}
-      <div className="bg-yellow-50 border-b border-yellow-200 py-2 px-4">
-        <div className="max-w-7xl mx-auto">
-          <p className="text-sm text-yellow-800 text-center">
-            ⚠️ For informational purposes only. Not affiliated with any dispensary.
-            This site does not sell controlled substances.
-          </p>
+    <div className="min-h-screen bg-groovy-cream">
+      {/* Compliance */}
+      <div className="compliance-banner">
+        <div className="max-w-4xl mx-auto flex items-center gap-2">
+          <CannabisLeaf size={16} color="#1C1917" />
+          <p className="text-sm">⚠️ For informational purposes only. Not affiliated with any dispensary. Does not sell controlled substances.</p>
         </div>
       </div>
 
       {/* Breadcrumb */}
-      <div className="bg-white border-b">
+      <div className="bg-white border-b-2 border-stone-200">
         <div className="max-w-4xl mx-auto px-4 py-3">
-          <nav className="text-sm text-gray-600">
-            <Link href="/" className="hover:text-cannabis-600">Home</Link>
-            <span className="mx-2">/</span>
-            <Link href="/products/search" className="hover:text-cannabis-600">Search</Link>
-            <span className="mx-2">/</span>
-            <span className="text-gray-900">{product.name}</span>
+          <nav className="text-sm font-body text-stone-500 flex items-center gap-2">
+            <Link href="/" className="hover:text-groovy-teal transition-colors">Home</Link>
+            <span>/</span>
+            <Link href="/products/search" className="hover:text-groovy-teal transition-colors">Search</Link>
+            <span>/</span>
+            <span className="text-groovy-ink font-semibold truncate">{product.name}</span>
           </nav>
         </div>
       </div>
 
-      {/* Product Header */}
-      <div className="bg-white shadow">
-        <div className="max-w-4xl mx-auto px-4 py-8">
-          <div className="flex flex-col md:flex-row md:justify-between md:items-start">
-            <div>
-              <h1 className="text-3xl md:text-4xl font-bold text-cannabis-700">{product.name}</h1>
-              {product.brand && (
-                <p className="text-xl text-gray-600 mt-2">by {product.brand}</p>
-              )}
-              <span className="inline-block mt-3 px-3 py-1 bg-cannabis-100 text-cannabis-800 rounded-full text-sm">
-                {product.product_type}
-              </span>
+      {/* Product Hero Header — retro gradient band */}
+      <div
+        className="border-b-4 border-groovy-ink relative overflow-hidden"
+        style={{
+          background: 'linear-gradient(135deg, #F59E0B 0%, #F97316 40%, #0D9488 100%)',
+          filter: 'saturate(115%) contrast(105%)',
+        }}
+      >
+        {/* Decorative leaves */}
+        <div className="absolute right-6 top-4 opacity-20 hidden md:block">
+          <CannabisLeaf size={72} color="#FFF8EE" rotate={20} />
+        </div>
+        <div className="absolute right-20 bottom-0 opacity-15 hidden md:block">
+          <CannabisLeaf size={48} color="#FFF8EE" rotate={-15} variant="sprig" />
+        </div>
 
-              {/* Watchlist Button */}
-              <div className="mt-4">
-                <WatchlistButton productId={productId} />
+        <div className="relative max-w-4xl mx-auto px-4 py-10">
+          <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-6">
+            <div>
+              <h1
+                className="font-display font-bold text-white leading-tight"
+                style={{
+                  fontSize: 'clamp(2rem, 5vw, 3.5rem)',
+                  WebkitTextStroke: '1.5px rgba(28,25,23,0.3)',
+                }}
+              >
+                {product.name}
+              </h1>
+              {product.brand && (
+                <p className="font-body text-white/80 text-lg mt-1">by {product.brand}</p>
+              )}
+              <div className="flex items-center gap-3 mt-3">
+                <span className="font-display font-bold text-sm px-3 py-1 bg-groovy-sun text-groovy-ink rounded-full border-2 border-groovy-ink shadow-[2px_2px_0px_#1C1917]">
+                  {product.product_type}
+                </span>
+                <div className="mt-0 [&>button]:border-white [&>button]:text-white">
+                  <WatchlistButton productId={productId} />
+                </div>
               </div>
             </div>
 
             {bestPrice && (
-              <div className="mt-4 md:mt-0 text-right">
-                <p className="text-gray-600 text-sm">Best Price</p>
-                <p className="text-3xl font-bold text-green-600">
+              <div className="bg-white/20 backdrop-blur-sm border-2 border-white/40 rounded-2xl px-6 py-4 text-right flex-shrink-0">
+                <p className="font-body text-white/70 text-sm">Best Price</p>
+                <p className="font-display font-bold text-3xl text-groovy-sun">
                   ${(bestPrice.deal_price || bestPrice.msrp).toFixed(2)}
                 </p>
                 {bestPrice.deal_price && bestPrice.savings_percentage && (
-                  <span className="inline-block px-2 py-1 bg-green-100 text-green-800 rounded text-sm">
+                  <span className="inline-block font-display font-bold text-xs px-2 py-0.5 bg-groovy-sun text-groovy-ink rounded-full border-2 border-groovy-ink mt-1">
                     Save {bestPrice.savings_percentage}%
                   </span>
                 )}
@@ -215,103 +226,106 @@ export default function ProductDetailPage() {
             )}
           </div>
 
-          {/* Stats Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+          {/* Stats row */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-8">
             {product.thc_percentage !== null && (
-              <div className="bg-cannabis-50 p-4 rounded-lg">
-                <p className="text-gray-600 text-sm">THC</p>
-                <p className="text-2xl font-bold text-cannabis-700">{product.thc_percentage}%</p>
+              <div className="bg-white/20 backdrop-blur-sm border-2 border-white/30 rounded-2xl p-4">
+                <p className="font-body text-white/70 text-xs">THC</p>
+                <p className="font-display font-bold text-2xl text-groovy-sun">{product.thc_percentage}%</p>
               </div>
             )}
             {product.cbd_percentage !== null && (
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <p className="text-gray-600 text-sm">CBD</p>
-                <p className="text-2xl font-bold text-blue-700">{product.cbd_percentage}%</p>
+              <div className="bg-white/20 backdrop-blur-sm border-2 border-white/30 rounded-2xl p-4">
+                <p className="font-body text-white/70 text-xs">CBD</p>
+                <p className="font-display font-bold text-2xl text-white">{product.cbd_percentage}%</p>
               </div>
             )}
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <p className="text-gray-600 text-sm">Dispensaries</p>
-              <p className="text-2xl font-bold text-gray-700">{new Set(allPrices.map(p => p.dispensary_id)).size}</p>
+            <div className="bg-white/20 backdrop-blur-sm border-2 border-white/30 rounded-2xl p-4">
+              <p className="font-body text-white/70 text-xs">Dispensaries</p>
+              <p className="font-display font-bold text-2xl text-white">{new Set(allPrices.map(p => p.dispensary_id)).size}</p>
             </div>
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <p className="text-gray-600 text-sm">In Stock</p>
-              <p className="text-2xl font-bold text-gray-700">{inStockCount}</p>
+            <div className="bg-white/20 backdrop-blur-sm border-2 border-white/30 rounded-2xl p-4">
+              <p className="font-body text-white/70 text-xs">In Stock</p>
+              <p className="font-display font-bold text-2xl text-white">{inStockCount}</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-4xl mx-auto px-4 py-10">
+
         {/* Price Comparison */}
         <section className="mb-12">
-          <h2 className="text-2xl font-bold mb-4 text-gray-800">Prices Across Dispensaries</h2>
+          <div className="flex items-center gap-3 mb-5">
+            <CannabisLeaf size={24} color="#0D9488" rotate={-10} />
+            <h2 className="font-display font-bold text-2xl text-groovy-ink">Prices Across Dispensaries</h2>
+          </div>
           {displayGroups.length > 0 && allPrices.length > 0 ? (
             <div className="space-y-6">
               {displayGroups.map((group, i) => (
                 <div key={group.weight ?? i}>
                   {hasMultipleWeights && group.weight && (
-                    <h3 className="text-lg font-semibold text-gray-700 mb-2 px-1">
-                      {group.weight}
-                    </h3>
+                    <h3 className="font-display font-semibold text-lg text-groovy-ink mb-2 px-1">{group.weight}</h3>
                   )}
-                  <PriceComparisonTable
-                    prices={group.prices}
-                    productId={productId}
-                    productName={product.name}
-                  />
+                  <PriceComparisonTable prices={group.prices} productId={productId} productName={product.name} />
                 </div>
               ))}
             </div>
           ) : (
-            <div className="bg-white rounded-lg shadow p-6 text-center text-gray-600">
+            <div className="card-sticker p-8 text-center text-stone-500 font-body">
               No pricing data available for this product.
             </div>
           )}
         </section>
 
-        {/* Pricing History */}
+        {/* Price History */}
         <section className="mb-12">
-          <h2 className="text-2xl font-bold mb-4 text-gray-800">Price History</h2>
-          <PricingChart productId={productId} />
+          <div className="flex items-center gap-3 mb-5">
+            <CannabisLeaf size={24} color="#F97316" rotate={15} />
+            <h2 className="font-display font-bold text-2xl text-groovy-ink">Price History</h2>
+          </div>
+          <div className="card-sticker overflow-hidden">
+            <PricingChart productId={productId} />
+          </div>
         </section>
 
         {/* Reviews */}
         <section className="mb-12">
-          <h2 className="text-2xl font-bold mb-4 text-gray-800">Community Reviews</h2>
+          <div className="flex items-center gap-3 mb-5">
+            <CannabisLeaf size={24} color="#0D9488" rotate={-5} variant="sprig" />
+            <h2 className="font-display font-bold text-2xl text-groovy-ink">Community Reviews</h2>
+          </div>
           <ReviewsSection productId={productId} />
         </section>
 
         {/* Similar Products */}
         {relatedProducts.length > 0 && (
           <section>
-            <h2 className="text-2xl font-bold mb-4 text-gray-800">Similar Products</h2>
+            <div className="flex items-center gap-3 mb-5">
+              <CannabisLeaf size={24} color="#F97316" rotate={10} />
+              <h2 className="font-display font-bold text-2xl text-groovy-ink">Similar Products</h2>
+            </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {relatedProducts.map((rp) => (
                 <Link
                   key={rp.id}
                   href={`/products/${rp.id}`}
-                  className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow"
+                  className="card-sticker p-4 hover:-translate-y-0.5 transition-all duration-150 block"
                 >
-                  <h3 className="font-semibold text-gray-900 text-sm leading-tight line-clamp-2">
-                    {rp.name}
-                  </h3>
+                  <h3 className="font-display font-bold text-sm text-groovy-ink leading-tight line-clamp-2">{rp.name}</h3>
                   {rp.brand && (
-                    <p className="text-xs text-gray-500 mt-1 truncate">{rp.brand}</p>
+                    <p className="font-body text-xs text-stone-500 mt-1 truncate">{rp.brand}</p>
                   )}
-                  <span className="inline-block mt-2 px-2 py-0.5 bg-cannabis-100 text-cannabis-800 rounded-full text-xs">
+                  <span className="inline-block mt-2 px-2 py-0.5 bg-groovy-sun text-groovy-ink text-xs font-display font-bold rounded-full border-2 border-groovy-ink">
                     {rp.product_type}
                   </span>
-                  <div className="mt-2 flex items-center gap-2 text-xs text-gray-600">
-                    {rp.thc_percentage != null && (
-                      <span>THC {rp.thc_percentage}%</span>
-                    )}
-                    {rp.cbd_percentage != null && (
-                      <span>CBD {rp.cbd_percentage}%</span>
-                    )}
+                  <div className="mt-2 flex items-center gap-2 text-xs font-body text-stone-600">
+                    {rp.thc_percentage != null && <span>THC {rp.thc_percentage}%</span>}
+                    {rp.cbd_percentage != null && <span>CBD {rp.cbd_percentage}%</span>}
                   </div>
                   {rp.min_price != null && (
-                    <p className="mt-2 text-sm font-semibold text-green-600">
+                    <p className="mt-2 font-display font-bold text-sm text-groovy-teal">
                       {rp.min_price === rp.max_price
                         ? `$${rp.min_price.toFixed(2)}`
                         : `$${rp.min_price.toFixed(2)}–$${rp.max_price!.toFixed(2)}`}

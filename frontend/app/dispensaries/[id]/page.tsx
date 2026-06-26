@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { api } from '@/lib/api'
 import CurrentPromotions from '@/components/CurrentPromotions'
 import DispensaryInventory from '@/components/DispensaryInventory'
+import CannabisLeaf from '@/components/CannabisLeaf'
 
 interface Promotion {
   id: string
@@ -37,9 +38,7 @@ export default function DispensaryDetailPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (dispensaryId) {
-      loadDispensaryData()
-    }
+    if (dispensaryId) loadDispensaryData()
   }, [dispensaryId])
 
   const loadDispensaryData = async () => {
@@ -49,7 +48,6 @@ export default function DispensaryDetailPage() {
       const res = await api.dispensaries.get(dispensaryId)
       setDispensary(res.data)
     } catch (err: any) {
-      console.error('Failed to load dispensary:', err)
       setError(err.response?.status === 404 ? 'Dispensary not found' : 'Failed to load dispensary')
     } finally {
       setLoading(false)
@@ -58,10 +56,10 @@ export default function DispensaryDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-groovy-cream flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-cannabis-600"></div>
-          <p className="mt-4 text-gray-600">Loading dispensary...</p>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-groovy-teal border-t-transparent"></div>
+          <p className="mt-4 font-display font-semibold text-groovy-ink">Loading dispensary…</p>
         </div>
       </div>
     )
@@ -69,13 +67,11 @@ export default function DispensaryDetailPage() {
 
   if (error || !dispensary) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <svg className="mx-auto h-16 w-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-          </svg>
-          <h2 className="mt-4 text-xl font-semibold text-gray-700">{error || 'Dispensary not found'}</h2>
-          <Link href="/dispensaries" className="mt-4 inline-block text-cannabis-600 hover:underline">
+      <div className="min-h-screen bg-groovy-cream flex items-center justify-center">
+        <div className="card-sticker p-10 max-w-sm text-center">
+          <CannabisLeaf size={56} color="#9CA3AF" className="mx-auto mb-4" variant="stalk" />
+          <h2 className="font-display font-bold text-xl text-groovy-ink mb-4">{error || 'Dispensary not found'}</h2>
+          <Link href="/dispensaries" className="btn-groovy-teal">
             ← Back to Dispensaries
           </Link>
         </div>
@@ -84,46 +80,69 @@ export default function DispensaryDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Compliance Banner */}
-      <div className="bg-yellow-50 border-b border-yellow-200 py-2 px-4">
-        <div className="max-w-7xl mx-auto">
-          <p className="text-sm text-yellow-800 text-center">
-            ⚠️ For informational purposes only. Not affiliated with any dispensary.
-            This site does not sell controlled substances.
-          </p>
+    <div className="min-h-screen bg-groovy-cream">
+      {/* Compliance */}
+      <div className="compliance-banner">
+        <div className="max-w-4xl mx-auto flex items-center gap-2">
+          <CannabisLeaf size={16} color="#1C1917" />
+          <p className="text-sm">⚠️ For informational purposes only. Not affiliated with any dispensary. Does not sell controlled substances.</p>
         </div>
       </div>
 
       {/* Breadcrumb */}
-      <div className="bg-white border-b">
+      <div className="bg-white border-b-2 border-stone-200">
         <div className="max-w-4xl mx-auto px-4 py-3">
-          <nav className="text-sm text-gray-600">
-            <Link href="/" className="hover:text-cannabis-600">Home</Link>
-            <span className="mx-2">/</span>
-            <Link href="/dispensaries" className="hover:text-cannabis-600">Dispensaries</Link>
-            <span className="mx-2">/</span>
-            <span className="text-gray-900">{dispensary.name}</span>
+          <nav className="text-sm font-body text-stone-500 flex items-center gap-2">
+            <Link href="/" className="hover:text-groovy-teal transition-colors">Home</Link>
+            <span>/</span>
+            <Link href="/dispensaries" className="hover:text-groovy-teal transition-colors">Dispensaries</Link>
+            <span>/</span>
+            <span className="text-groovy-ink font-semibold truncate">{dispensary.name}</span>
           </nav>
         </div>
       </div>
 
-      {/* Dispensary Header */}
-      <div className="bg-white shadow">
-        <div className="max-w-4xl mx-auto px-4 py-8">
-          <div className="flex flex-col md:flex-row md:justify-between md:items-start">
+      {/* Dispensary Hero — cobalt-to-teal gradient */}
+      <div
+        className="border-b-4 border-groovy-ink relative overflow-hidden"
+        style={{
+          background: 'linear-gradient(135deg, #2563EB 0%, #0D9488 60%, #0F766E 100%)',
+          filter: 'saturate(110%) contrast(105%)',
+        }}
+      >
+        {/* Decorative leaves */}
+        <div className="absolute right-4 top-6 opacity-20 hidden md:block">
+          <CannabisLeaf size={80} color="#FFF8EE" rotate={25} variant="stalk" />
+        </div>
+        <div className="absolute left-8 bottom-0 opacity-15 hidden md:block">
+          <CannabisLeaf size={56} color="#FFF8EE" rotate={-20} />
+        </div>
+        <div className="absolute right-32 top-4 opacity-15 hidden lg:block">
+          <CannabisLeaf size={40} color="#FFF8EE" rotate={10} variant="sprig" />
+        </div>
+
+        <div className="relative max-w-4xl mx-auto px-4 py-10">
+          <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-6">
             <div>
-              <h1 className="text-3xl md:text-4xl font-bold text-cannabis-700">{dispensary.name}</h1>
-              <p className="text-gray-600 mt-2 flex items-center">
-                <svg className="w-5 h-5 mr-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <h1
+                className="font-display font-bold text-white leading-tight"
+                style={{
+                  fontSize: 'clamp(2rem, 5vw, 3.5rem)',
+                  WebkitTextStroke: '1.5px rgba(28,25,23,0.25)',
+                }}
+              >
+                {dispensary.name}
+              </h1>
+              <p className="font-body text-white/80 mt-2 flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
                 {dispensary.location}
               </p>
               {dispensary.hours && (
-                <p className="text-gray-600 mt-1 flex items-center">
-                  <svg className="w-5 h-5 mr-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <p className="font-body text-white/70 mt-1 flex items-center gap-2 text-sm">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   {dispensary.hours}
@@ -136,9 +155,9 @@ export default function DispensaryDetailPage() {
                 href={dispensary.website}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-4 md:mt-0 inline-flex items-center px-4 py-2 bg-cannabis-600 text-white rounded-lg hover:bg-cannabis-700 transition-colors"
+                className="flex-shrink-0 inline-flex items-center gap-2 font-display font-bold px-5 py-3 bg-groovy-sun text-groovy-ink rounded-2xl border-2 border-groovy-ink shadow-[4px_4px_0px_#1C1917] hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_#1C1917] transition-all duration-150"
               >
-                <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                 </svg>
                 Visit Website
@@ -146,42 +165,47 @@ export default function DispensaryDetailPage() {
             )}
           </div>
 
-          {/* Stats Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-6">
-            <div className="bg-cannabis-50 p-4 rounded-lg">
-              <p className="text-gray-600 text-sm">Products in Stock</p>
-              <p className="text-2xl font-bold text-cannabis-700">{dispensary.product_count}</p>
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-3 mt-8">
+            <div className="bg-white/20 backdrop-blur-sm border-2 border-white/30 rounded-2xl p-4">
+              <p className="font-body text-white/70 text-xs">Products</p>
+              <p className="font-display font-bold text-2xl text-groovy-sun">{dispensary.product_count}</p>
             </div>
-            <div className="bg-green-50 p-4 rounded-lg">
-              <p className="text-gray-600 text-sm">Active Deals</p>
-              <p className="text-2xl font-bold text-green-700">{dispensary.promotions.length}</p>
+            <div className="bg-white/20 backdrop-blur-sm border-2 border-white/30 rounded-2xl p-4">
+              <p className="font-body text-white/70 text-xs">Active Deals</p>
+              <p className="font-display font-bold text-2xl text-white">{dispensary.promotions.length}</p>
             </div>
-            <div className="bg-gray-50 p-4 rounded-lg col-span-2 md:col-span-1">
-              <p className="text-gray-600 text-sm">License Status</p>
-              <p className="text-lg font-semibold text-gray-700">
-                <span className="inline-flex items-center">
-                  <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                  Active
-                </span>
-              </p>
+            <div className="bg-white/20 backdrop-blur-sm border-2 border-white/30 rounded-2xl p-4">
+              <p className="font-body text-white/70 text-xs">License</p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-groovy-sun flex-shrink-0"></span>
+                <p className="font-display font-bold text-base text-white">Active</p>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Current Promotions */}
+      <div className="max-w-4xl mx-auto px-4 py-10">
+
+        {/* Promotions */}
         {dispensary.promotions.length > 0 && (
           <section className="mb-12">
-            <h2 className="text-2xl font-bold mb-4 text-gray-800">Current Promotions & Deals</h2>
+            <div className="flex items-center gap-3 mb-5">
+              <CannabisLeaf size={24} color="#F97316" rotate={-10} />
+              <h2 className="font-display font-bold text-2xl text-groovy-ink">Current Promotions & Deals</h2>
+            </div>
             <CurrentPromotions promotions={dispensary.promotions} />
           </section>
         )}
 
         {/* Inventory */}
         <section className="mb-12">
-          <h2 className="text-2xl font-bold mb-4 text-gray-800">Inventory</h2>
+          <div className="flex items-center gap-3 mb-5">
+            <CannabisLeaf size={24} color="#0D9488" rotate={10} variant="stalk" />
+            <h2 className="font-display font-bold text-2xl text-groovy-ink">Inventory</h2>
+          </div>
           <DispensaryInventory dispensaryId={dispensaryId} />
         </section>
       </div>

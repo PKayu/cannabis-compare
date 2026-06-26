@@ -580,9 +580,13 @@ class BeehiveFarmacyBaseScraper(BaseScraper):
         name = re.sub(r'\s*\|\s*$', '', name).strip()
         # Strip Dutchie embedded-menu category labels appended after "|"
         # (e.g. "White Runtz | Tincture" → "White Runtz", "Menthol Calm | Balm" → "Menthol Calm")
+        # Also handles Dutchie concentrate subtypes: "Afterglow | Live Resin Sugar |" → "Afterglow"
         name = re.sub(
             r'\s*\|\s*(?:Topical|Tincture|Balm|Patches?|Cream|Lotion|Flower|Concentrate|'
-            r'Pre-?Rolls?|Vape|Vaporizer|Cartridge|Edibles?|Accessory|Accessories|Gear)\s*$',
+            r'Pre-?Rolls?|Vape|Vaporizer|Cartridge|Disposable|AIO|Edibles?|'
+            r'Live\s+Resin\s+(?:Sugar|Badder|Budder)|Live\s+Budder|Sugar\s+Wax|'
+            r'Live\s+Piatella|Gel\s+Cube|Kief|Rosin|'
+            r'Accessory|Accessories|Gear)\s*$',
             '',
             name,
             flags=re.IGNORECASE,
@@ -740,6 +744,17 @@ class BeehiveFarmacyBaseScraper(BaseScraper):
                             weight = f"{qty}{unit}"
                     else:
                         weight = None
+
+                # Guard: skip sub-$2 variants for edibles/tinctures — Dutchie
+                # sometimes returns a per-piece (1ct) variant alongside the full
+                # package, producing implausibly low prices like $1.00 for a
+                # cannabis edible. Hardware accessories can legitimately cost <$2.
+                if price < 2.0 and category in ("edible", "tincture"):
+                    logger.debug(
+                        f"Skipping sub-$2 {category} variant for '{name}' "
+                        f"(price=${price}, option={opt!r})"
+                    )
+                    continue
 
                 var_in_stock = bool(fv.get("inStock", fv.get("in_stock", global_in_stock)))
                 products.append(ScrapedProduct(
@@ -917,7 +932,10 @@ class BeehiveFarmacyBaseScraper(BaseScraper):
         # Strip Dutchie category labels appended after "|"
         name = re.sub(
             r'\s*\|\s*(?:Topical|Tincture|Balm|Patches?|Cream|Lotion|Flower|Concentrate|'
-            r'Pre-?Rolls?|Vape|Vaporizer|Cartridge|Edibles?|Accessory|Accessories|Gear)\s*$',
+            r'Pre-?Rolls?|Vape|Vaporizer|Cartridge|Disposable|AIO|Edibles?|'
+            r'Live\s+Resin\s+(?:Sugar|Badder|Budder)|Live\s+Budder|Sugar\s+Wax|'
+            r'Live\s+Piatella|Gel\s+Cube|Kief|Rosin|'
+            r'Accessory|Accessories|Gear)\s*$',
             '',
             name,
             flags=re.IGNORECASE,

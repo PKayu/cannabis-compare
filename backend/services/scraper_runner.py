@@ -121,13 +121,30 @@ class ScraperRunner:
             logger.info(f"Scraped {len(products)} products from {config.name}. Saving to DB...")
 
             # 2. Get or create the dispensary record
-            dispensary = self._get_or_create_dispensary(
-                name=config.dispensary_name,
-                location=config.dispensary_location
-            )
-
-            # Link run log to dispensary now that we have it
-            run_log.dispensary_id = dispensary.id
+            # Retry with rollback if SQLite "database is locked" causes a
+            # PendingRollbackError — this is the #1 cause of Curaleaf failures.
+            for _db_attempt in range(3):
+                try:
+                    dispensary = self._get_or_create_dispensary(
+                        name=config.dispensary_name,
+                        location=config.dispensary_location
+                    )
+                    # Link run log to dispensary now that we have it
+                    run_log.dispensary_id = dispensary.id
+                    self.db.flush()
+                    break
+                except Exception as db_err:
+                    if "database is locked" in str(db_err) or "PendingRollbackError" in type(db_err).__name__:
+                        logger.warning(f"DB lock on dispensary update (attempt {_db_attempt + 1}/3): {db_err}")
+                        self.db.rollback()
+                        # Re-fetch the run_log since rollback detached it
+                        run_log = self.db.query(ScraperRun).filter(ScraperRun.id == run_log.id).first()
+                        if _db_attempt == 2:
+                            raise
+                        import time
+                        time.sleep(1 + _db_attempt)
+                    else:
+                        raise
 
             # 3. Pre-load master product candidates for fuzzy matching
             from collections import defaultdict

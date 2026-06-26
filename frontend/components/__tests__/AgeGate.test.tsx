@@ -210,12 +210,12 @@ describe('AgeGate Component', () => {
       await user.click(checkbox)
       await user.click(continueButton)
 
-      // Should not verify if birthday hasn't occurred yet this year
-      // Age should be calculated as 20, not 21
       await waitFor(() => {
-        const errorMessage = screen.queryByText('You must be 21 years or older to access this site.')
-        // This test verifies age calculation handles future birthdays correctly
+        expect(screen.getByText('You must be 21 years or older to access this site.')).toBeInTheDocument()
       })
+
+      expect(mockOnVerify).not.toHaveBeenCalled()
+      expect(localStorage.setItem).not.toHaveBeenCalled()
     })
   })
 
@@ -252,3 +252,4 @@ describe('AgeGate Component', () => {
     })
   })
 })
+

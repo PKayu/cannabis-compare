@@ -8,6 +8,9 @@ on:
   # Allow manual trigger
   workflow_dispatch:
 
+permissions:
+  pull-requests: write
+
 jobs:
   e2e-tests:
     name: Playwright E2E Tests

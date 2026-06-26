@@ -42,7 +42,7 @@ def _base_name(name: str) -> str:
     return name[: m.start()].strip() if m else name
 
 from database import get_db
-from models import ScraperFlag, Product, Price, Brand, Dispensary, ScraperRun
+from models import ScraperFlag, Product, Price, Brand, Dispensary, ScraperRun, User
 from services.normalization.flag_processor import ScraperFlagProcessor
 from services.quality.outlier_detection import OutlierDetector
 from services.admin.flag_analyzer import (
@@ -50,8 +50,9 @@ from services.admin.flag_analyzer import (
     compute_data_quality,
     get_matched_product_dispensary_ids,
 )
+from routers.auth import verify_admin
 
-router = APIRouter(prefix="/api/admin", tags=["admin"])
+router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(verify_admin)])
 
 
 # === Pydantic Schemas ===
@@ -144,26 +145,6 @@ class FlagStatsResponse(BaseModel):
     dismissed: int
     cleaned: int = 0
     total: int
-
-
-# === Admin Verification (Placeholder) ===
-
-async def get_current_user():
-    """Placeholder for user authentication"""
-    return "admin-user-id"
-
-
-async def verify_admin(
-    user_id: str = Depends(get_current_user),
-    db: Session = Depends(get_db)
-) -> str:
-    """
-    Verify user has admin privileges.
-    TODO: Implement proper admin verification with JWT/Supabase.
-    """
-    if user_id not in ["admin-user-id"]:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    return user_id
 
 
 # === Flag CRUD Endpoints ===

@@ -51,8 +51,8 @@ jobs:
     - name: Start backend server
       working-directory: ./backend
       run: |
-        uvicorn main:app --host 0.0.0.0 --port 8000 &
-        echo $! > ../backend.pid
+        uvicorn main:app --host 0.0.0.0 --port 8000 > /tmp/uvicorn.log 2>&1 &
+        echo $! > backend.pid
       env:
         DATABASE_URL: sqlite:///./test.db
         SECRET_KEY: test-secret-key-for-e2e
@@ -61,14 +61,28 @@ jobs:
 
     - name: Wait for backend to be ready
       run: |
-        timeout 30 bash -c 'until curl -f http://localhost:8000/health; do sleep 1; done'
+        for i in $(seq 1 60); do
+          if curl -sf http://localhost:8000/health; then
+            echo "Backend ready after ${i}s"
+            exit 0
+          fi
+          if ! kill -0 $(cat backend/backend.pid) 2>/dev/null; then
+            echo "Backend process died. Logs:"
+            cat /tmp/uvicorn.log
+            exit 1
+          fi
+          sleep 1
+        done
+        echo "Backend did not start within 60s. Logs:"
+        cat /tmp/uvicorn.log
+        exit 1
 
     - name: Start frontend server
       working-directory: ./frontend
       run: |
         npm run build
-        npm run start &
-        echo $! > ../frontend.pid
+        PORT=3000 npm run start > /tmp/next.log 2>&1 &
+        echo $! > frontend.pid
       env:
         NEXT_PUBLIC_API_URL: http://localhost:8000
         NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://test.supabase.co' }}
@@ -76,7 +90,21 @@ jobs:
 
     - name: Wait for frontend to be ready
       run: |
-        timeout 60 bash -c 'until curl -f http://localhost:3000; do sleep 1; done'
+        for i in $(seq 1 90); do
+          if curl -sf http://localhost:3000; then
+            echo "Frontend ready after ${i}s"
+            exit 0
+          fi
+          if ! kill -0 $(cat frontend/frontend.pid) 2>/dev/null; then
+            echo "Frontend process died. Logs:"
+            cat /tmp/next.log
+            exit 1
+          fi
+          sleep 1
+        done
+        echo "Frontend did not start within 90s. Logs:"
+        cat /tmp/next.log
+        exit 1
 
     - name: Run Playwright tests
       run: npx playwright test
@@ -97,6 +125,16 @@ jobs:
       with:
         name: playwright-videos
         path: test-results/
+        retention-days: 7
+
+    - name: Upload server logs
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: server-logs
+        path: |
+          /tmp/uvicorn.log
+          /tmp/next.log
         retention-days: 7
 
     - name: Generate test summary
@@ -145,5 +183,5 @@ jobs:
     - name: Stop servers
       if: always()
       run: |
-        if [ -f frontend.pid ]; then kill $(cat frontend.pid) || true; fi
-        if [ -f backend.pid ]; then kill $(cat backend.pid) || true; fi
+        if [ -f frontend/frontend.pid ]; then kill $(cat frontend/frontend.pid) 2>/dev/null || true; fi
+        if [ -f backend/backend.pid ]; then kill $(cat backend/backend.pid) 2>/dev/null || true; fi

@@ -10,7 +10,7 @@ Provides endpoints for:
 import asyncio
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query  # noqa: F401
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, case
 from typing import Optional, List
@@ -20,10 +20,11 @@ from pydantic import BaseModel
 from database import get_db, SessionLocal
 from models import ScraperRun, Product, Price, Brand, Dispensary
 from services.scrapers.registry import ScraperRegistry
+from routers.auth import verify_admin
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/admin/scrapers", tags=["admin-scrapers"])
+router = APIRouter(prefix="/api/admin/scrapers", tags=["admin-scrapers"], dependencies=[Depends(verify_admin)])
 
 
 # === Pydantic Response Models ===
@@ -198,8 +199,8 @@ async def _run_scraper_in_background(scraper_id: str) -> None:
     try:
         logger.info(f"Starting subprocess for scraper '{scraper_id}'")
 
-        # Run scraper in subprocess with 600-second timeout
-        result = await run_scraper_subprocess_async(scraper_id, timeout=600)
+        # Run scraper in subprocess with 900-second timeout
+        result = await run_scraper_subprocess_async(scraper_id, timeout=900)
 
         logger.info(f"Subprocess for scraper '{scraper_id}' completed: {result['status']}")
 

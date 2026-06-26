@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 @register_scraper(
     id="curaleaf-lehi",
     name="Curaleaf Utah - Lehi",
-    dispensary_name="Curaleaf",
+    dispensary_name="Curaleaf Lehi",
     dispensary_location="Lehi, UT",
     schedule_minutes=120,
     description="Playwright-based scraper for Curaleaf Utah Lehi location"
@@ -67,6 +67,7 @@ class CuraleafScraper(PlaywrightScraper):
     # Curaleaf product categories (slugs from their menu)
     CATEGORIES = [
         "flower",
+        "pre-rolls",
         "vaporizers",
         "edibles",
         "concentrates",
@@ -102,7 +103,7 @@ class CuraleafScraper(PlaywrightScraper):
                 current = page.url
                 if "age-gate" in current or self.menu_url not in current:
                     try:
-                        await page.goto(self.menu_url, wait_until="networkidle", timeout=30000)
+                        await page.goto(self.menu_url, wait_until="domcontentloaded", timeout=30000)
                     except Exception as nav_err:
                         if "interrupted" in str(nav_err).lower():
                             logger.info(f"Navigation interrupted (likely redirect in progress) — waiting for page to settle")
@@ -131,7 +132,7 @@ class CuraleafScraper(PlaywrightScraper):
                         if "age-gate" in page.url:
                             logger.warning(f"  Age gate re-appeared for category {category}, re-dismissing...")
                             await self._dismiss_age_gate(page)
-                            await page.goto(category_url, wait_until="networkidle", timeout=30000)
+                            await page.goto(category_url, wait_until="domcontentloaded", timeout=30000)
                             await page.wait_for_timeout(2000)
 
                         # Wait for products to load on this category page
@@ -149,11 +150,13 @@ class CuraleafScraper(PlaywrightScraper):
                         logger.info(f"  Found {len(category_products)} products in {category}")
 
                         # The JS extraction infers category from product text keywords, not the page URL.
-                        # Override to "hardware" for the accessories page so these products don't
-                        # compete with cannabis products in confidence matching.
+                        # Override category for pages where JS keyword inference is unreliable.
                         if category == "accessories":
                             for p in category_products:
                                 p.category = "hardware"
+                        elif category == "pre-rolls":
+                            for p in category_products:
+                                p.category = "pre-roll"
 
                         all_products.extend(category_products)
 
@@ -202,47 +205,74 @@ class CuraleafScraper(PlaywrightScraper):
         """
         Dismiss Curaleaf's age verification page.
 
-        As of Mar 2026, Curaleaf changed from a modal overlay to a full-page redirect:
-        every URL (including category pages) redirects to /age-gate?returnurl=...
-        The confirm button is rendered by AgeVerificationClient (client-side React),
-        so we must wait for networkidle + extra hydration time before looking for it.
+        As of June 2026, the age gate requires two Radix UI checkboxes (button[role="checkbox"])
+        to be checked before the "I'm over 21" confirm button becomes enabled.
+
+        Key issue: Radix UI state updates are async (React). Each checkbox must be clicked
+        exactly once with a wait for state propagation before proceeding.
         """
         from urllib.parse import quote
-        logger.info("Handling Curaleaf age gate (full-page redirect pattern)...")
-
-        # Navigate directly to the age gate page with networkidle so React fully hydrates
         age_gate_url = f"https://ut.curaleaf.com/age-gate?returnurl={quote(self.menu_url, safe='')}"
-        await page.goto(age_gate_url, wait_until="networkidle", timeout=30000)
-        await page.wait_for_timeout(2000)  # Extra wait for client-side hydration
+        logger.info("Handling Curaleaf age gate (checkbox + button pattern)...")
 
-        age_gate_selectors = [
-            'button:has-text("I\'m over 18")',
-            'button:has-text("I am over 18")',
-            'button:has-text("Yes, I\'m 18")',
-            'button:has-text("I\'m 21")',
-            'button:has-text("I am 21")',
-            'button:has-text("I\'m 21 or older")',
-            'button:has-text("Yes")',
-            'button:has-text("Enter")',
-            'button:has-text("I\'m of legal age")',
-            # Fallback: any button that is not the "Exit" button
-            # The age gate has exactly two buttons: confirm and Exit (links to google.com)
-            'button:not(:has-text("Exit"))',
-        ]
+        for attempt in range(3):
+            logger.info(f"Age gate dismissal attempt {attempt + 1}/3...")
+            await page.goto(age_gate_url, wait_until="domcontentloaded", timeout=30000)
+            await page.wait_for_timeout(2000)
 
-        for selector in age_gate_selectors:
             try:
-                button = await page.wait_for_selector(selector, timeout=5000)
+                # Click each Radix UI checkbox exactly once and wait for React state update.
+                # Using locator() to avoid duplicate matches from combined selectors.
+                checkboxes = page.locator('button[role="checkbox"]')
+                count = await checkboxes.count()
+                logger.info(f"Found {count} checkboxes")
+
+                for i in range(count):
+                    cb = checkboxes.nth(i)
+                    try:
+                        if await cb.is_visible(timeout=3000):
+                            state_before = await cb.get_attribute("aria-checked")
+                            if state_before != "true":
+                                await cb.click()
+                                # React state change is async — wait for it
+                                await page.wait_for_timeout(800)
+                                state_after = await cb.get_attribute("aria-checked")
+                                logger.info(f"  Checkbox {i}: {state_before} -> {state_after}")
+                    except Exception as cb_err:
+                        logger.debug(f"Checkbox {i} error: {cb_err}")
+
+                # Wait for confirm button to become enabled (requires both boxes checked)
+                try:
+                    await page.wait_for_function(
+                        """() => Array.from(document.querySelectorAll('button')).some(
+                            b => b.textContent && b.textContent.includes('21') && !b.disabled
+                        )""",
+                        timeout=8000
+                    )
+                    logger.info("Confirm button is now enabled")
+                except Exception:
+                    logger.warning("Confirm button still disabled after checkbox clicks")
+
+            except Exception as cb_err:
+                logger.debug(f"Checkbox interaction error: {cb_err}")
+
+            # Click the confirm button only if it's not disabled
+            try:
+                button = await page.wait_for_selector('button:has-text("I\'m over 21")', timeout=5000)
                 if button and await button.is_visible():
-                    logger.info(f"Clicking age gate button with selector: {selector}")
-                    await button.click()
-                    await page.wait_for_timeout(3000)
-                    if "age-gate" not in page.url:
-                        logger.info("Age gate dismissed successfully")
-                        await self._dismiss_cookies(page)
-                        return
+                    disabled = await button.is_disabled()
+                    logger.info(f"Confirm button found (disabled={disabled})")
+                    if not disabled:
+                        await button.click()
+                        await page.wait_for_timeout(3000)
+                        if "age-gate" not in page.url:
+                            logger.info("Age gate dismissed successfully")
+                            await self._dismiss_cookies(page)
+                            return
             except Exception:
-                continue
+                pass
+
+            logger.warning(f"Age gate not dismissed on attempt {attempt + 1}/3")
 
         logger.warning("Could not dismiss Curaleaf age gate — scraping will likely return 0 products")
 
@@ -280,14 +310,14 @@ class CuraleafScraper(PlaywrightScraper):
         logger.info("Waiting for Curaleaf products to load...")
 
         selectors = [
-            '[class*="product-item-list"]',  # Category pages
-            '[class*="product-carousel"]',   # Main page
+            '[class*="ProductCard"]',        # Current Curaleaf site (Mar 2026+) — check first
+            '[class*="ProductItem"]',
+            '[class*="product-item-list"]',  # Legacy: category pages
+            '[class*="product-carousel"]',   # Legacy: main page
             '[data-testid*="product"]',
             '[data-test*="product"]',
             '.product-card',
             '.product-item',
-            '[class*="ProductCard"]',
-            '[class*="ProductItem"]',
         ]
 
         for selector in selectors:
@@ -478,15 +508,56 @@ class CuraleafScraper(PlaywrightScraper):
                         else if (fullText.includes('Sativa')) strainType = 'Sativa';
                         else if (fullText.includes('Hybrid')) strainType = 'Hybrid';
 
-                        // THC / CBD from text (may or may not be present in the new layout)
+                        // THC / CBD from text — Curaleaf's card layout varies by category.
+                        // Try several labels: "THC:", "THC", "THCa:", "Total THC:" and trailing "X% THC".
                         let thc = null, thcUnit = null, cbd = null, cbdUnit = null;
-                        const thcPctM = fullText.match(/THC:\\s*(\\d+\\.?\\d*)%/i);
-                        if (thcPctM) { thc = thcPctM[1]; thcUnit = '%'; }
-                        else { const thcMgM = fullText.match(/THC:\\s*(\\d+\\.?\\d*)\\s*mg/i); if (thcMgM) { thc = thcMgM[1]; thcUnit = 'mg'; } }
+                        const thcPatterns = [
+                            /Total\\s*THCa?:?\\s*(\\d+\\.?\\d*)\\s*%/i,
+                            /THCa?:\\s*(\\d+\\.?\\d*)\\s*%/i,
+                            /THCa?\\s+(\\d+\\.?\\d*)\\s*%/i,
+                            /(\\d+\\.?\\d*)\\s*%\\s*THCa?\\b/i,
+                        ];
+                        for (const re of thcPatterns) {
+                            const m = fullText.match(re);
+                            if (m) { thc = m[1]; thcUnit = '%'; break; }
+                        }
+                        if (!thc) {
+                            const thcMgPatterns = [
+                                /Total\\s*THCa?:?\\s*(\\d+\\.?\\d*)\\s*mg/i,
+                                /THCa?:?\\s*(\\d+\\.?\\d*)\\s*mg\\b/i,
+                                /(\\d+\\.?\\d*)\\s*mg\\s*THCa?\\b/i,
+                            ];
+                            for (const re of thcMgPatterns) {
+                                const m = fullText.match(re);
+                                if (m) { thc = m[1]; thcUnit = 'mg'; break; }
+                            }
+                        }
 
-                        const cbdPctM = fullText.match(/CBD:\\s*(\\d+\\.?\\d*)%/i);
-                        if (cbdPctM) { cbd = cbdPctM[1]; cbdUnit = '%'; }
-                        else { const cbdMgM = fullText.match(/CBD:\\s*(\\d+\\.?\\d*)\\s*mg/i); if (cbdMgM) { cbd = cbdMgM[1]; cbdUnit = 'mg'; } }
+                        const cbdPatterns = [
+                            /Total\\s*CBD:?\\s*(\\d+\\.?\\d*)\\s*%/i,
+                            /CBD:\\s*(\\d+\\.?\\d*)\\s*%/i,
+                            /CBD\\s+(\\d+\\.?\\d*)\\s*%/i,
+                            /(\\d+\\.?\\d*)\\s*%\\s*CBD\\b/i,
+                        ];
+                        for (const re of cbdPatterns) {
+                            const m = fullText.match(re);
+                            if (m) { cbd = m[1]; cbdUnit = '%'; break; }
+                        }
+                        if (!cbd) {
+                            const cbdMgPatterns = [
+                                /Total\\s*CBD:?\\s*(\\d+\\.?\\d*)\\s*mg/i,
+                                /CBD:?\\s*(\\d+\\.?\\d*)\\s*mg\\b/i,
+                                /(\\d+\\.?\\d*)\\s*mg\\s*CBD\\b/i,
+                            ];
+                            for (const re of cbdMgPatterns) {
+                                const m = fullText.match(re);
+                                if (m) { cbd = m[1]; cbdUnit = 'mg'; break; }
+                            }
+                        }
+
+                        // Guard against nonsense percentages (e.g. picking up a batch number)
+                        if (thcUnit === '%' && parseFloat(thc) > 100) { thc = null; thcUnit = null; }
+                        if (cbdUnit === '%' && parseFloat(cbd) > 100) { cbd = null; cbdUnit = null; }
 
                         const cbgM = fullText.match(/CBG:\\s*(\\d+\\.?\\d*)(%|\\s*mg)?/i);
                         const cbg = cbgM ? cbgM[1] : null;
@@ -614,7 +685,7 @@ class CuraleafScraper(PlaywrightScraper):
 @register_scraper(
     id="curaleaf-provo",
     name="Curaleaf Utah - Provo",
-    dispensary_name="Curaleaf",
+    dispensary_name="Curaleaf Provo",
     dispensary_location="Provo, UT",
     schedule_minutes=120,
     description="Playwright-based scraper for Curaleaf Utah Provo location"
@@ -629,7 +700,7 @@ class CuraleafProvoScraper(CuraleafScraper):
 @register_scraper(
     id="curaleaf-springville",
     name="Curaleaf Utah - Springville",
-    dispensary_name="Curaleaf",
+    dispensary_name="Curaleaf Springville",
     dispensary_location="Springville, UT",
     schedule_minutes=120,
     description="Playwright-based scraper for Curaleaf Utah Springville location"
@@ -647,6 +718,7 @@ class CuraleafSpringvilleScraper(CuraleafScraper):
     dispensary_name="Curaleaf Payson",
     dispensary_location="Payson, UT",
     schedule_minutes=120,
+    enabled=False,  # No online menu at /stores/curaleaf-ut-payson — 0 products across 24+ runs
     description="Playwright-based scraper for Curaleaf Utah Payson location"
 )
 class CuraleafPaysonScraper(CuraleafScraper):

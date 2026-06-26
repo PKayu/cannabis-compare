@@ -16,9 +16,12 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from routers import (
     admin_flags, admin_scrapers, search, products, dispensaries, auth, users,
     scrapers, reviews, watchlist, notifications
@@ -64,6 +67,15 @@ from config import settings
 
 import logging
 logger = logging.getLogger(__name__)
+
+# Validate critical settings at startup
+if not settings.secret_key:
+    logger.warning(
+        "SECURITY: SECRET_KEY is not set — JWTs are insecure. "
+        "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\" "
+        "and add SECRET_KEY=<value> to backend/.env. "
+        "Required before production deployment."
+    )
 
 # Warn if Supabase credentials are missing (auth will silently fail without them)
 if not settings.supabase_url or not settings.supabase_service_key:
@@ -129,6 +141,9 @@ async def lifespan(_app: FastAPI):
     await scheduler.stop(wait=True)
     logger.info("Scraper scheduler stopped")
 
+# Rate limiter (keyed by client IP)
+limiter = Limiter(key_func=get_remote_address)
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Utah Cannabis Aggregator API",
@@ -136,6 +151,8 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Register routers
 app.include_router(admin_flags.router)
@@ -151,25 +168,38 @@ app.include_router(watchlist.router)
 app.include_router(notifications.router)
 
 
-# Configure CORS
+# Configure CORS — set ALLOWED_ORIGINS in .env as comma-separated list.
+# Dev fallback includes localhost variants for convenience.
+_default_origins = [
+    "http://localhost:3000",
+    "http://localhost:4001",
+    "http://localhost:4002",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:4001",
+    "http://127.0.0.1:4002",
+]
+import os as _os
+_env_origins = _os.getenv("ALLOWED_ORIGINS", "")
+_allowed_origins = (
+    [o.strip() for o in _env_origins.split(",") if o.strip()]
+    if _env_origins
+    else _default_origins
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://localhost:4001",  # Docker frontend port
-        "http://localhost:4002",  # Local dev frontend port (4001-4009 range)
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3001",
-        "http://127.0.0.1:4001",
-        "http://127.0.0.1:4002",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000"
-    ],  # Update for production
+    allow_origins=_allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Catch-all handler so unhandled exceptions never leak stack traces to clients."""
+    logger.error("Unhandled exception on %s %s", request.method, request.url, exc_info=exc)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 # Health check endpoint
 @app.get("/health")

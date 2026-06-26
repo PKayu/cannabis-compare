@@ -101,7 +101,11 @@ def run_scraper_subprocess(scraper_id: str, timeout: int = 600) -> dict:
         logger.error(f"Stdout: {e.stdout}")
         logger.error(f"Stderr: {e.stderr}")
 
-        _mark_stuck_runs_as_error(scraper_id, f"Process exited with code {e.returncode}")
+        stderr_tail = (e.stderr or "")[-2000:]
+        error_msg = f"Process exited with code {e.returncode}"
+        if stderr_tail:
+            error_msg += f"\n\nStderr:\n{stderr_tail}"
+        _mark_stuck_runs_as_error(scraper_id, error_msg)
         return {
             "status": "error",
             "scraper_id": scraper_id,

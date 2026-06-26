@@ -1,0 +1,17 @@
+# Production overrides — use with: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+services:
+  backend:
+    volumes: []  # No source mounts in prod — use built image only
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2
+    environment:
+      DEBUG: "false"
+    restart: unless-stopped
+
+  frontend:
+    volumes: []  # No source mounts in prod — use built image only
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
+
+  postgres:
+    restart: unless-stopped

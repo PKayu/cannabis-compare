@@ -256,33 +256,6 @@ async def list_scrapers():
     return scrapers
 
 
-@router.post("/run/{scraper_id}")
-async def run_scraper(scraper_id: str):
-    """
-    Run a specific scraper by ID in a subprocess with timeout protection.
-
-    Uses the subprocess wrapper to prevent zombie runs — if the scraper
-    hangs (e.g., Playwright timeout), the subprocess is killed after 600s
-    and the ScraperRun record is marked as error.
-
-    Args:
-        scraper_id: The scraper's registry ID (e.g., "wholesomeco", "beehive")
-
-    Returns:
-        Result of the scrape including product count and status
-    """
-    config = ScraperRegistry.get(scraper_id)
-    if not config:
-        raise HTTPException(status_code=404, detail=f"Scraper '{scraper_id}' not found")
-
-    result = await run_scraper_subprocess_async(scraper_id, timeout=600)
-
-    if result["status"] == "error":
-        raise HTTPException(status_code=500, detail=result.get("message", "Scraper failed"))
-
-    return result
-
-
 @router.post("/run/all")
 async def run_all_scrapers(db: Session = Depends(get_db)):
     """
@@ -299,6 +272,33 @@ async def run_all_scrapers(db: Session = Depends(get_db)):
     """
     runner = ScraperRunner(db)
     return await runner.run_all()
+
+
+@router.post("/run/{scraper_id}")
+async def run_scraper(scraper_id: str):
+    """
+    Run a specific scraper by ID in a subprocess with timeout protection.
+
+    Uses the subprocess wrapper to prevent zombie runs — if the scraper
+    hangs (e.g., Playwright timeout), the subprocess is killed after 900s
+    and the ScraperRun record is marked as error.
+
+    Args:
+        scraper_id: The scraper's registry ID (e.g., "wholesomeco", "beehive")
+
+    Returns:
+        Result of the scrape including product count and status
+    """
+    config = ScraperRegistry.get(scraper_id)
+    if not config:
+        raise HTTPException(status_code=404, detail=f"Scraper '{scraper_id}' not found")
+
+    result = await run_scraper_subprocess_async(scraper_id, timeout=900)
+
+    if result["status"] == "error":
+        raise HTTPException(status_code=500, detail=result.get("message", "Scraper failed"))
+
+    return result
 
 
 @router.get("/test/{scraper_id}", response_model=ScraperTestResponse)

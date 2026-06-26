@@ -1,7 +1,11 @@
 """
 Authentication endpoints using Supabase and JWT tokens
 """
-from fastapi import APIRouter, Depends, HTTPException, Header, status
+from fastapi import APIRouter, Depends, HTTPException, Header, Request, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+_limiter = Limiter(key_func=get_remote_address)
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from datetime import timedelta
@@ -141,6 +145,16 @@ async def get_current_user(
     )
 
 
+async def verify_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Dependency that requires the current user to have admin privileges."""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return current_user
+
+
 # Endpoints
 @router.post("/register", response_model=TokenResponse)
 async def register(
@@ -214,8 +228,10 @@ async def register(
 
 
 @router.post("/login", response_model=TokenResponse)
+@_limiter.limit("10/minute")
 async def login(
-    request: LoginRequest,
+    request: Request,
+    body: LoginRequest,
     db: Session = Depends(get_db)
 ) -> dict:
     """
@@ -234,7 +250,7 @@ async def login(
         HTTPException: If credentials are invalid
     """
     # Find user by email
-    user = db.query(User).filter(User.email == request.email).first()
+    user = db.query(User).filter(User.email == body.email).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -242,7 +258,7 @@ async def login(
         )
 
     # Verify password
-    if not verify_password(request.password, user.hashed_password):
+    if not verify_password(body.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",

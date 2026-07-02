@@ -1,6 +1,6 @@
 """add_is_admin_to_users
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: 548777494dfe
 Revises: f2a3b4c5d6e7
 Create Date: 2026-04-10 00:00:00.000000
 
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from sqlalchemy.exc import OperationalError
 
 
-revision: str = 'a1b2c3d4e5f6'
+revision: str = '548777494dfe'
 down_revision: Union[str, None] = 'f2a3b4c5d6e7'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

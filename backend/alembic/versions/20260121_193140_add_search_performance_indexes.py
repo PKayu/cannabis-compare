@@ -9,7 +9,6 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.exc import OperationalError
 
 
 # revision identifiers, used by Alembic.
@@ -20,11 +19,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def _safe_create_index(name, table, columns, **kw):
-    """Create index if it doesn't already exist (SQLite compatibility)."""
-    try:
-        op.create_index(name, table, columns, **kw)
-    except OperationalError:
-        pass
+    """Create index if it doesn't already exist.
+
+    Checks via inspector rather than catching the DB error, since a failed
+    CREATE INDEX aborts the whole transaction on Postgres (unlike SQLite).
+    """
+    inspector = sa.inspect(op.get_bind())
+    existing = {idx['name'] for idx in inspector.get_indexes(table)}
+    if name in existing:
+        return
+    op.create_index(name, table, columns, **kw)
 
 
 def upgrade() -> None:

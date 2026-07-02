@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Install Python dependencies
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Playwright browsers (needed for scrapers)
@@ -23,7 +23,7 @@ RUN playwright install chromium
 RUN playwright install-deps chromium
 
 # Copy application code
-COPY . .
+COPY backend/ .
 
 EXPOSE 8000
 

@@ -69,13 +69,18 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Validate critical settings at startup
-if not settings.secret_key:
-    logger.warning(
-        "SECURITY: SECRET_KEY is not set — JWTs are insecure. "
+if not settings.secret_key or len(settings.secret_key) < 32:
+    _secret_msg = (
+        "SECRET_KEY is missing or too short (need >= 32 chars) — JWTs would be forgeable. "
         "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\" "
-        "and add SECRET_KEY=<value> to backend/.env. "
-        "Required before production deployment."
+        "and set SECRET_KEY=<value> in the environment."
     )
+    if settings.debug:
+        # Dev convenience only: warn but allow startup with an insecure key.
+        logger.warning("SECURITY: %s", _secret_msg)
+    else:
+        # Production: fail closed rather than silently signing tokens with a weak key.
+        raise RuntimeError(f"SECURITY: {_secret_msg}")
 
 # Warn if Supabase credentials are missing (auth will silently fail without them)
 if not settings.supabase_url or not settings.supabase_service_key:

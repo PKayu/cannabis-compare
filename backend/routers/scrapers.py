@@ -25,8 +25,12 @@ from services.scraper_subprocess import run_scraper_subprocess_async
 from services.scrapers.registry import ScraperRegistry
 from services.scrapers.base_scraper import BaseScraper, ScrapedProduct
 from models import Product, Price, Dispensary
+from routers.auth import verify_admin
 
-router = APIRouter(prefix="/scrapers", tags=["scrapers"])
+# All endpoints on this router trigger real scraper work (Playwright subprocesses,
+# full run-all sweeps) or expose an HTML control panel that does — so the entire
+# router requires admin auth. Public scraper info is served elsewhere.
+router = APIRouter(prefix="/scrapers", tags=["scrapers"], dependencies=[Depends(verify_admin)])
 
 
 # ========== Response Models ==========

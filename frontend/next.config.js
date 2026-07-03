@@ -2,8 +2,11 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  // Required for standalone Docker output (copies only necessary files)
-  output: 'standalone',
+  // Standalone output is required by frontend/Dockerfile (copies only necessary
+  // files into the runtime image) but breaks Vercel, which expects its own
+  // build output format and silently serves nothing if given a standalone build.
+  // Vercel sets VERCEL=1 during its builds, so only apply this for Docker.
+  ...(process.env.VERCEL ? {} : { output: 'standalone' }),
   async headers() {
     return [
       {

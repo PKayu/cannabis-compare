@@ -123,7 +123,7 @@ export const api = {
   users: {
     me: () => apiClient.get('/api/users/me'),
     myReviews: () => apiClient.get('/api/users/me/reviews'),
-    update: (data: any) => apiClient.put('/api/users/me', data),
+    update: (data: any) => apiClient.patch('/api/users/me', data),
   },
 
   // Watchlist

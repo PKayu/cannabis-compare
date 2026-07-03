@@ -231,7 +231,7 @@ class TestGetPublicUserProfile:
         data = response.json()
 
         assert data["username"] == "publicuser"
-        assert data["email"] == "public@example.com"
+        assert "email" not in data  # public profile must not leak email (enumerable user_id)
         assert data["review_count"] == 0
 
     def test_get_public_profile_not_found(self, client):

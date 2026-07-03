@@ -12,6 +12,21 @@ from main import app
 from database import Base, get_db
 from models import User
 from services.auth_service import hash_password, create_access_token
+from routers.auth import _limiter as auth_limiter
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """
+    slowapi's Limiter keeps its hit counts in a process-wide in-memory store,
+    and _limiter in routers/auth.py is a module-level singleton — so without
+    resetting it, rate-limit state leaks across tests (every test shares the
+    same TestClient "testclient" IP) and unrelated tests start failing with
+    429s once enough login/register calls accumulate across the session.
+    """
+    auth_limiter.reset()
+    yield
+    auth_limiter.reset()
 
 
 # Use in-memory SQLite database for tests

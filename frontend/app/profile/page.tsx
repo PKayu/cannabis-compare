@@ -189,7 +189,7 @@ function ProfileContent() {
 
           {reviews.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-gray-600 mb-4">You haven't posted any reviews yet.</p>
+              <p className="text-gray-600 mb-4">You haven&apos;t posted any reviews yet.</p>
               <Link
                 href="/products/search"
                 className="inline-block px-6 py-2 bg-cannabis-600 text-white rounded-lg hover:bg-cannabis-700 transition-colors"

@@ -218,7 +218,7 @@ export default function Home() {
               Every dispensary,<br/>one search
             </h2>
             <p className="mt-4 text-stone-600 font-body text-base leading-relaxed max-w-md">
-              We track pricing across Utah's licensed medical dispensaries so you always know who has the best price near you.
+              We track pricing across Utah&apos;s licensed medical dispensaries so you always know who has the best price near you.
             </p>
           </div>
           <div className="flex-1 flex justify-center">

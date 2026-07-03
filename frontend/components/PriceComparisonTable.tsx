@@ -35,6 +35,20 @@ const DISPENSARY_LINKS: Record<string, string> = {
   'beehive': 'https://beehivefarmacy.com/search?q=',
 }
 
+// Scraped values are untrusted input. Only ever return http(s) URLs — if the raw
+// string doesn't already declare one of those schemes we force it by prepending
+// https://, so a crafted "javascript:..." or "data:..." value can never survive
+// as the resulting protocol; anything that still fails to parse is dropped.
+function safeExternalUrl(raw: string): string | null {
+  const candidate = raw.startsWith('http://') || raw.startsWith('https://') ? raw : `https://${raw}`
+  try {
+    const url = new URL(candidate)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null
+  } catch {
+    return null
+  }
+}
+
 function generateOrderLink(
   dispensaryId: string,
   dispensaryWebsite: string | null,
@@ -42,12 +56,12 @@ function generateOrderLink(
   productName?: string
 ): string {
   if (productUrl && productUrl.trim() !== '') {
-    const url = productUrl.trim()
-    return url.startsWith('http') ? url : `https://${url}`
+    const safe = safeExternalUrl(productUrl.trim())
+    if (safe) return safe
   }
   if (dispensaryWebsite && dispensaryWebsite.trim() !== '') {
-    const url = dispensaryWebsite.trim()
-    return url.startsWith('http') ? url : `https://${url}`
+    const safe = safeExternalUrl(dispensaryWebsite.trim())
+    if (safe) return safe
   }
   const pattern = DISPENSARY_LINKS[dispensaryId.toLowerCase()]
   if (pattern && productName) return pattern + encodeURIComponent(productName)

@@ -198,7 +198,7 @@ function NotificationContent() {
               <h3 className="text-sm font-medium text-blue-800">About Email Alerts</h3>
               <div className="mt-2 text-sm text-blue-700">
                 <p>
-                  Currently, only "Immediate" email delivery is available. Daily and weekly digests are planned for a future update.
+                  Currently, only &quot;Immediate&quot; email delivery is available. Daily and weekly digests are planned for a future update.
                 </p>
               </div>
             </div>

@@ -1,10 +1,20 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/AuthContext'
 
-export default function CallbackPage() {
+// Only allow same-origin relative paths, rejecting protocol-relative ("//evil.com")
+// and backslash variants browsers also treat as protocol-relative, so an attacker
+// can't use ?returnUrl= to redirect a freshly authenticated user off-site.
+function sanitizeReturnUrl(raw: string | null): string {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/\\')) {
+    return '/'
+  }
+  return raw
+}
+
+function CallbackContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, loading } = useAuth()
@@ -27,7 +37,7 @@ export default function CallbackPage() {
 
     if (user) {
       // Auth succeeded. Redirect to the return URL.
-      const returnUrl = searchParams.get('returnUrl') || '/'
+      const returnUrl = sanitizeReturnUrl(searchParams.get('returnUrl'))
       console.log('[Callback] Auth confirmed, redirecting to:', returnUrl)
       router.replace(returnUrl)
     } else if (hasTimedOut) {
@@ -86,5 +96,23 @@ export default function CallbackPage() {
         <p className="text-sm text-gray-500 mt-2">Please wait</p>
       </div>
     </div>
+  )
+}
+
+export default function CallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-br from-cannabis-50 to-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cannabis-600 mx-auto mb-4"></div>
+            <p className="text-gray-600 font-medium">Verifying your credentials...</p>
+            <p className="text-sm text-gray-500 mt-2">Please wait</p>
+          </div>
+        </div>
+      }
+    >
+      <CallbackContent />
+    </Suspense>
   )
 }

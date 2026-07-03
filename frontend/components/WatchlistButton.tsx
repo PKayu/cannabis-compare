@@ -144,7 +144,7 @@ export default function WatchlistButton({ productId, initialWatched = false }: W
                 <option value={25}>25% or more</option>
               </select>
               <p className="mt-2 text-xs text-gray-500">
-                You'll get an email when the price drops by this amount or more.
+                You&apos;ll get an email when the price drops by this amount or more.
               </p>
             </div>
           )}

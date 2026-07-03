@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { Suspense, useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { api, apiClient } from '@/lib/api'
 import SearchBar from '@/components/SearchBar'
@@ -43,7 +43,7 @@ interface SearchFilters {
   sortBy: string
 }
 
-export default function SearchPage() {
+function SearchPageContent() {
   const [results, setResults] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [loadingPhraseIndex, setLoadingPhraseIndex] = useState(0)
@@ -194,7 +194,7 @@ export default function SearchPage() {
                 <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
-                <p className="mt-4 text-gray-600">No results found for "{query}"</p>
+                <p className="mt-4 text-gray-600">No results found for &quot;{query}&quot;</p>
                 <p className="text-sm text-gray-500 mt-2">Try adjusting your filters or search term</p>
               </div>
             )}
@@ -225,5 +225,13 @@ export default function SearchPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={null}>
+      <SearchPageContent />
+    </Suspense>
   )
 }

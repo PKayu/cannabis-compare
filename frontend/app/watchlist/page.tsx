@@ -170,7 +170,7 @@ function WatchlistContent() {
               <h3 className="text-sm font-medium text-blue-800">About alerts</h3>
               <div className="mt-2 text-sm text-blue-700">
                 <p>
-                  We'll email you when watched products come back in stock or when prices drop by your threshold amount.
+                  We&apos;ll email you when watched products come back in stock or when prices drop by your threshold amount.
                   You can adjust your notification preferences in your{' '}
                   <Link href="/profile/notifications" className="font-medium underline">
                     notification settings

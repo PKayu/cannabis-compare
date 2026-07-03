@@ -60,7 +60,6 @@ describe('API Client', () => {
 
       mockGetSession.mockResolvedValue({
         data: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           session: {
             access_token: mockToken,
           } as any,

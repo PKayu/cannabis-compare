@@ -157,8 +157,10 @@ async def verify_admin(current_user: User = Depends(get_current_user)) -> User:
 
 # Endpoints
 @router.post("/register", response_model=TokenResponse)
+@_limiter.limit("5/minute")
 async def register(
-    request: RegisterRequest,
+    request: Request,
+    body: RegisterRequest,
     db: Session = Depends(get_db)
 ) -> dict:
     """
@@ -168,7 +170,7 @@ async def register(
     Returns a JWT token for immediate login.
 
     Args:
-        request: Registration request with email, password, username
+        body: Registration request with email, password, username
         db: Database session
 
     Returns:
@@ -178,7 +180,7 @@ async def register(
         HTTPException: If email already exists or registration fails
     """
     # Check if user already exists
-    existing_user = db.query(User).filter(User.email == request.email).first()
+    existing_user = db.query(User).filter(User.email == body.email).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -186,7 +188,7 @@ async def register(
         )
 
     # Create user in Supabase Auth
-    supabase_user = SupabaseClient.create_user(request.email, request.password)
+    supabase_user = SupabaseClient.create_user(body.email, body.password)
     if not supabase_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -196,9 +198,9 @@ async def register(
     # Create user in local database
     db_user = User(
         id=supabase_user["id"],
-        email=request.email,
-        username=request.username,
-        hashed_password=hash_password(request.password),
+        email=body.email,
+        username=body.username,
+        hashed_password=hash_password(body.password),
     )
 
     try:
@@ -228,7 +230,7 @@ async def register(
 
 
 @router.post("/login", response_model=TokenResponse)
-@_limiter.limit("10/minute")
+@_limiter.limit("5/minute")
 async def login(
     request: Request,
     body: LoginRequest,
@@ -329,7 +331,9 @@ async def get_current_user_profile(
 
 
 @router.post("/refresh")
+@_limiter.limit("20/minute")
 async def refresh_token(
+    request: Request,
     current_user: User = Depends(get_current_user),
 ) -> TokenResponse:
     """

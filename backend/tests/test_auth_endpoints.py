@@ -141,6 +141,17 @@ class TestLogin:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
+    def test_login_rate_limited_after_five_attempts(self, client):
+        """6th login attempt within a minute (from the same client) must be throttled"""
+        payload = {"email": "bruteforce@example.com", "password": "wrong"}
+
+        for _ in range(5):
+            response = client.post("/api/auth/login", json=payload)
+            assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+        response = client.post("/api/auth/login", json=payload)
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+
 
 @pytest.mark.auth
 @pytest.mark.integration

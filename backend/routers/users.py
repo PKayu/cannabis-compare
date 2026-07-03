@@ -32,9 +32,21 @@ class ReviewResponse(BaseModel):
 
 
 class UserProfileResponse(BaseModel):
-    """User profile response model"""
+    """User profile response model (own profile only — includes email)"""
     id: str
     email: str
+    username: str
+    created_at: str
+    review_count: int
+
+    class Config:
+        from_attributes = True
+
+
+class PublicUserProfileResponse(BaseModel):
+    """Public user profile response model — no email, since user_id is enumerable
+    and this endpoint is unauthenticated."""
+    id: str
     username: str
     created_at: str
     review_count: int
@@ -178,7 +190,7 @@ async def get_user_reviews(
     return result
 
 
-@router.get("/{user_id}", response_model=UserProfileResponse)
+@router.get("/{user_id}", response_model=PublicUserProfileResponse)
 async def get_public_user_profile(
     user_id: str,
     db: Session = Depends(get_db),
@@ -209,7 +221,6 @@ async def get_public_user_profile(
 
     return {
         "id": str(user.id),
-        "email": user.email,
         "username": user.username,
         "created_at": user.created_at.isoformat(),
         "review_count": review_count,

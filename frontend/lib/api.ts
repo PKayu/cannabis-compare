@@ -156,7 +156,7 @@ export const api = {
         sort_by?: 'confidence' | 'created_at'
         sort_order?: 'asc' | 'desc'
         include_auto_merged?: boolean
-        flag_type?: 'match_review' | 'data_cleanup'
+        flag_type?: 'match_review' | 'data_cleanup' | 'duplicate_pair'
       }) => apiClient.get('/api/admin/flags/pending', { params }),
       stats: () => apiClient.get('/api/admin/flags/stats'),
       approve: (flagId: string, data?: {
@@ -206,10 +206,12 @@ export const api = {
       crossDispensaryProducts: (params?: { min_dispensaries?: number; limit?: number }) =>
         apiClient.get('/api/admin/products/cross-dispensary', { params }),
       dispensaryCoverage: () => apiClient.get('/api/admin/products/dispensary-coverage'),
-      potentialDuplicates: (params?: { limit?: number }) =>
-        apiClient.get('/api/admin/products/potential-duplicates', { params }),
+      duplicateScan: (params?: { limit?: number }) =>
+        apiClient.post('/api/admin/products/duplicate-scan', null, { params }),
       mergeProducts: (sourceId: string, targetId: string) =>
         apiClient.post('/api/admin/products/merge', { source_product_id: sourceId, target_product_id: targetId }),
+      mergeBatch: (merges: { winner_id: string; loser_id: string; flag_id?: string }[]) =>
+        apiClient.post('/api/admin/products/merge-batch', { merges }),
       repairOrphanedVariants: () =>
         apiClient.post('/api/admin/products/repair-orphaned-variants'),
       dispensaryDuplicates: (threshold?: number) =>

@@ -41,6 +41,57 @@ def _base_name(name: str) -> str:
     m = _WEIGHT_SUFFIX_RE.search(name)
     return name[: m.start()].strip() if m else name
 
+
+def _product_pair_summary(db, product_id: str) -> Optional[dict]:
+    """Side-by-side summary of one product in a duplicate_pair flag:
+    core fields, active variant weights, and dispensary names/URLs."""
+    from models import Product as _Product, Price as _Price, Dispensary as _Dispensary
+
+    product = db.query(_Product).filter(_Product.id == product_id).first()
+    if not product:
+        return None
+
+    variants = (
+        db.query(_Product)
+        .filter(
+            _Product.master_product_id == product_id,
+            _Product.is_master.is_(False),
+            _Product.is_active.is_(True),
+        )
+        .all()
+    )
+    variant_ids = [v.id for v in variants] + [product_id]
+
+    price_rows = (
+        db.query(_Price, _Dispensary.name)
+        .join(_Dispensary, _Dispensary.id == _Price.dispensary_id)
+        .filter(_Price.product_id.in_(variant_ids))
+        .all()
+    )
+    dispensaries: dict = {}
+    for price, disp_name in price_rows:
+        entry = dispensaries.setdefault(
+            disp_name, {"name": disp_name, "url": None, "price": None}
+        )
+        if entry["url"] is None and price.product_url:
+            entry["url"] = price.product_url
+        if entry["price"] is None or price.amount < entry["price"]:
+            entry["price"] = price.amount
+
+    return {
+        "id": product.id,
+        "name": product.name,
+        "product_type": product.product_type,
+        "brand": product.brand.name if product.brand else None,
+        "thc_percentage": product.thc_percentage,
+        "cbd_percentage": product.cbd_percentage,
+        "is_active": product.is_active,
+        "weights": sorted(
+            {v.weight for v in variants if v.weight}, key=str
+        ),
+        "dispensaries": sorted(dispensaries.values(), key=lambda d: d["name"]),
+    }
+
 from database import get_db
 from models import ScraperFlag, Product, Price, Brand, Dispensary, ScraperRun, User
 from services.normalization.flag_processor import ScraperFlagProcessor
@@ -111,6 +162,16 @@ class MergeRequest(BaseModel):
     target_product_id: str
 
 
+class MergePairItem(BaseModel):
+    winner_id: str
+    loser_id: str
+    flag_id: Optional[str] = None  # duplicate_pair flag to resolve
+
+
+class MergeBatchRequest(BaseModel):
+    merges: List[MergePairItem]
+
+
 class SplitRequest(BaseModel):
     product_name: str
     brand_id: str
@@ -164,7 +225,7 @@ async def get_pending_flags(
     sort_by: Optional[str] = Query("created_at", pattern="^(confidence|created_at)$"),
     sort_order: Optional[str] = Query("desc", pattern="^(asc|desc)$"),
     include_auto_merged: bool = Query(False),  # When True, also returns auto_merged flags
-    flag_type: Optional[str] = Query(None, pattern="^(match_review|data_cleanup)$"),
+    flag_type: Optional[str] = Query(None, pattern="^(match_review|data_cleanup|duplicate_pair)$"),
 ):
     """
     Get pending ScraperFlags for admin review with advanced filtering and sorting.
@@ -255,6 +316,14 @@ async def get_pending_flags(
                     "cbd_percentage": product.cbd_percentage,
                 }
 
+        # duplicate_pair flags carry full side-by-side summaries of both products
+        duplicate_pair = None
+        if flag.flag_type == "duplicate_pair" and flag.secondary_product_id:
+            duplicate_pair = {
+                "product_a": _product_pair_summary(db, flag.matched_product_id),
+                "product_b": _product_pair_summary(db, flag.secondary_product_id),
+            }
+
         flag_data.append({
             "id": flag.id,
             "original_name": flag.original_name,
@@ -272,7 +341,9 @@ async def get_pending_flags(
             "confidence_score": flag.confidence_score,
             "confidence_percent": f"{flag.confidence_score:.0%}",
             "matched_product_id": flag.matched_product_id,  # Needed for frontend approve button
+            "secondary_product_id": flag.secondary_product_id,
             "matched_product": matched_product,
+            "duplicate_pair": duplicate_pair,
             "merge_reason": flag.merge_reason,
             "status": flag.status,
             "flag_type": flag.flag_type,
@@ -817,6 +888,66 @@ async def merge_products(
     }
 
 
+@router.post("/products/merge-batch")
+async def merge_products_batch(
+    request: MergeBatchRequest,
+    db: Session = Depends(get_db),
+    admin_id: str = Depends(verify_admin)
+):
+    """
+    Merge multiple product pairs in one call, each with an explicit winner.
+
+    Each pair runs in a savepoint so one failure doesn't poison the rest.
+    When a flag_id is supplied, the duplicate_pair flag is marked merged.
+    Returns per-pair results.
+    """
+    from services.product_merge import merge_product_pair
+
+    if not request.merges:
+        raise HTTPException(status_code=400, detail="No merges provided")
+
+    results = []
+    for item in request.merges:
+        savepoint = db.begin_nested()
+        try:
+            merge_result = merge_product_pair(
+                db, winner_id=item.winner_id, loser_id=item.loser_id
+            )
+
+            if item.flag_id:
+                flag = db.query(ScraperFlag).filter(
+                    ScraperFlag.id == item.flag_id
+                ).first()
+                if flag and flag.status == "pending":
+                    flag.status = "merged"
+                    flag.resolved_by = admin_id
+                    flag.resolved_at = datetime.utcnow()
+                    flag.admin_notes = f"Batch merge: kept {item.winner_id}"
+
+            savepoint.commit()
+            results.append({**merge_result, "ok": True})
+        except Exception as e:
+            savepoint.rollback()
+            logger.error(
+                f"Batch merge failed for {item.loser_id} -> {item.winner_id}: {e}"
+            )
+            results.append({
+                "winner_id": item.winner_id,
+                "loser_id": item.loser_id,
+                "ok": False,
+                "error": str(e),
+            })
+
+    db.commit()
+
+    merged_count = sum(1 for r in results if r["ok"])
+    return {
+        "merged": merged_count,
+        "failed": len(results) - merged_count,
+        "results": results,
+    }
+
+
 @router.post("/products/repair-orphaned-variants")
 async def repair_orphaned_variants(
     db: Session = Depends(get_db),
@@ -1039,23 +1170,16 @@ async def get_dispensary_coverage(db: Session = Depends(get_db)):
     }
 
 
-@router.get("/products/potential-duplicates")
-async def get_potential_duplicates(
-    db: Session = Depends(get_db),
-    limit: int = Query(100, ge=1, le=500),
-):
+def _compute_duplicate_pairs(db: Session, limit: int = 500) -> list:
     """
-    Surface potential duplicate products by running pairwise fuzzy matching
-    across all active master products within the same product_type.
+    Pairwise fuzzy scan for potential duplicate products across all active
+    master products within the same product_type.
 
-    Only includes pairs where the two products share NO dispensary in common —
-    same-dispensary near-misses (e.g. two similarly named WholesomeCo vaporizers,
-    or a product that already appears at both Beehive Farmington and SLC) are
-    skipped as the admin doesn't need to review them.
+    Includes both cross-dispensary pairs and same-dispensary pairs (the latter
+    marked with same_dispensary=True so the admin can filter).
 
     Returns pairs with 65–84% confidence sorted by confidence descending.
-    Caps at `limit` pairs. This is O(n²) — ~5–15 seconds for 1,344 products.
-    Only call on demand.
+    This is O(n²) — ~5–15 seconds for 1,344 products. Only call on demand.
     """
     from collections import defaultdict
     from sqlalchemy.orm import aliased
@@ -1130,12 +1254,10 @@ async def get_potential_duplicates(
                 a = group[i]
                 b = group[j]
 
-                # Skip pairs that share ANY dispensary — if both products are
-                # already available at the same store (even if each also appears
-                # elsewhere), the admin doesn't need to review them as a
-                # cross-dispensary duplicate.
-                if a["disp_ids"] & b["disp_ids"]:
-                    continue
+                # Pairs sharing a dispensary are still candidates (intra-store
+                # duplicates were previously invisible) — just marked so the
+                # admin can filter them.
+                same_dispensary = bool(a["disp_ids"] & b["disp_ids"])
 
                 score, _ = ProductMatcher.score_match(
                     # Use base_name (suffix-stripped) so that shared weight/type
@@ -1171,6 +1293,7 @@ async def get_potential_duplicates(
                         },
                         "product_type": a["product_type"],
                         "confidence": round(score, 3),
+                        "same_dispensary": same_dispensary,
                     })
 
     # Sort by confidence descending
@@ -1196,9 +1319,81 @@ async def get_potential_duplicates(
             seen_id_pairs.add(id_key)
             seen_name_pairs.add(name_key)
             deduped.append(pair)
-    pairs = deduped
 
-    return {"pairs": pairs[:limit], "total": len(pairs)}
+    return deduped[:limit]
+
+
+@router.post("/products/duplicate-scan")
+async def run_duplicate_scan(
+    db: Session = Depends(get_db),
+    admin_id: str = Depends(verify_admin),
+    limit: int = Query(500, ge=1, le=1000),
+):
+    """
+    Run the pairwise duplicate scan and persist results as duplicate_pair
+    ScraperFlags (status=pending) for review in the cleanup queue.
+
+    Pairs that already have a flag in ANY status (pending, dismissed, merged)
+    are skipped — dismissing a pair permanently keeps it out of future scans.
+    """
+    pairs = _compute_duplicate_pairs(db, limit=limit)
+
+    # Existing pair keys (sorted id tuples) across all statuses
+    existing_keys = {
+        tuple(sorted((f.matched_product_id, f.secondary_product_id)))
+        for f in db.query(ScraperFlag)
+        .filter(
+            ScraperFlag.flag_type == "duplicate_pair",
+            ScraperFlag.secondary_product_id.isnot(None),
+        )
+        .all()
+    }
+
+    created = 0
+    skipped_existing = 0
+    for pair in pairs:
+        # Canonical pair key: matched_product_id < secondary_product_id
+        low_id, high_id = sorted((pair["product_a_id"], pair["product_b_id"]))
+        if (low_id, high_id) in existing_keys:
+            skipped_existing += 1
+            continue
+
+        a_is_low = pair["product_a_id"] == low_id
+        low_name = pair["product_a_name"] if a_is_low else pair["product_b_name"]
+        low_brand = pair["product_a_brand"] if a_is_low else pair["product_b_brand"]
+
+        flag = ScraperFlag(
+            original_name=low_name,
+            brand_name=low_brand or "Unknown",
+            dispensary_id=None,  # pairs span dispensaries
+            matched_product_id=low_id,
+            secondary_product_id=high_id,
+            confidence_score=pair["confidence"],
+            status="pending",
+            flag_type="duplicate_pair",
+            merge_reason=(
+                f"Potential duplicate at {pair['confidence']:.0%} similarity "
+                f"({'same' if pair['same_dispensary'] else 'cross'}-dispensary)"
+            ),
+            original_category=pair["product_type"],
+            issue_tags=(
+                ["same_dispensary_pair"] if pair["same_dispensary"] else None
+            ),
+        )
+        db.add(flag)
+        existing_keys.add((low_id, high_id))
+        created += 1
+
+    db.commit()
+    logger.info(
+        f"Duplicate scan by {admin_id}: {len(pairs)} pairs, "
+        f"{created} flags created, {skipped_existing} already flagged"
+    )
+    return {
+        "total_pairs": len(pairs),
+        "created": created,
+        "skipped_existing": skipped_existing,
+    }
 
 
 @router.get("/dispensaries/potential-duplicates")

@@ -2,12 +2,13 @@
 
 import React from 'react'
 
-export type FilterTab = 'data_cleanup' | 'legacy_review' | 'auto_linked' | 'all'
+export type FilterTab = 'data_cleanup' | 'duplicates' | 'legacy_review' | 'auto_linked' | 'all'
 
 interface FilterTabsProps {
   activeTab: FilterTab
   counts: {
     data_cleanup: number
+    duplicates: number
     legacy_review: number
     auto_linked: number
     all: number
@@ -64,6 +65,14 @@ export function FilterTabs({ activeTab, counts, onTabChange }: FilterTabsProps) 
           count={counts.data_cleanup}
         />
         <TabButton
+          active={activeTab === 'duplicates'}
+          onClick={() => onTabChange('duplicates')}
+          icon="👯"
+          label="Duplicates"
+          description="Suspected duplicate products — pick a winner and merge, or keep separate"
+          count={counts.duplicates}
+        />
+        <TabButton
           active={activeTab === 'legacy_review'}
           onClick={() => onTabChange('legacy_review')}
           icon="🔗"
@@ -96,6 +105,11 @@ export function FilterTabs({ activeTab, counts, onTabChange }: FilterTabsProps) 
             These products were imported with dirty data. Edit the fields to fix them, then &quot;Save &amp; Activate&quot; to make them live. Or &quot;Delete&quot; if the data is garbage.
           </p>
         )}
+        {activeTab === 'duplicates' && (
+          <p className="text-xs text-purple-600">
+            Suspected duplicate product pairs found by the scan. Pick the record to <strong>keep</strong> (winner), then Merge — prices, reviews, and watchlists consolidate under it. Or &quot;Not Duplicates&quot; to keep both permanently.
+          </p>
+        )}
         {activeTab === 'legacy_review' && (
           <p className="text-xs text-blue-600">
             These flags were created before the scoring overhaul (when 60–90% matches were flagged for review). New scrapes will <strong>not</strong> generate these — only cross-dispensary auto-merges at &gt;90% go to Auto-Linked now. Clear this backlog at your own pace.
@@ -119,6 +133,7 @@ export function FilterTabs({ activeTab, counts, onTabChange }: FilterTabsProps) 
 // Tab filter configurations — sent as query params to the pending flags API
 export const TAB_FILTERS: Record<FilterTab, any> = {
   data_cleanup: { flag_type: 'data_cleanup' },
+  duplicates: { flag_type: 'duplicate_pair' },
   legacy_review: { flag_type: 'match_review' },
   auto_linked: { include_auto_merged: true },
   all: {},

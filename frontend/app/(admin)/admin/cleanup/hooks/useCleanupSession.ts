@@ -8,6 +8,30 @@ export interface MatchedProduct {
   cbd_percentage: number | null
 }
 
+export interface PairProductDispensary {
+  name: string
+  url: string | null
+  price: number | null
+}
+
+/** One side of a duplicate_pair flag — full summary for side-by-side review */
+export interface PairProduct {
+  id: string
+  name: string
+  product_type: string | null
+  brand: string | null
+  thc_percentage: number | null
+  cbd_percentage: number | null
+  is_active: boolean
+  weights: string[]
+  dispensaries: PairProductDispensary[]
+}
+
+export interface DuplicatePair {
+  product_a: PairProduct | null
+  product_b: PairProduct | null
+}
+
 export interface ScraperFlag {
   id: string
   original_name: string
@@ -20,14 +44,16 @@ export interface ScraperFlag {
   original_category: string | null
   original_url: string | null
   brand_name: string
-  dispensary_id: string
+  dispensary_id: string | null
   dispensary_name: string | null
   matched_product_id: string | null
+  secondary_product_id: string | null
   matched_product: MatchedProduct | null
+  duplicate_pair: DuplicatePair | null
   confidence_score: number
   confidence_percent: string
   merge_reason: string | null
-  flag_type: 'match_review' | 'data_cleanup'
+  flag_type: 'match_review' | 'data_cleanup' | 'duplicate_pair'
   status: 'pending' | 'approved' | 'rejected' | 'dismissed' | 'merged' | 'auto_merged' | 'cleaned'
   corrections: Record<string, any> | null
   issue_tags: string[] | null
@@ -39,6 +65,8 @@ export interface FlagStats {
   pending: number
   pending_cleanup: number
   pending_review: number
+  pending_duplicates: number
+  auto_merged: number
   approved: number
   rejected: number
   dismissed: number

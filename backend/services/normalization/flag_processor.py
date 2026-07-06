@@ -123,16 +123,9 @@ class ScraperFlagProcessor:
             if final_parent_brand is not None:
                 existing_brand = parent.brand
                 if not existing_brand or existing_brand.name.lower() != final_parent_brand.lower():
-                    brand = (
-                        db.query(Brand)
-                        .filter(Brand.name.ilike(final_parent_brand))
-                        .first()
+                    parent.brand_id = ConfidenceScorer._get_or_create_brand(
+                        db, final_parent_brand
                     )
-                    if not brand:
-                        brand = Brand(name=final_parent_brand)
-                        db.add(brand)
-                        db.flush()
-                    parent.brand_id = brand.id
 
         # Resolve final values (override or flag original)
         final_thc = thc_percentage if thc_percentage is not None else flag.original_thc
@@ -239,17 +232,8 @@ class ScraperFlagProcessor:
         final_weight = weight if weight is not None else flag.original_weight
         final_price = price if price is not None else flag.original_price
 
-        # Get or create brand
-        brand = (
-            db.query(Brand)
-            .filter(Brand.name.ilike(final_brand_name))
-            .first()
-        )
-
-        if not brand:
-            brand = Brand(name=final_brand_name)
-            db.add(brand)
-            db.flush()
+        # Get or create brand (normalized lookup avoids duplicate rows)
+        brand_id = ConfidenceScorer._get_or_create_brand(db, final_brand_name)
 
         # Resolve product type
         resolved_type = "Unknown"
@@ -262,7 +246,7 @@ class ScraperFlagProcessor:
         parent = Product(
             name=final_name,
             product_type=resolved_type,
-            brand_id=brand.id,
+            brand_id=brand_id,
             thc_percentage=final_thc,
             cbd_percentage=final_cbd,
             is_master=True,
@@ -495,6 +479,11 @@ class ScraperFlagProcessor:
         Moves all Price, Review, and Watchlist records from the loser product
         to the winner (kept_product_id), then soft-deletes the loser.
 
+        The flag must reference both products: matched_product_id and
+        secondary_product_id (near-miss flags store the newly created product
+        there; duplicate_pair flags store product B). Legacy flags without a
+        secondary_product_id cannot be merged this way.
+
         Args:
             db: Database session
             flag_id: ScraperFlag ID referencing the two products
@@ -503,91 +492,51 @@ class ScraperFlagProcessor:
             notes: Optional admin notes
 
         Returns:
-            dict with winner_id, loser_id, prices_moved, reviews_moved, watchlist_moved
+            dict with winner_id, loser_id, variants_reparented, variants_merged,
+            prices_moved, reviews_moved, watchlist_moved
         """
-        from models import ScraperFlag, Product, Price, Review
+        from models import ScraperFlag
+        from services.product_merge import merge_product_pair
 
         flag = db.query(ScraperFlag).filter(ScraperFlag.id == flag_id).first()
         if not flag:
             raise ValueError(f"ScraperFlag not found: {flag_id}")
-        if flag.status != "pending":
+        if flag.status not in ("pending", "auto_missed"):
             raise ValueError(f"Flag already resolved with status: {flag.status}")
-        if not flag.matched_product_id:
-            raise ValueError(f"Flag has no matched product to merge: {flag_id}")
 
-        # Determine the loser — whichever product is NOT the kept one
-        candidate_ids = {flag.matched_product_id}
-        # The "incoming" product may have already been created as a variant;
-        # if not, we just work with the matched product pair
+        candidate_ids = {flag.matched_product_id, flag.secondary_product_id} - {None}
+        if len(candidate_ids) < 2:
+            raise ValueError(
+                f"Flag {flag_id} does not reference two products "
+                f"(matched={flag.matched_product_id}, secondary={flag.secondary_product_id}); "
+                "cannot determine which product to merge away"
+            )
         if kept_product_id not in candidate_ids:
             raise ValueError(
                 f"kept_product_id {kept_product_id} must be one of the flagged products: "
                 f"{candidate_ids}"
             )
 
-        loser_id = next(id for id in candidate_ids if id != kept_product_id)
+        loser_id = next(pid for pid in candidate_ids if pid != kept_product_id)
 
-        # Ensure both products exist
-        winner = db.query(Product).filter(Product.id == kept_product_id).first()
-        loser = db.query(Product).filter(Product.id == loser_id).first()
-        if not winner:
-            raise ValueError(f"Winner product not found: {kept_product_id}")
-        if not loser:
-            raise ValueError(f"Loser product not found: {loser_id}")
-
-        # Move Price records
-        prices_moved = (
-            db.query(Price)
-            .filter(Price.product_id == loser_id)
-            .update({Price.product_id: kept_product_id}, synchronize_session=False)
-        )
-
-        # Move Review records (reviews attach to master products)
-        reviews_moved = (
-            db.query(Review)
-            .filter(Review.product_id == loser_id)
-            .update({Review.product_id: kept_product_id}, synchronize_session=False)
-        )
-
-        # Move Watchlist records if model exists
-        watchlist_moved = 0
-        try:
-            from models import Watchlist
-            watchlist_moved = (
-                db.query(Watchlist)
-                .filter(Watchlist.product_id == loser_id)
-                .update({Watchlist.product_id: kept_product_id}, synchronize_session=False)
-            )
-        except Exception:
-            pass  # Watchlist model may not exist in all deployments
-
-        # Soft-delete the loser
-        loser.is_active = False
-        loser.master_product_id = kept_product_id  # Point to winner for traceability
+        result = merge_product_pair(db, winner_id=kept_product_id, loser_id=loser_id)
 
         # Resolve flag
-        flag.status = "dismissed"
+        flag.status = "merged"
         flag.resolved_by = admin_id
         flag.resolved_at = datetime.utcnow()
         flag.admin_notes = notes or f"Duplicate merged: kept {kept_product_id}"
-        flag.issue_tags = flag.issue_tags or []
-        if "duplicate" not in (flag.issue_tags or []):
+        if "duplicate_merged" not in (flag.issue_tags or []):
             flag.issue_tags = list(flag.issue_tags or []) + ["duplicate_merged"]
 
         db.commit()
 
         logger.info(
             f"Merged duplicate: loser={loser_id} -> winner={kept_product_id} "
-            f"(prices={prices_moved}, reviews={reviews_moved}) by admin {admin_id}"
+            f"by admin {admin_id}"
         )
 
-        return {
-            "winner_id": kept_product_id,
-            "loser_id": loser_id,
-            "prices_moved": prices_moved,
-            "reviews_moved": reviews_moved,
-            "watchlist_moved": watchlist_moved,
-        }
+        return result
 
     @staticmethod
     def clean_and_activate(
@@ -663,16 +612,8 @@ class ScraperFlagProcessor:
         if brand_name is not None:
             existing_brand = product.brand
             if not existing_brand or existing_brand.name.lower() != brand_name.lower():
-                brand = (
-                    db.query(Brand)
-                    .filter(Brand.name.ilike(brand_name))
-                    .first()
-                )
-                if not brand:
-                    brand = Brand(name=brand_name)
-                    db.add(brand)
-                    db.flush()
-                product.brand_id = brand.id
+                from services.normalization.scorer import ConfidenceScorer
+                product.brand_id = ConfidenceScorer._get_or_create_brand(db, brand_name)
 
         # Handle weight change on variants
         if weight is not None:

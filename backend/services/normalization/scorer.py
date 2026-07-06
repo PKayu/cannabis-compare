@@ -1,9 +1,10 @@
 """
 Confidence scoring and product normalization service.
 
-Handles the decision logic for scraped products:
-- >90% confidence: Auto-merge to existing product (create variant)
-- <90% confidence: Create new product entry (parent + variant)
+Handles the decision logic for scraped products (see ProductMatcher thresholds):
+- >=85% confidence: Auto-merge to existing product (create variant)
+- 65-84% confidence: Near-miss — create product + "auto_missed" review flag
+- <65% confidence: Create new product entry (parent + variant)
   - Clean data: product is active immediately
   - Dirty data: product is inactive, flagged for admin cleanup
 
@@ -14,6 +15,7 @@ Products use a parent/variant hierarchy:
 from sqlalchemy.orm import Session
 from typing import Optional, Tuple, List
 import logging
+import math
 
 from services.normalization.matcher import ProductMatcher
 from services.normalization.weight_parser import parse_weight, extract_weight_from_name
@@ -45,26 +47,32 @@ def find_or_create_variant(
 
     weight_label, weight_g = parse_weight(raw_weight)
 
-    # Look for existing variant with same weight under this parent
+    # Look for existing variant with same weight under this parent.
+    # Compared with isclose rather than SQL equality — oz↔g conversions and
+    # rounding (e.g. 3.5 vs 3.544) would otherwise split variants.
     if weight_g is not None:
-        existing = (
+        siblings = (
             db.query(Product)
             .filter(
                 Product.master_product_id == parent_id,
                 Product.is_master.is_(False),
-                Product.weight_grams == weight_g
+                Product.is_active.is_(True),
+                Product.weight_grams.isnot(None)
             )
-            .first()
+            .all()
         )
-        if existing:
-            return existing
+        for sibling in siblings:
+            if math.isclose(sibling.weight_grams, weight_g, rel_tol=0.01):
+                return sibling
     else:
-        # Look for a weightless variant
+        # Look for a weightless variant (active only — merge losers are
+        # soft-deleted, demoted non-masters that must not collect prices)
         existing = (
             db.query(Product)
             .filter(
                 Product.master_product_id == parent_id,
                 Product.is_master.is_(False),
+                Product.is_active.is_(True),
                 Product.weight_grams.is_(None)
             )
             .first()
@@ -138,13 +146,28 @@ class ConfidenceScorer:
                 .filter(Product.is_master.is_(True))
                 .all()
             )
+            # Variant weights per master, for the weight-match signal
+            weight_rows = (
+                db.query(Product.master_product_id, Product.weight_grams)
+                .filter(
+                    Product.is_master.is_(False),
+                    Product.master_product_id.isnot(None),
+                    Product.weight_grams.isnot(None),
+                )
+                .all()
+            )
+            weights_by_master: dict = {}
+            for master_id, weight_g in weight_rows:
+                weights_by_master.setdefault(master_id, set()).add(weight_g)
+
             candidates = []
             for master in master_products:
                 candidates.append({
                     "id": master.id,
                     "name": master.name,
                     "brand": master.brand.name if master.brand else "",
-                    "thc_percentage": master.thc_percentage,
+                    "product_type": master.product_type,
+                    "weight_grams_set": weights_by_master.get(master.id, set()),
                     "dispensary_ids": set(),  # Fallback — dispensary_ids unknown in this path
                 })
 
@@ -154,6 +177,13 @@ class ConfidenceScorer:
             junk_cleaned
         )
         name_for_matching = clean_name or junk_cleaned
+
+        # Weight in grams for the matching signal: prefer the scraper-provided
+        # weight field, fall back to the weight extracted from the name.
+        _, scraper_weight_g = parse_weight(scraped_product.weight)
+        weight_g_for_matching = (
+            scraper_weight_g if scraper_weight_g is not None else extracted_weight_g
+        )
 
         # Hardware guard: skip cannabis product matching entirely.
         # Hardware items (Puffco, Volcano, grinders, etc.) must never fuzzy-match
@@ -169,7 +199,7 @@ class ConfidenceScorer:
                 scraped_name=name_for_matching,
                 scraped_brand=scraped_product.brand,
                 candidates=candidates,
-                scraped_thc=scraped_product.thc_percentage,
+                scraped_weight_g=weight_g_for_matching,
                 product_type=scraped_product.category
             )
 
@@ -255,53 +285,57 @@ class ConfidenceScorer:
                 "name": parent.name,
                 "brand": scraped_product.brand,
                 "product_type": scraped_product.category,
-                "thc_percentage": scraped_product.thc_percentage,
+                "weight_grams_set": (
+                    {weight_g_for_matching} if weight_g_for_matching is not None else set()
+                ),
                 "dispensary_ids": {dispensary_id},
             })
 
-            # Only create an auto_missed audit flag if the incoming product is from
-            # a DIFFERENT dispensary than the best-match candidate.  Same-dispensary
-            # near-misses (e.g. two similar WholesomeCo vaporizers) are noise that
-            # the admin doesn't need to review.
-            best_match_disp_ids = best_match.get("dispensary_ids", set())
-            if dispensary_id not in best_match_disp_ids:
-                # Create audit flag only if one doesn't already exist for this
-                # dispensary + name + candidate combination (avoids flooding on re-runs)
-                existing_missed_flag = (
-                    db.query(ScraperFlag)
-                    .filter(
-                        ScraperFlag.dispensary_id == dispensary_id,
-                        ScraperFlag.original_name == name_for_matching,
-                        ScraperFlag.matched_product_id == best_match["id"],
-                        ScraperFlag.status == "auto_missed",
-                    )
-                    .first()
+            # Create an auto_missed audit flag for every near-miss. Same-dispensary
+            # near-misses (e.g. two similar WholesomeCo vaporizers) are tagged so
+            # the admin can filter them separately from cross-dispensary ones.
+            is_same_dispensary = dispensary_id in best_match.get("dispensary_ids", set())
+            # Create audit flag only if one doesn't already exist for this
+            # dispensary + name + candidate combination (avoids flooding on re-runs)
+            existing_missed_flag = (
+                db.query(ScraperFlag)
+                .filter(
+                    ScraperFlag.dispensary_id == dispensary_id,
+                    ScraperFlag.original_name == name_for_matching,
+                    ScraperFlag.matched_product_id == best_match["id"],
+                    ScraperFlag.status == "auto_missed",
                 )
-                if not existing_missed_flag:
-                    missed_flag = ScraperFlag(
-                        original_name=name_for_matching,
-                        original_thc=scraped_product.thc_percentage,
-                        original_cbd=scraped_product.cbd_percentage,
-                        original_thc_content=scraped_product.thc_content,
-                        original_cbd_content=scraped_product.cbd_content,
-                        brand_name=scraped_product.brand or "Unknown",
-                        dispensary_id=dispensary_id,
-                        matched_product_id=best_match["id"],
-                        confidence_score=confidence,
-                        status="auto_missed",
-                        flag_type="match_review",
-                        merge_reason=(
-                            f"Near-miss at {confidence:.0%} confidence — "
-                            f"below auto-merge threshold. "
-                            f"New product id: {parent.id}"
-                        ),
-                        original_weight=scraped_product.weight,
-                        original_price=scraped_product.price,
-                        original_category=scraped_product.category,
-                        original_url=scraped_product.url,
-                    )
-                    db.add(missed_flag)
-                    db.flush()
+                .first()
+            )
+            if not existing_missed_flag:
+                missed_flag = ScraperFlag(
+                    original_name=name_for_matching,
+                    original_thc=scraped_product.thc_percentage,
+                    original_cbd=scraped_product.cbd_percentage,
+                    original_thc_content=scraped_product.thc_content,
+                    original_cbd_content=scraped_product.cbd_content,
+                    brand_name=scraped_product.brand or "Unknown",
+                    dispensary_id=dispensary_id,
+                    matched_product_id=best_match["id"],
+                    secondary_product_id=parent.id,
+                    confidence_score=confidence,
+                    status="auto_missed",
+                    flag_type="match_review",
+                    merge_reason=(
+                        f"Near-miss at {confidence:.0%} confidence — "
+                        f"below auto-merge threshold. "
+                        f"New product id: {parent.id}"
+                    ),
+                    original_weight=scraped_product.weight,
+                    original_price=scraped_product.price,
+                    original_category=scraped_product.category,
+                    original_url=scraped_product.url,
+                    issue_tags=(
+                        ["same_dispensary_near_miss"] if is_same_dispensary else None
+                    ),
+                )
+                db.add(missed_flag)
+                db.flush()
 
             return variant.id, "review_flag_created"
 
@@ -358,7 +392,9 @@ class ConfidenceScorer:
                 "name": parent.name,  # Clean name for future matching
                 "brand": scraped_product.brand,
                 "product_type": scraped_product.category,
-                "thc_percentage": scraped_product.thc_percentage,
+                "weight_grams_set": (
+                    {weight_g_for_matching} if weight_g_for_matching is not None else set()
+                ),
                 "dispensary_ids": {dispensary_id},
             })
 
@@ -391,21 +427,37 @@ class ConfidenceScorer:
 
     @staticmethod
     def _get_or_create_brand(db: Session, brand_name: str) -> str:
-        """Get existing brand or create new one."""
+        """
+        Get existing brand or create new one.
+
+        Looks up by normalized name so spelling/punctuation variants
+        ("Zion Cultivars, LLC" vs "Zion Cultivars") reuse one Brand row.
+        Falls back to exact-name match for legacy rows without normalized_name.
+        """
         from models import Brand
 
         # Handle None or empty brand name
         if not brand_name:
             brand_name = "Unknown"
 
+        normalized = ProductMatcher.normalize_brand_name(brand_name)
+
         brand = (
             db.query(Brand)
-            .filter(Brand.name.ilike(brand_name))
+            .filter(Brand.normalized_name == normalized)
             .first()
         )
+        if not brand:
+            brand = (
+                db.query(Brand)
+                .filter(Brand.name.ilike(brand_name))
+                .first()
+            )
+            if brand and not brand.normalized_name:
+                brand.normalized_name = normalized
 
         if not brand:
-            brand = Brand(name=brand_name)
+            brand = Brand(name=brand_name.strip(), normalized_name=normalized)
             db.add(brand)
             db.flush()
             logger.info(f"Created new brand: {brand_name}")

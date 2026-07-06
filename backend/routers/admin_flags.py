@@ -139,11 +139,13 @@ class FlagStatsResponse(BaseModel):
     pending: int
     pending_cleanup: int = 0
     pending_review: int = 0
+    pending_duplicates: int = 0
     auto_merged: int = 0
     approved: int
     rejected: int
     dismissed: int
     cleaned: int = 0
+    merged: int = 0
     total: int
 
 
@@ -321,22 +323,29 @@ async def get_flag_stats(db: Session = Depends(get_db)):
         ScraperFlag.status == "pending",
         ScraperFlag.flag_type == "match_review"
     ).count()
+    pending_duplicates = db.query(ScraperFlag).filter(
+        ScraperFlag.status == "pending",
+        ScraperFlag.flag_type == "duplicate_pair"
+    ).count()
     auto_merged = db.query(ScraperFlag).filter(ScraperFlag.status == "auto_merged").count()
     approved = db.query(ScraperFlag).filter(ScraperFlag.status == "approved").count()
     rejected = db.query(ScraperFlag).filter(ScraperFlag.status == "rejected").count()
     dismissed = db.query(ScraperFlag).filter(ScraperFlag.status == "dismissed").count()
     cleaned = db.query(ScraperFlag).filter(ScraperFlag.status == "cleaned").count()
+    merged = db.query(ScraperFlag).filter(ScraperFlag.status == "merged").count()
 
     return {
         "pending": pending,
         "pending_cleanup": pending_cleanup,
         "pending_review": pending_review,
+        "pending_duplicates": pending_duplicates,
         "auto_merged": auto_merged,
         "approved": approved,
         "rejected": rejected,
         "dismissed": dismissed,
         "cleaned": cleaned,
-        "total": pending + auto_merged + approved + rejected + dismissed + cleaned,
+        "merged": merged,
+        "total": pending + auto_merged + approved + rejected + dismissed + cleaned + merged,
     }
 
 
@@ -785,45 +794,26 @@ async def merge_products(
     db: Session = Depends(get_db),
     admin_id: str = Depends(verify_admin)
 ):
-    """Merge source product into target product."""
-    source = db.query(Product).filter(Product.id == request.source_product_id).first()
-    target = db.query(Product).filter(Product.id == request.target_product_id).first()
+    """Merge source product into target product (target is kept)."""
+    from services.product_merge import merge_product_pair
 
-    if not source:
-        raise HTTPException(status_code=404, detail="Source product not found")
-    if not target:
-        raise HTTPException(status_code=404, detail="Target product not found")
-
-    # Re-parent source's child variants to target so they remain reachable
-    # under the surviving master product. Without this, after demoting source
-    # the variants become orphaned (master_product_id points to a non-master).
-    variant_count = (
-        db.query(Product)
-        .filter(
-            Product.master_product_id == request.source_product_id,
-            Product.is_master.is_(False),
+    try:
+        result = merge_product_pair(
+            db,
+            winner_id=request.target_product_id,
+            loser_id=request.source_product_id,
         )
-        .update({Product.master_product_id: request.target_product_id})
-    )
-
-    # Move any prices directly on source to target (prices should be on variants,
-    # but this is a safety net in case of legacy data).
-    price_count = (
-        db.query(Price)
-        .filter(Price.product_id == request.source_product_id)
-        .update({Price.product_id: request.target_product_id})
-    )
-
-    source.is_master = False
-    source.master_product_id = request.target_product_id
+    except ValueError as e:
+        detail = str(e)
+        status_code = 404 if "not found" in detail else 400
+        raise HTTPException(status_code=status_code, detail=detail)
 
     db.commit()
 
     return {
         "status": "merged",
         "target_id": request.target_product_id,
-        "variants_reparented": variant_count,
-        "prices_moved": price_count,
+        **result,
     }
 
 
@@ -1154,8 +1144,6 @@ async def get_potential_duplicates(
                     master_name=b["base_name"],
                     scraped_brand=a["brand"],
                     master_brand=b["brand"],
-                    scraped_thc=a["thc_percentage"],
-                    master_thc=b["thc_percentage"],
                 )
                 if ProductMatcher.REVIEW_THRESHOLD <= score < ProductMatcher.AUTO_MERGE_THRESHOLD:
                     pairs.append({

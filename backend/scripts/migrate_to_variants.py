@@ -141,9 +141,7 @@ def phase2_deduplicate(db):
                 scraped_name=product_b.name,
                 master_name=product_a.name,
                 scraped_brand="",  # Same brand, skip brand scoring
-                master_brand="",
-                scraped_thc=product_b.thc_percentage,
-                master_thc=product_a.thc_percentage
+                master_brand=""
             )
 
             if match_type == "auto_merge":

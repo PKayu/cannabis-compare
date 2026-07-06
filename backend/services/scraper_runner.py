@@ -174,13 +174,27 @@ class ScraperRunner:
             for _pid, _did in _disp_rows:
                 _product_disp_ids[_pid].add(_did)
 
+            # Variant weights per master, for the weight-match scoring signal
+            _weight_rows = (
+                self.db.query(Product.master_product_id, Product.weight_grams)
+                .filter(
+                    Product.master_product_id.in_(master_ids),
+                    Product.is_master.is_(False),
+                    Product.weight_grams.isnot(None),
+                )
+                .all()
+            )
+            _product_weights: dict = defaultdict(set)
+            for _pid, _wg in _weight_rows:
+                _product_weights[_pid].add(_wg)
+
             candidates = [
                 {
                     "id": m.id,
                     "name": m.name,
                     "brand": m.brand.name if m.brand else "",
                     "product_type": m.product_type,
-                    "thc_percentage": m.thc_percentage,
+                    "weight_grams_set": _product_weights.get(m.id, set()),
                     "dispensary_ids": _product_disp_ids.get(m.id, set()),
                 }
                 for m in master_products

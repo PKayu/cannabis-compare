@@ -107,6 +107,16 @@ Mirror of Claude reference:
 - `.claude/agents/documentation-manager.md`
 - `.claude/commands/revise-claude-md.md`
 
+## Patient-Facing UX Work
+
+For public or signed-in patient-facing UI changes:
+
+- Use the repository skill at `.agents/skills/cannabis-compare-ui/SKILL.md`.
+- Treat `docs/ux/` as the design, capability, acceptance, and handoff authority.
+- Preserve production API, Supabase authentication, compliance, and route contracts.
+- Patient Guidance is future-only and must not be implemented or linked in the current product.
+- A redesigned journey is incomplete until it passes `docs/ux/ACCEPTANCE-GATES.md`.
+
 ## Review Expectations
 
 When asked to review, prioritize:

@@ -97,6 +97,16 @@ Phase 3: Community (User System)
 | [09 - Reviews](./workflows/09_review_system_dual_track.md) | ⏳ Next | Review system |
 | [10 - Alerts](./workflows/10_stock_alerts_and_notifications.md) | ⏳ Next | Notifications |
 
+### UX redesign and handoff
+
+| Document | Purpose |
+|----------|---------|
+| [UX program](./ux/README.md) | Authority order and active pilot |
+| [Design system](./ux/DESIGN-SYSTEM.md) | Production visual and interaction language |
+| [Capability status](./ux/CAPABILITY-STATUS.md) | Supported, hidden, and future behavior |
+| [Acceptance gates](./ux/ACCEPTANCE-GATES.md) | Required approval evidence |
+| [Execution and handoff](./ux/EXECUTION-AND-HANDOFF.md) | Journey delivery workflow |
+
 ---
 
 ## File Structure

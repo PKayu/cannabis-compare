@@ -21,6 +21,8 @@ When sources disagree, use this order:
 - `PILOT-HANDOFF.md` — implemented discovery pilot, capability/route mapping, evidence, and remaining gates.
 - `future-concepts/PATIENT-GUIDANCE.md` — parked concept; not part of the current site.
 
-## Current pilot
+## Migration status
 
-The first production journey is discovery through product evaluation: search, filters, results, variants, price comparison, reviews, and external dispensary handoff.
+- Homepage: implemented; final manual accessibility and production-harness approval remains open. See `HOMEPAGE-HANDOFF.md`.
+- Discovery and product evaluation: implemented; pilot approval gates remain open.
+- Next journey: dispensary directory, detail, promotions, and inventory.

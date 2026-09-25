@@ -15,6 +15,12 @@ Work one complete journey at a time in production. Do not merge the Lovable repo
 
 The first two items form the active pilot and may share primitives, but each must remain reviewable.
 
+### Migration status
+
+- The shared public shell and homepage are implemented; their manual accessibility and environment-specific validation gates remain open.
+- Discovery and product evaluation are implemented as the first pilot; see `PILOT-HANDOFF.md`.
+- Dispensary exploration and inventory is the next implementation journey.
+
 ## Before implementation
 
 1. Read the production route, components, API client calls, and matching backend router.
@@ -65,4 +71,3 @@ Files changed, shared dependencies, and safe rollback point
 - Reviewer: capability traceability, accessibility, regression risk, and unsupported-feature detection.
 
 One person may fill multiple roles, but the handoff must address each responsibility explicitly.
-

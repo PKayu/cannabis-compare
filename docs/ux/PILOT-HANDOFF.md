@@ -48,9 +48,9 @@ Existing URLs are preserved: /products/search and /products/[id]. Variant IDs st
 - Narrow existing-component changes: ReviewForm labels/auth loading/centralized endpoint; WatchlistButton auth loading, signed-out return query, action labels.
 - Presentation contracts: frontend/lib/product-contracts.ts and search-state.ts.
 - Artwork: five existing prototype JPGs in frontend/public/images/mountain-bloom, 472,831 bytes total, clearly representative. Served directly using per-image unoptimized because standalone optimization lacks sharp. No runtime dependency added.
-- Follow-up visual correction adds the approved `groovy-hero.jpg` header illustration and low-contrast leaf page-field SVGs to search. The hero stays decorative behind an accessible text scrim; opaque task surfaces retain legibility.
+- Follow-up visual correction adds the approved camper-van header illustration and low-contrast leaf page-field SVGs to search. The hero stays decorative behind an accessible text scrim; opaque task surfaces retain legibility.
 - api.ts, Supabase, protected routes and backend contracts were not changed.
-- Home content, dispensary routes, profile, watchlist and authentication pages have not been visually migrated.
+- The homepage is now visually migrated; see `HOMEPAGE-HANDOFF.md`. Dispensary routes, profile, watchlist and authentication pages have not been visually migrated.
 
 ## Reproducible validation
 

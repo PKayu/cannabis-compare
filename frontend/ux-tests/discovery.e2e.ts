@@ -108,7 +108,7 @@ test('keyboard search, package selection, mobile menu and signed-out save', asyn
 test('filters send supported values, validate ranges, and survive browser back', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/products/search?q=blue')
-  await page.getByRole('button', { name: 'Show filters' }).click()
+  await page.getByRole('button', { name: 'Tune the menu' }).click()
   await page.getByRole('combobox', { name: 'Product type', exact: true }).selectOption('flower')
   await page.getByRole('spinbutton', { name: 'Minimum price', exact: true }).fill('60')
   await page.getByRole('spinbutton', { name: 'Maximum price', exact: true }).fill('40')

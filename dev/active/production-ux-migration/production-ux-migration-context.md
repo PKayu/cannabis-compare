@@ -85,3 +85,15 @@ The following foundation results predate the pilot. Pilot validation is recorded
 - User review found the search pilot had over-corrected away from the approved prototype by replacing the greenhouse header image and leaf page-field texture with a generic navy ring.
 - Restoring the prototype hero artwork and low-contrast leaf texture is Frontend-only. The texture remains outside opaque, task-heavy panels so it does not weaken comparison readability.
 - The local API at http://127.0.0.1:8000 is healthy, but `/api/products/search?q=blue` and `/api/dispensaries` both returned empty arrays. This is an empty local data store, not a search UI failure. `backend/seed_test_data.py` is the documented local test-data path; do not show fixture results as production results.
+
+## Correction: prototype fidelity (2026-09-25)
+
+- User clarified that migration means recreating a similar Mountain Bloom experience, not applying a restrained interpretation of isolated tokens.
+- Required visual translation now includes the saturated blue leaf-pattern shell, warm patterned task surface, groovy camper-van hero, avocado cards, rounded colored controls, tactile transform/offset-shadow motion, and full visual hierarchy from the prototype search/product routes.
+- Production behavior remains authoritative. Unsupported stock sub-states, rating aggregates, original-price deals in search, guest reviews, guidance, personalization and in-app purchasing remain absent rather than visually simulated.
+
+## Visual reconstruction in progress (2026-09-25)
+
+- The discovery route now uses the prototype's actual camper-van hero asset, saturated blue shell, parchment work surface, blue search field, horizontal filter field, avocado result cards, and offset-shadow control motion.
+- Search capabilities remain limited to the production query, filters, product price ranges, weights, potency, and dispensary counts. No prototype-only ratings, discounts, precise stock level, or checkout UI was brought over.
+- Visual review was performed at 1280px for discovery and product evaluation. Focused browser coverage passed in ten scenarios across 390px, 768px, 1280px, and 1440px; it includes comparison, error recovery, filters, keyboard navigation, signed-out saving, and shell landmarks. The isolated test environment fell back from Google fonts because external font downloads are sandbox-blocked.

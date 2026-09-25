@@ -100,15 +100,19 @@ code {
   @apply text-groovy-ink font-semibold text-xs leading-relaxed sm:text-sm;
 }
 
-/* Mountain Bloom: scoped to migrated journeys and the public shell. */
-.bloom-page { @apply min-w-0 bg-bloom-cream font-bloom text-bloom-ink; }
-.bloom-leaf-field { background-image: url('/images/mountain-bloom/leaf-pattern-ink.svg'); background-repeat: repeat; background-size: 240px 240px; }
+/* Mountain Bloom: recreate the prototype's saturated shell, colored cards and tactile controls. */
+.bloom-page { @apply min-w-0 bg-bloom-blue font-bloom text-bloom-cream; }
+.bloom-leaf-field { background-image: url('/images/mountain-bloom/leaf-pattern-cream.svg'); background-repeat: repeat; background-size: 240px 240px; }
+.bloom-warm-surface { @apply border-y border-bloom-ink/15 bg-bloom-parchment text-bloom-ink; background-image: url('/images/mountain-bloom/leaf-pattern-ink.svg'); background-repeat: repeat; background-size: 240px 240px; }
 .bloom-container { @apply mx-auto w-full max-w-7xl px-5 sm:px-8; }
 .bloom-title { @apply font-bloom-display font-normal leading-tight; text-wrap: balance; }
-.bloom-panel { @apply rounded-3xl border border-bloom-line bg-bloom-cream; }
-.bloom-button { @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-bloom-ink bg-bloom-orange px-5 py-2.5 text-sm font-bold text-bloom-ink transition-colors hover:bg-bloom-mustard disabled:cursor-not-allowed disabled:opacity-50; }
-.bloom-button-secondary { @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-bloom-line bg-bloom-cream px-5 py-2.5 text-sm font-bold text-bloom-ink hover:border-bloom-navy; }
-.bloom-input { @apply min-h-[44px] w-full min-w-0 rounded-xl border border-bloom-muted bg-white px-3 py-2 text-base text-bloom-ink placeholder:text-bloom-muted; }
+.bloom-panel { @apply rounded-[2rem] border border-bloom-cream/30 bg-bloom-avocado text-bloom-ink shadow-[3px_3px_0_#102A32]; }
+.bloom-card { @apply rounded-[2rem] border border-bloom-cream/30 bg-bloom-avocado text-bloom-ink shadow-[3px_3px_0_#102A32]; }
+.bloom-button { @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border border-bloom-ink bg-bloom-orange px-5 py-2.5 text-sm font-bold text-bloom-cream shadow-[3px_3px_0_#102A32] transition-all duration-200 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-bloom-mustard hover:text-bloom-ink hover:shadow-[5px_5px_0_#102A32] active:translate-x-0 active:translate-y-0 active:shadow-none disabled:cursor-not-allowed disabled:opacity-50; }
+.bloom-button-secondary { @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border border-bloom-ink bg-bloom-mustard px-5 py-2.5 text-sm font-bold text-bloom-ink shadow-[3px_3px_0_#102A32] transition-all duration-200 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-bloom-orange hover:text-bloom-cream hover:shadow-[5px_5px_0_#102A32] active:translate-x-0 active:translate-y-0 active:shadow-none; }
+.bloom-button-glass { @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border border-bloom-cream/40 bg-bloom-cream/10 px-5 py-2.5 text-sm font-bold text-bloom-cream shadow-[3px_3px_0_#102A32] backdrop-blur transition-all duration-200 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-bloom-cream/20 hover:shadow-[5px_5px_0_#102A32] active:translate-x-0 active:translate-y-0 active:shadow-none; }
+.bloom-input { @apply min-h-[44px] w-full min-w-0 rounded-full border border-bloom-cream/25 bg-bloom-blue px-4 py-2 text-base text-bloom-cream placeholder:text-bloom-cream/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] focus:border-bloom-mustard; }
+.bloom-input option { @apply bg-bloom-navy text-bloom-cream; }
 .bloom-page :is(a,button,input,select,summary,textarea):focus-visible,
 .bloom-shell :is(a,button):focus-visible { outline: 3px solid #103D50; outline-offset: 4px; }
 .bloom-dark :is(a,button):focus-visible { outline-color: #F4B940; }

@@ -11,6 +11,10 @@
 
 The interface should feel warm, candid, optimistic, and distinctly local while remaining credible for medical-cannabis price research. The personality comes from typography, color blocking, illustration, and tactile interaction—not from reducing data clarity.
 
+## Fidelity rule
+
+For a migrated public route, recreate the recognizable Mountain Bloom experience—not merely its palette. This includes its saturated blue, patterned shell; warm parchment task surface; avocado product cards; retro hero imagery; rounded color controls; and short tactile hover/press movement. Only remove or alter a prototype element when it requires unavailable production data, changes compliance/auth behavior, or makes required information unreadable. Document each such omission in the handoff.
+
 ## Foundations
 
 ### Typography
@@ -75,7 +79,7 @@ Do not introduce page-specific palettes. Status colors must remain distinguishab
 
 ## Anti-patterns
 
-- Repeating cannabis-leaf backgrounds.
+- High-contrast or repeating cannabis-leaf backgrounds behind dense task content. The approved low-contrast pattern belongs in page fields and decorative margins only.
 - Three identical marketing cards used as the default layout.
 - Multiple competing accent colors in one task surface.
 - Ratings, discounts, inventory states, or locations not provided by production.

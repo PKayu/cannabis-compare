@@ -45,8 +45,8 @@ Do not introduce page-specific palettes. Status colors must remain distinguishab
 
 ### Botanical motifs
 
-- Prefer abstract sun, mountain, and flower motifs. Existing leaf artwork may remain on unmigrated routes.
-- Never use repeating leaf wallpaper behind forms, tables, result grids, compliance text, or other task-heavy content.
+- Use the approved Mountain Bloom greenhouse/retro illustration in journey hero bands when it strengthens orientation or emotional tone; it is decorative and must not conceal the task heading.
+- Use the prototype's low-contrast cannabis-leaf pattern as a page-field texture around content. Do not put it behind forms, tables, result cards, compliance text, or other task-heavy surfaces.
 - Decorative artwork must be hidden from assistive technology and must not create horizontal overflow.
 
 ## Interaction rules

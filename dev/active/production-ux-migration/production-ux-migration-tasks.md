@@ -28,6 +28,8 @@
 - [ ] Pass desktop, 768px, and 390px acceptance gates.
 - [x] Review loaded-image/font screenshots at all four widths and pass 10 production-browser scenarios.
 - [x] Record capability mapping, validation limitations, and next-owner instructions in docs/ux/PILOT-HANDOFF.md.
+- [ ] Restore approved prototype hero imagery and leaf page-field treatment after visual review.
+- [ ] Confirm local test-data loading path; do not mask an empty API with frontend fixtures.
 - [ ] Resolve or disposition 11 pre-existing full-suite test failures before approval.
 - [ ] Complete assistive-technology and authenticated live integration verification before pilot approval.
 

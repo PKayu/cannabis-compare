@@ -48,6 +48,7 @@ Existing URLs are preserved: /products/search and /products/[id]. Variant IDs st
 - Narrow existing-component changes: ReviewForm labels/auth loading/centralized endpoint; WatchlistButton auth loading, signed-out return query, action labels.
 - Presentation contracts: frontend/lib/product-contracts.ts and search-state.ts.
 - Artwork: five existing prototype JPGs in frontend/public/images/mountain-bloom, 472,831 bytes total, clearly representative. Served directly using per-image unoptimized because standalone optimization lacks sharp. No runtime dependency added.
+- Follow-up visual correction adds the approved `groovy-hero.jpg` header illustration and low-contrast leaf page-field SVGs to search. The hero stays decorative behind an accessible text scrim; opaque task surfaces retain legibility.
 - api.ts, Supabase, protected routes and backend contracts were not changed.
 - Home content, dispensary routes, profile, watchlist and authentication pages have not been visually migrated.
 
@@ -86,6 +87,10 @@ Screenshots are generated under:
 Widths: 390, 768, 1280, 1440. Images/fonts must be loaded before capture. The main journey tests assert no page overflow and no browser console/page errors. Screenshots are ignored generated evidence, not committed product fixtures.
 
 ## Remaining approval gates and next work
+
+### Local review data
+
+The frontend intentionally does not fabricate results when the API has no data. For this local review, the empty SQLite store was seeded through `backend/seed_test_data.py`: 3 dispensaries, 5 parent products, 8 variants, 17 prices, 3 reviews, and 3 promotions. Search `blue` to begin with Blue Dream. Seed data is local development content, not a production capability. The seed script skips when dispensaries already exist.
 
 Screenshots reviewed at all four widths: no clipped essential text or page overflow in the tested states. On mobile, the chart becomes a readable range summary plus expandable exact data rather than tiny axis labels.
 

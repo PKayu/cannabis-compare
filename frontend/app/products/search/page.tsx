@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Image from 'next/image'
 import { api } from '@/lib/api'
 import SearchBar from '@/components/SearchBar'
 import FilterPanel from '@/components/FilterPanel'
@@ -35,10 +36,12 @@ function SearchPageContent() {
     else router.push(`/products/search${next ? `?${next}` : ''}`, { scroll: false })
   }
   const count = activeFilterCount(filters)
-  return <div className="bloom-page pb-16">
-    <section className="relative overflow-hidden bg-bloom-navy text-bloom-cream">
-      <div aria-hidden="true" className="absolute -right-12 -top-32 h-96 w-96 rounded-full border-[48px] border-bloom-blue opacity-40" />
-      <div className="bloom-container relative py-10 sm:py-14"><p className="text-xs font-bold uppercase tracking-[0.2em] text-bloom-mustard">Find your next good thing</p><h1 className="bloom-title mt-3 text-5xl sm:text-6xl">A clearer way to compare.</h1><p className="mt-4 max-w-xl text-base leading-relaxed">Find a product. Explore its sizes. Compare what Utah dispensaries are listing before you make your next stop.</p></div>
+  return <div className="bloom-page bloom-leaf-field pb-16">
+    <section className="relative isolate min-h-[22rem] overflow-hidden bg-bloom-navy text-bloom-cream sm:min-h-[25rem]">
+      <Image src="/images/mountain-bloom/groovy-hero.jpg" alt="" aria-hidden="true" fill priority unoptimized sizes="100vw" className="object-cover object-center" />
+      <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(90deg,rgba(16,61,80,0.96)_0%,rgba(16,61,80,0.82)_42%,rgba(16,61,80,0.28)_100%)]" />
+      <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(0deg,rgba(16,61,80,0.45),transparent_45%)]" />
+      <div className="bloom-container relative z-10 flex min-h-[22rem] items-center py-10 sm:min-h-[25rem] sm:py-14"><div className="max-w-2xl"><p className="text-xs font-bold uppercase tracking-[0.2em] text-bloom-mustard">Find your next good thing</p><h1 className="bloom-title mt-3 text-5xl sm:text-6xl">A clearer way to compare.</h1><p className="mt-4 max-w-xl text-base leading-relaxed">Find a product. Explore its sizes. Compare what Utah dispensaries are listing before you make your next stop.</p></div></div>
     </section>
     <div className="bloom-container pt-8">
       <div className="max-w-3xl"><SearchBar initialQuery={query} onSearch={next => navigate(next, filters)} /></div>

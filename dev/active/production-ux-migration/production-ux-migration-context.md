@@ -79,3 +79,9 @@ The following foundation results predate the pilot. Pilot validation is recorded
 - Acceptance is still open: actual screen reader, complete target/focus/zoom audit, authenticated integration and interrupted action replay, baseline test disposition, live-data extremes, Docker smoke test and user visual approval.
 - See docs/ux/PILOT-HANDOFF.md for exact commands, mappings, evidence paths and migration boundaries.
 - Saved pilot frontend/assets/tests as local commit a73a350. No push or deployment.
+
+## Follow-up: visual convergence and local data (2026-09-25)
+
+- User review found the search pilot had over-corrected away from the approved prototype by replacing the greenhouse header image and leaf page-field texture with a generic navy ring.
+- Restoring the prototype hero artwork and low-contrast leaf texture is Frontend-only. The texture remains outside opaque, task-heavy panels so it does not weaken comparison readability.
+- The local API at http://127.0.0.1:8000 is healthy, but `/api/products/search?q=blue` and `/api/dispensaries` both returned empty arrays. This is an empty local data store, not a search UI failure. `backend/seed_test_data.py` is the documented local test-data path; do not show fixture results as production results.

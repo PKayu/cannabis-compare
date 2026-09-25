@@ -9,11 +9,16 @@ interface BulkActionsProps {
   activeTab: FilterTab
   onSelectAll: () => void
   onDeselectAll: () => void
-  onBulkApprove: () => Promise<void>
-  onBulkReject: () => Promise<void>
-  onBulkDismiss: () => Promise<void>
-  onBulkClean?: () => Promise<void>
-  onBulkDelete?: () => Promise<void>
+  onBulkApprove: () => Promise<void> | void
+  onBulkReject: () => Promise<void> | void
+  onBulkDismiss: () => Promise<void> | void
+  onBulkClean?: () => Promise<void> | void
+  onBulkDelete?: () => Promise<void> | void
+  onBulkMergeDuplicates?: () => Promise<void> | void
+  /** True when every selected duplicate pair has a winner picked */
+  bulkMergeReady?: boolean
+  /** Number of selected pairs still missing a winner */
+  bulkMergePendingWinners?: number
 }
 
 export function BulkActions({
@@ -27,9 +32,12 @@ export function BulkActions({
   onBulkDismiss,
   onBulkClean,
   onBulkDelete,
+  onBulkMergeDuplicates,
+  bulkMergeReady,
+  bulkMergePendingWinners,
 }: BulkActionsProps) {
   const [showConfirmModal, setShowConfirmModal] = useState(false)
-  const [confirmAction, setConfirmAction] = useState<'approve' | 'reject' | 'dismiss' | 'clean' | 'delete' | null>(null)
+  const [confirmAction, setConfirmAction] = useState<'approve' | 'reject' | 'dismiss' | 'clean' | 'delete' | 'merge' | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
 
   if (selectedFlagIds.length === 0) return null
@@ -52,6 +60,8 @@ export function BulkActions({
         await onBulkClean()
       } else if (confirmAction === 'delete' && onBulkDelete) {
         await onBulkDelete()
+      } else if (confirmAction === 'merge' && onBulkMergeDuplicates) {
+        await onBulkMergeDuplicates()
       }
     } finally {
       setIsProcessing(false)
@@ -77,6 +87,8 @@ export function BulkActions({
         return 'activate them with their current data (no edits applied)'
       case 'delete':
         return 'permanently delete the flagged products'
+      case 'merge':
+        return 'merge each pair into its chosen winner (prices, reviews, and watchlists consolidate)'
       default:
         return ''
     }
@@ -86,6 +98,7 @@ export function BulkActions({
     switch (confirmAction) {
       case 'approve':
       case 'clean':
+      case 'merge':
         return 'bg-green-600 hover:bg-green-700'
       case 'reject':
       case 'delete':
@@ -167,6 +180,31 @@ export function BulkActions({
               className="px-4 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-300 text-white text-sm font-medium rounded-md shadow-sm transition-colors"
             >
               Dismiss All
+            </button>
+          </>
+        )}
+
+        {/* Duplicates tab: Merge Selected + Not Duplicates */}
+        {activeTab === 'duplicates' && (
+          <>
+            <button
+              onClick={() => handleActionClick('merge')}
+              disabled={isProcessing || !onBulkMergeDuplicates || !bulkMergeReady}
+              title={
+                !bulkMergeReady && (bulkMergePendingWinners ?? 0) > 0
+                  ? `Pick a winner on ${bulkMergePendingWinners} more pair${bulkMergePendingWinners === 1 ? '' : 's'} first`
+                  : undefined
+              }
+              className="px-4 py-2 bg-cannabis-600 hover:bg-cannabis-700 disabled:bg-gray-300 text-white text-sm font-medium rounded-md shadow-sm transition-colors"
+            >
+              Merge Selected
+            </button>
+            <button
+              onClick={() => handleActionClick('dismiss')}
+              disabled={isProcessing}
+              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-300 text-white text-sm font-medium rounded-md shadow-sm transition-colors"
+            >
+              Not Duplicates
             </button>
           </>
         )}

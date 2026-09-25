@@ -67,6 +67,7 @@ class Brand(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String, nullable=False, unique=True, index=True)
+    normalized_name = Column(String, nullable=True, index=True)  # ProductMatcher.normalize_brand_name(name)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -203,10 +204,10 @@ class ScraperFlag(Base):
     """
     Flags for products with low confidence matches requiring manual admin review.
 
-    Confidence thresholds (PRD section 4.1):
-    - >90%: Auto-merge to existing product
-    - 60-90%: Flagged for admin review (stored here)
-    - <60%: Create new product entry
+    Confidence thresholds (see ProductMatcher):
+    - >=85%: Auto-merge to existing product (audit flag with status="auto_merged")
+    - 65-84%: Near-miss — product created anyway, flagged status="auto_missed"
+    - <65%: Create new product entry (flagged only if data quality is dirty)
     """
     __tablename__ = "scraper_flags"
 
@@ -219,17 +220,24 @@ class ScraperFlag(Base):
     original_thc_content = Column(String, nullable=True)  # Display value: "15.4%" or "396mg"
     original_cbd_content = Column(String, nullable=True)  # Display value: "1.2%" or "50mg"
     brand_name = Column(String, nullable=False)
-    dispensary_id = Column(String, ForeignKey("dispensaries.id"), nullable=False)
+    # Nullable: duplicate_pair flags span dispensaries and have no single source dispensary
+    dispensary_id = Column(String, ForeignKey("dispensaries.id"), nullable=True)
     original_weight = Column(String, nullable=True)  # Raw weight string from scraper
     original_price = Column(Float, nullable=True)  # Price from scraper (for creating price on resolution)
     original_category = Column(String, nullable=True)  # Product category from scraper
     original_url = Column(String, nullable=True)  # Direct link to product page at dispensary
 
-    # Flag type: "match_review" (legacy 60-90% match) or "data_cleanup" (dirty data on new product)
+    # Flag type: "match_review" (65-84% near-miss), "data_cleanup" (dirty data on
+    # new product), or "duplicate_pair" (two existing products suspected duplicates)
     flag_type = Column(String, default="match_review", index=True)
 
-    # Potential match (for match_review: suggested match; for data_cleanup: the created product)
+    # Potential match (match_review: suggested match; data_cleanup: the created
+    # product; duplicate_pair: product A of the pair)
     matched_product_id = Column(String, ForeignKey("products.id"), nullable=True)
+    # Second product reference (match_review: the newly created near-miss product,
+    # i.e. the merge "loser" candidate; duplicate_pair: product B — ids stored
+    # sorted so matched_product_id < secondary_product_id forms the pair key)
+    secondary_product_id = Column(String, ForeignKey("products.id"), nullable=True, index=True)
     confidence_score = Column(Float, nullable=False)  # 0.0 to 1.0
 
     # Status workflow
@@ -249,6 +257,7 @@ class ScraperFlag(Base):
     # Relationships
     dispensary = relationship("Dispensary", back_populates="scraper_flags")
     matched_product = relationship("Product", foreign_keys=[matched_product_id])
+    secondary_product = relationship("Product", foreign_keys=[secondary_product_id])
 
     def __repr__(self):
         return f"<ScraperFlag {self.original_name} ({self.confidence_score:.0%}) @ {self.status}>"

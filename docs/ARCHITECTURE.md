@@ -53,6 +53,10 @@ Utah Cannabis Aggregator is a full-stack web application designed to help Utah M
 
 ## Data Flow
 
+### Mountain Bloom presentation migration
+
+The public shell and discovery/product-evaluation pilot use centralized bloom tokens and production-shaped presentation helpers in frontend/lib/product-contracts.ts and search-state.ts. API access still goes through api.ts and existing Supabase authentication. The root layout owns the main landmark and compliance notice. No backend, routing-framework or authentication replacement is part of this migration. See [PILOT-HANDOFF.md](ux/PILOT-HANDOFF.md) for route/capability mappings and unresolved acceptance gates.
+
 ### 1. Price Aggregation Flow
 ```
 Dispensary Website/API

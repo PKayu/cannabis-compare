@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240">
+  <defs>
+    <g id="leaf-motif" fill="#f5efe2" fill-opacity="0.055">
+      <g>
+        <path d="M 0 0 C -4 -12, -8 -30, 0 -60 C 8 -30, 4 -12, 0 0 Z"/>
+        <path d="M 0 0 C -4 -12, -8 -30, 0 -60 C 8 -30, 4 -12, 0 0 Z" transform="rotate(36) scale(0.88)"/>
+        <path d="M 0 0 C -4 -12, -8 -30, 0 -60 C 8 -30, 4 -12, 0 0 Z" transform="rotate(-36) scale(0.88)"/>
+        <path d="M 0 0 C -4 -12, -8 -30, 0 -60 C 8 -30, 4 -12, 0 0 Z" transform="rotate(72) scale(0.72)"/>
+        <path d="M 0 0 C -4 -12, -8 -30, 0 -60 C 8 -30, 4 -12, 0 0 Z" transform="rotate(-72) scale(0.72)"/>
+        <path d="M 0 0 C -4 -12, -8 -30, 0 -60 C 8 -30, 4 -12, 0 0 Z" transform="rotate(108) scale(0.52)"/>
+        <path d="M 0 0 C -4 -12, -8 -30, 0 -60 C 8 -30, 4 -12, 0 0 Z" transform="rotate(-108) scale(0.52)"/>
+      </g>
+      <path d="M 0 0 L 0 18" stroke="#f5efe2" stroke-opacity="0.055" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    </g>
+  </defs>
+  <use href="#leaf-motif" x="60" y="60"/>
+  <use href="#leaf-motif" x="180" y="180"/>
+</svg>

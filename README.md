@@ -26,6 +26,8 @@ A web-based platform for Utah Medical Cannabis patients to compare prices across
 
 ## Tech Stack
 
+The public UI is being migrated incrementally to **Mountain Bloom**. Search and product evaluation are the active pilot; other routes retain their existing presentation. See [the pilot handoff](docs/ux/PILOT-HANDOFF.md) for capability mappings, browser-test commands, screenshots and outstanding approval gates. Do not wholesale-import the Lovable project or treat the pilot as fully approved.
+
 - **Frontend**: Next.js (React), TypeScript, Tailwind CSS
 - **Backend**: Python, FastAPI, Pydantic
 - **Database**: PostgreSQL (via Supabase)

@@ -178,7 +178,7 @@ def test_scorer_auto_merge_uses_clean_names(db, test_brand):
         "id": existing_parent.id,
         "name": existing_parent.name,
         "brand": test_brand.name,
-        "thc_percentage": existing_parent.thc_percentage
+        "product_type": existing_parent.product_type,
     }]
 
     # Scrape a product with weight in name but same strain

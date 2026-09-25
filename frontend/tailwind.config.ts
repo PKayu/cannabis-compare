@@ -9,6 +9,11 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        bloom: {
+          cream: '#FAF6ED', parchment: '#EEE6D3', ink: '#102A32', navy: '#103D50',
+          blue: '#218BA5', avocado: '#A2B83D', orange: '#F4783C', mustard: '#F4B940',
+          muted: '#49616A', line: '#CBD2C7', error: '#9B2C21',
+        },
         // Remapped to 70s groovy palette — low range = warm amber, high range = action teal
         cannabis: {
           50: '#FFFBEB',
@@ -34,6 +39,8 @@ const config: Config = {
         },
       },
       fontFamily: {
+        bloom: ['var(--font-dm-sans)', 'system-ui', 'sans-serif'],
+        'bloom-display': ['var(--font-lobster)', 'Georgia', 'serif'],
         display: ['var(--font-fredoka)', 'sans-serif'],
         body: ['var(--font-nunito)', 'sans-serif'],
         sans: ['var(--font-nunito)', 'system-ui', 'sans-serif'],

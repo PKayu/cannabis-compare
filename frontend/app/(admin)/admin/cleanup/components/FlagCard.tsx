@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { ScraperFlag, EditableFields } from '../hooks/useCleanupSession'
+import { CompareField } from './CompareField'
 
 const CATEGORY_OPTIONS = [
   'flower', 'concentrate', 'edible', 'vaporizer',
@@ -513,12 +514,16 @@ export function FlagCard({ flag, selected, tabMode = 'all', onToggleSelect, onAp
         />
       </div>
 
-      {/* Matched Product Comparison with inline editing — hidden for data_cleanup flags */}
-      {flag.matched_product && flag.flag_type !== 'data_cleanup' && (
+      {/* Matched Product Comparison with inline editing.
+          For data_cleanup flags matched_product is the CREATED product —
+          shown as "Current Product" so the admin sees scraped vs DB state. */}
+      {flag.matched_product && (
         <div className="bg-gray-50 rounded-md p-3 mb-4">
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs font-semibold text-gray-500">
-              Suggested Match ({flag.confidence_percent || `${Math.round(flag.confidence_score * 100)}%`})
+              {flag.flag_type === 'data_cleanup'
+                ? 'Current Product in Database'
+                : `Suggested Match (${flag.confidence_percent || `${Math.round(flag.confidence_score * 100)}%`})`}
             </p>
             <button
               onClick={() => setMatchedEditing(prev => Object.values(prev).some(v => v) ? ({} as Record<string, boolean>) : { name: true, brand: true })}
@@ -830,13 +835,3 @@ function EditableSelectField({
   )
 }
 
-function CompareField({ label, scraped, matched }: { label: string; scraped: string; matched: string }) {
-  const match = scraped.toLowerCase().trim() === matched.toLowerCase().trim()
-  const bg = !scraped && !matched ? '' : match ? 'bg-green-50' : 'bg-yellow-50'
-  return (
-    <div className={`flex justify-between px-2 py-0.5 rounded ${bg}`}>
-      <span className="text-gray-500 text-xs w-12">{label}:</span>
-      <span className="text-xs font-medium text-gray-900 truncate">{matched || 'N/A'}</span>
-    </div>
-  )
-}

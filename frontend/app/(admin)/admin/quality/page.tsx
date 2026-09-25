@@ -64,21 +64,6 @@ interface DispensaryDuplicateGroup {
   duplicates: DispensaryDuplicateEntry[]
 }
 
-interface PotentialDuplicatePair {
-  product_a_id: string
-  product_a_name: string
-  product_a_brand: string
-  product_a_dispensaries: string[]
-  product_a_dispensary_urls: Record<string, string>
-  product_b_id: string
-  product_b_name: string
-  product_b_brand: string
-  product_b_dispensaries: string[]
-  product_b_dispensary_urls: Record<string, string>
-  product_type: string
-  confidence: number
-}
-
 type Tab = 'health' | 'cross-dispensary'
 
 export default function QualityPage() {
@@ -97,23 +82,6 @@ export default function QualityPage() {
   const [crossLoaded, setCrossLoaded] = useState(false)
   const [sortBy, setSortBy] = useState<'dispensary_count' | 'name'>('dispensary_count')
 
-  // Potential duplicates state
-  const [dupPairs, setDupPairs] = useState<PotentialDuplicatePair[]>([])
-  const [dupLoading, setDupLoading] = useState(false)
-  const [dupLoaded, setDupLoaded] = useState(false)
-  const [dupError, setDupError] = useState<string | null>(null)
-  // v2 key: name-based so dismissals survive ID changes from merges/deduplication reordering
-  const [dismissedPairs, setDismissedPairs] = useState<Set<string>>(() => {
-    if (typeof window === 'undefined') return new Set()
-    try {
-      const saved = localStorage.getItem('dismissed_duplicate_pairs_v2')
-      return new Set(saved ? JSON.parse(saved) : [])
-    } catch { return new Set() }
-  })
-  const [merging, setMerging] = useState<string | null>(null)
-  const [selectedPairs, setSelectedPairs] = useState<Set<string>>(new Set())
-  const [bulkMerging, setBulkMerging] = useState(false)
-  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null)
   const [repairing, setRepairing] = useState(false)
   const [repairResult, setRepairResult] = useState<string | null>(null)
 
@@ -160,101 +128,6 @@ export default function QualityPage() {
     if (tab === 'cross-dispensary') loadCrossDispensary()
   }
 
-  function loadPotentialDuplicates() {
-    setDupLoading(true)
-    setDupError(null)
-    api.admin.quality.potentialDuplicates({ limit: 100 })
-      .then((res) => {
-        setDupPairs(res.data?.pairs ?? [])
-        setDupLoaded(true)
-      })
-      .catch((err) => {
-        setDupError(err?.response?.data?.detail ?? 'Failed to load potential duplicates.')
-      })
-      .finally(() => setDupLoading(false))
-  }
-
-  /** Stable dismiss key by sorted product names — survives ID changes across re-analyses */
-  function getDismissKey(pair: PotentialDuplicatePair): string {
-    return [pair.product_a_name, pair.product_b_name]
-      .map(n => n.toLowerCase().trim())
-      .sort()
-      .join('::')
-  }
-
-  function dismissPair(dismissKeyOrPair: string | PotentialDuplicatePair) {
-    const key = typeof dismissKeyOrPair === 'string' ? dismissKeyOrPair : getDismissKey(dismissKeyOrPair)
-    const next = new Set(dismissedPairs)
-    next.add(key)
-    setDismissedPairs(next)
-    try {
-      localStorage.setItem('dismissed_duplicate_pairs_v2', JSON.stringify([...next]))
-    } catch { /* ignore */ }
-  }
-
-  function clearDismissed() {
-    setDismissedPairs(new Set())
-    try { localStorage.removeItem('dismissed_duplicate_pairs_v2') } catch { /* ignore */ }
-  }
-
-  function togglePair(pairKey: string) {
-    const next = new Set(selectedPairs)
-    if (next.has(pairKey)) next.delete(pairKey); else next.add(pairKey)
-    setSelectedPairs(next)
-  }
-
-  function toggleAll(visible: PotentialDuplicatePair[]) {
-    const allKeys = visible.map(p => `${p.product_a_id}:${p.product_b_id}`)
-    if (selectedPairs.size === visible.length && visible.length > 0) {
-      setSelectedPairs(new Set())
-    } else {
-      setSelectedPairs(new Set(allKeys))
-    }
-  }
-
-  async function mergePair(sourceId: string, targetId: string, pairKey: string, pair: PotentialDuplicatePair) {
-    setMerging(pairKey)
-    try {
-      await api.admin.quality.mergeProducts(sourceId, targetId)
-      dismissPair(pair)
-      setSelectedPairs(prev => { const n = new Set(prev); n.delete(pairKey); return n })
-      fetchCrossData()
-    } catch (err: any) {
-      alert(err?.response?.data?.detail ?? 'Merge failed.')
-    } finally {
-      setMerging(null)
-    }
-  }
-
-  async function mergeSelected() {
-    const keys = [...selectedPairs]
-    setBulkMerging(true)
-    setBulkProgress({ done: 0, total: keys.length })
-    let anyMerged = false
-    for (const key of keys) {
-      const pair = dupPairs.find(p => `${p.product_a_id}:${p.product_b_id}` === key)
-      if (!pair) continue
-      try {
-        await api.admin.quality.mergeProducts(pair.product_a_id, pair.product_b_id)
-        dismissPair(pair)
-        setSelectedPairs(prev => { const n = new Set(prev); n.delete(key); return n })
-        anyMerged = true
-      } catch { /* leave failed merges in list */ }
-      setBulkProgress(prev => prev ? { ...prev, done: prev.done + 1 } : null)
-    }
-    setBulkMerging(false)
-    setBulkProgress(null)
-    if (anyMerged) fetchCrossData()
-  }
-
-  function dismissSelected() {
-    for (const key of selectedPairs) {
-      const pair = dupPairs.find(p => `${p.product_a_id}:${p.product_b_id}` === key)
-      if (pair) dismissPair(pair)
-    }
-    setSelectedPairs(new Set())
-  }
-
   async function runRepair() {
     setRepairing(true)
     setRepairResult(null)
@@ -294,15 +167,11 @@ export default function QualityPage() {
       loadDispensaryDuplicates()
       fetchCrossData()
     } catch (err: any) {
-      alert(err?.response?.data?.detail ?? 'Dispensary merge failed.')
+      setDispDupError(err?.response?.data?.detail ?? 'Dispensary merge failed.')
     } finally {
       setMergingDisp(null)
     }
   }
-
-  const visibleDupPairs = dupPairs.filter(
-    (p) => !dismissedPairs.has(getDismissKey(p))
-  )
 
   const sortedProducts = [...crossProducts].sort((a, b) => {
     if (sortBy === 'dispensary_count') return b.dispensary_count - a.dispensary_count
@@ -555,234 +424,23 @@ export default function QualityPage() {
                 </div>
               )}
 
-              {/* Potential Duplicates */}
+              {/* Potential Duplicates moved to the Dedup & Review queue */}
               <div className="mb-8">
-                <div className="flex items-center justify-between mb-3">
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 flex items-center justify-between gap-4">
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900">Potential Duplicates</h2>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      Products with 65–84% name similarity within the same category that may have been imported separately.
+                    <h2 className="text-base font-semibold text-purple-900">Potential Duplicate Products</h2>
+                    <p className="text-xs text-purple-700 mt-0.5">
+                      Duplicate detection now lives in the Dedup &amp; Review queue &mdash; scans persist
+                      as reviewable pairs with server-side dismissals and choose-your-winner merging.
                     </p>
                   </div>
-                  {!dupLoaded && (
-                    <button
-                      onClick={loadPotentialDuplicates}
-                      disabled={dupLoading}
-                      className="px-4 py-2 text-sm font-medium bg-cannabis-600 text-white rounded-lg hover:bg-cannabis-700 disabled:opacity-50"
-                    >
-                      {dupLoading ? 'Analyzing…' : 'Run Analysis'}
-                    </button>
-                  )}
-                  {dupLoaded && (
-                    <button
-                      onClick={loadPotentialDuplicates}
-                      disabled={dupLoading}
-                      className="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 disabled:opacity-50"
-                    >
-                      {dupLoading ? 'Refreshing…' : 'Refresh'}
-                    </button>
-                  )}
+                  <Link
+                    href="/admin/cleanup"
+                    className="shrink-0 px-4 py-2 text-sm font-medium bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                  >
+                    Open Duplicates Queue &rarr;
+                  </Link>
                 </div>
-
-                {dupError && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
-                    {dupError}
-                  </div>
-                )}
-
-                {dupLoading && (
-                  <div className="text-gray-500 py-8 text-center text-sm">
-                    Running O(n²) fuzzy comparison across all products… this may take 10–20 seconds.
-                  </div>
-                )}
-
-                {!dupLoading && !dupLoaded && !dupError && (
-                  <div className="bg-gray-50 border border-dashed border-gray-200 rounded-lg p-8 text-center">
-                    <p className="text-sm text-gray-500">
-                      Click <strong>Run Analysis</strong> to compare all existing products for near-matches.
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Takes 10–20 seconds for ~1,000+ products.
-                    </p>
-                  </div>
-                )}
-
-                {dupLoaded && !dupLoading && (
-                  visibleDupPairs.length === 0 ? (
-                    <div className="bg-white rounded-lg border p-6 text-center text-gray-500 text-sm">
-                      No potential duplicates found. Either products are distinct or all pairs have been dismissed.
-                    </div>
-                  ) : (
-                    <div className="bg-white rounded-lg border overflow-x-auto">
-                      {/* Toolbar: count + bulk actions */}
-                      <div className="px-4 py-2 bg-gray-50 border-b flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs text-gray-500">
-                            Showing {visibleDupPairs.length} pair{visibleDupPairs.length !== 1 ? 's' : ''} in near-miss range (65–84% confidence)
-                          </span>
-                          {dismissedPairs.size > 0 && (
-                            <button
-                              onClick={clearDismissed}
-                              className="text-xs text-gray-400 hover:text-gray-600 underline"
-                              title="Show previously dismissed pairs again"
-                            >
-                              Clear dismissed ({dismissedPairs.size})
-                            </button>
-                          )}
-                        </div>
-                        {selectedPairs.size > 0 && (
-                          <div className="flex items-center gap-2">
-                            {bulkProgress && (
-                              <span className="text-xs text-gray-500">
-                                {bulkProgress.done}/{bulkProgress.total} merged…
-                              </span>
-                            )}
-                            <button
-                              onClick={mergeSelected}
-                              disabled={bulkMerging}
-                              className="px-3 py-1 text-xs font-medium bg-cannabis-600 text-white rounded hover:bg-cannabis-700 disabled:opacity-50"
-                            >
-                              {bulkMerging ? 'Merging…' : `Merge Selected (${selectedPairs.size})`}
-                            </button>
-                            <button
-                              onClick={dismissSelected}
-                              disabled={bulkMerging}
-                              className="px-3 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded hover:bg-gray-200 disabled:opacity-50"
-                            >
-                              Dismiss Selected ({selectedPairs.size})
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      <table className="w-full text-sm min-w-[750px]">
-                        <thead className="bg-gray-50 border-b">
-                          <tr>
-                            <th className="px-3 py-2 w-8">
-                              <input
-                                type="checkbox"
-                                className="rounded border-gray-300"
-                                checked={selectedPairs.size === visibleDupPairs.length && visibleDupPairs.length > 0}
-                                onChange={() => toggleAll(visibleDupPairs)}
-                                title="Select all"
-                              />
-                            </th>
-                            <th className="text-left px-4 py-2 font-medium text-gray-700">Product A</th>
-                            <th className="text-center px-3 py-2 font-medium text-gray-700 whitespace-nowrap">Confidence</th>
-                            <th className="text-left px-4 py-2 font-medium text-gray-700">Product B</th>
-                            <th className="text-left px-3 py-2 font-medium text-gray-700">Type</th>
-                            <th className="text-right px-4 py-2 font-medium text-gray-700">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                          {visibleDupPairs.map((p) => {
-                            const pairKey = `${p.product_a_id}:${p.product_b_id}`
-                            const isMerging = merging === pairKey
-                            const isSelected = selectedPairs.has(pairKey)
-                            const pct = Math.round(p.confidence * 100)
-                            return (
-                              <tr key={pairKey} className={`hover:bg-gray-50 ${isSelected ? 'bg-cannabis-50' : ''}`}>
-                                <td className="px-3 py-3">
-                                  <input
-                                    type="checkbox"
-                                    className="rounded border-gray-300"
-                                    checked={isSelected}
-                                    onChange={() => togglePair(pairKey)}
-                                  />
-                                </td>
-                                <td className="px-4 py-3">
-                                  <Link
-                                    href={`/products/${p.product_a_id}`}
-                                    className="font-medium text-cannabis-700 hover:underline block"
-                                  >
-                                    {p.product_a_name}
-                                  </Link>
-                                  <span className="text-xs text-gray-400">{p.product_a_brand || '—'}</span>
-                                  {p.product_a_dispensaries.length > 0 && (
-                                    <div className="flex flex-wrap gap-1 mt-1">
-                                      {p.product_a_dispensaries.map((d) => {
-                                        const url = p.product_a_dispensary_urls?.[d]
-                                        return url ? (
-                                          <a
-                                            key={d}
-                                            href={url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-xs hover:bg-blue-100 hover:underline"
-                                            title={`Open on ${d} website`}
-                                          >{d} ↗</a>
-                                        ) : (
-                                          <span key={d} className="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-xs">{d}</span>
-                                        )
-                                      })}
-                                    </div>
-                                  )}
-                                </td>
-                                <td className="px-3 py-3 text-center">
-                                  <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                                    pct >= 80 ? 'bg-orange-100 text-orange-800' :
-                                    pct >= 70 ? 'bg-yellow-100 text-yellow-800' :
-                                    'bg-gray-100 text-gray-600'
-                                  }`}>
-                                    {pct}%
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3">
-                                  <Link
-                                    href={`/products/${p.product_b_id}`}
-                                    className="font-medium text-cannabis-700 hover:underline block"
-                                  >
-                                    {p.product_b_name}
-                                  </Link>
-                                  <span className="text-xs text-gray-400">{p.product_b_brand || '—'}</span>
-                                  {p.product_b_dispensaries.length > 0 && (
-                                    <div className="flex flex-wrap gap-1 mt-1">
-                                      {p.product_b_dispensaries.map((d) => {
-                                        const url = p.product_b_dispensary_urls?.[d]
-                                        return url ? (
-                                          <a
-                                            key={d}
-                                            href={url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-xs hover:bg-blue-100 hover:underline"
-                                            title={`Open on ${d} website`}
-                                          >{d} ↗</a>
-                                        ) : (
-                                          <span key={d} className="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-xs">{d}</span>
-                                        )
-                                      })}
-                                    </div>
-                                  )}
-                                </td>
-                                <td className="px-3 py-3 text-gray-500 text-xs capitalize">{p.product_type}</td>
-                                <td className="px-4 py-3 text-right">
-                                  <div className="flex items-center justify-end gap-2">
-                                    <button
-                                      onClick={() => mergePair(p.product_a_id, p.product_b_id, pairKey, p)}
-                                      disabled={isMerging || bulkMerging}
-                                      title="Merge A into B (B becomes canonical)"
-                                      className="px-2 py-1 text-xs font-medium bg-cannabis-50 text-cannabis-700 border border-cannabis-200 rounded hover:bg-cannabis-100 disabled:opacity-50"
-                                    >
-                                      {isMerging ? '…' : 'Merge A→B'}
-                                    </button>
-                                    <button
-                                      onClick={() => dismissPair(p)}
-                                      disabled={bulkMerging}
-                                      title="Keep as separate products"
-                                      className="px-2 py-1 text-xs font-medium bg-gray-50 text-gray-600 border border-gray-200 rounded hover:bg-gray-100 disabled:opacity-50"
-                                    >
-                                      Keep Separate
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )
-                )}
               </div>
 
               {/* Duplicate Dispensaries */}

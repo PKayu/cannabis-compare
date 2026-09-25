@@ -474,7 +474,8 @@ def seed_data():
 
         # Commit all changes
         db.commit()
-        print("\n✓ Test data seeded successfully!")
+        # Keep this line ASCII-only: local Windows terminals may use cp1252.
+        print("\nTest data seeded successfully!")
 
         # Print summary
         parent_count = sum(1 for p in products if p.is_master)

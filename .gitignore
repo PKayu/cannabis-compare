@@ -63,6 +63,8 @@ docs/Screenshot 2026-01-22 090126.png
 # Testing
 /coverage/
 /test-results/
+/frontend/test-results/
+/frontend/playwright-report/
 /playwright-report/
 /playwright/.cache/
 htmlcov/

@@ -1,297 +1,64 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
+import { useAuth } from '@/lib/AuthContext'
 import ReviewForm from './ReviewForm'
 
-interface ReviewsSectionProps {
-  productId: string
-}
-
 interface Review {
-  id: string
-  rating: number
-  effects_rating: number | null
-  taste_rating: number | null
-  value_rating: number | null
-  intention_type: string | null
-  intention_tag: string | null
-  comment: string | null
-  upvotes: number
-  username: string
-  created_at: string
-  updated_at: string
+  id: string; rating: number; effects_rating: number | null; taste_rating: number | null
+  value_rating: number | null; intention_type: string | null; intention_tag: string | null
+  comment: string | null; upvotes: number; username: string; created_at: string; updated_at: string
 }
-
-export default function ReviewsSection({ productId }: ReviewsSectionProps) {
+export default function ReviewsSection({ productId }: { productId: string }) {
   const [reviews, setReviews] = useState<Review[]>([])
-  const [loading, setLoading] = useState(true)
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [showForm, setShowForm] = useState(false)
-  const [filterIntention, setFilterIntention] = useState<string | null>(null)
-  const [sortBy, setSortBy] = useState('recent')
-
+  const [filter, setFilter] = useState('')
+  const [sort, setSort] = useState('recent')
+  const [retry, setRetry] = useState(0)
   useEffect(() => {
-    loadReviews()
-  }, [filterIntention, sortBy, productId])
-
-  const loadReviews = async () => {
-    try {
-      setLoading(true)
-      const params: any = { sort_by: sortBy }
-      if (filterIntention) {
-        params.intention_tag = filterIntention
-      }
-
-      const response = await api.reviews.list(productId, params)
-      setReviews(response.data)
-    } catch (error) {
-      console.error('Failed to load reviews:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleReviewSubmitted = () => {
-    setShowForm(false)
-    loadReviews() // Refresh reviews list
-  }
-
-  return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-2xl font-bold text-cannabis-800">Community Reviews</h3>
-        {!showForm && (
-          <button
-            onClick={() => setShowForm(true)}
-            className="px-4 py-2 bg-cannabis-600 text-white rounded-lg hover:bg-cannabis-700 transition-colors font-semibold"
-          >
-            Write a Review
-          </button>
-        )}
-      </div>
-
-      {/* Review Form */}
-      {showForm && (
-        <div className="mb-8">
-          <ReviewForm
-            productId={productId}
-            onSubmit={handleReviewSubmitted}
-            onCancel={() => setShowForm(false)}
-          />
-        </div>
-      )}
-
-      {/* Filters and Sorting */}
-      <div className="mb-6 flex flex-col sm:flex-row gap-4">
-        <div className="flex-1">
-          <label className="block text-sm font-semibold mb-2 text-gray-700">Filter by Use Case</label>
-          <select
-            value={filterIntention || ''}
-            onChange={(e) => setFilterIntention(e.target.value || null)}
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-cannabis-500"
-          >
-            <option value="">All Reviews</option>
-            <optgroup label="Medical">
-              <option value="pain">Pain Relief</option>
-              <option value="insomnia">Sleep/Insomnia</option>
-              <option value="anxiety">Anxiety</option>
-              <option value="nausea">Nausea</option>
-              <option value="spasms">Spasms</option>
-            </optgroup>
-            <optgroup label="Mood/Wellness">
-              <option value="socializing">Socializing</option>
-              <option value="creativity">Creativity</option>
-              <option value="deep_relaxation">Deep Relaxation</option>
-              <option value="focus">Focus</option>
-              <option value="post_workout">Post-Workout</option>
-            </optgroup>
-          </select>
-        </div>
-
-        <div className="flex-1">
-          <label className="block text-sm font-semibold mb-2 text-gray-700">Sort By</label>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-cannabis-500"
-          >
-            <option value="recent">Most Recent</option>
-            <option value="helpful">Most Helpful</option>
-            <option value="rating_high">Highest Rated</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Reviews List */}
-      {loading ? (
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="border rounded-lg p-4 animate-pulse">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
-                <div className="flex-1">
-                  <div className="h-4 bg-gray-200 rounded w-32 mb-2"></div>
-                  <div className="h-3 bg-gray-100 rounded w-24"></div>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="h-3 bg-gray-200 rounded w-full"></div>
-                <div className="h-3 bg-gray-200 rounded w-3/4"></div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : reviews.length === 0 ? (
-        <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg">
-          <svg
-            className="mx-auto h-12 w-12 text-gray-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-            />
-          </svg>
-          <p className="mt-4 text-gray-600 font-medium">No reviews yet</p>
-          <p className="text-gray-500">Be the first to share your experience with this product!</p>
-          {!showForm && (
-            <button
-              onClick={() => setShowForm(true)}
-              className="mt-4 px-4 py-2 bg-cannabis-600 text-white rounded-lg hover:bg-cannabis-700 transition-colors"
-            >
-              Write the First Review
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {reviews.map((review) => (
-            <ReviewCard key={review.id} review={review} onUpvote={loadReviews} />
-          ))}
-        </div>
-      )}
+    let current = true
+    setStatus('loading')
+    api.reviews.list(productId, { sort_by: sort, ...(filter ? { intention_tag: filter } : {}) }).then(response => {
+      if (current) { setReviews(response.data); setStatus('ready') }
+    }).catch(() => { if (current) setStatus('error') })
+    return () => { current = false }
+  }, [productId, filter, sort, retry])
+  useEffect(() => { setShowForm(false) }, [productId])
+  return <div className="bloom-panel p-5 sm:p-7">
+    <div className="flex flex-wrap items-center justify-between gap-4"><h2 className="text-2xl font-bold">Community reviews</h2><button className="bloom-button-secondary" onClick={() => setShowForm(value => !value)} aria-expanded={showForm}>{showForm ? 'Close review form' : 'Write a review'}</button></div>
+    <p className="mt-3 text-sm text-bloom-muted">Personal experiences, not medical advice. Sign in to share your own.</p>
+    {showForm && <div className="bloom-review-form mt-6"><ReviewForm productId={productId} onSubmit={() => { setShowForm(false); setRetry(value => value + 1) }} onCancel={() => setShowForm(false)} /></div>}
+    <div className="my-6 grid gap-4 sm:grid-cols-2">
+      <label className="text-sm font-bold">Filter by reported use<select value={filter} className="bloom-input mt-2" onChange={event => setFilter(event.target.value)}>
+        <option value="">All reviews</option><optgroup label="Medical">{[['pain','Pain relief'],['insomnia','Sleep / insomnia'],['anxiety','Anxiety'],['nausea','Nausea'],['spasms','Spasms']].map(([value,label]) => <option key={value} value={value}>{label}</option>)}</optgroup><optgroup label="Mood / wellness">{[['socializing','Socializing'],['creativity','Creativity'],['deep_relaxation','Deep relaxation'],['focus','Focus'],['post_workout','Post-workout']].map(([value,label]) => <option key={value} value={value}>{label}</option>)}</optgroup>
+      </select></label>
+      <label className="text-sm font-bold">Sort reviews<select className="bloom-input mt-2" value={sort} onChange={event => setSort(event.target.value)}><option value="recent">Most recent</option><option value="helpful">Most helpful</option><option value="rating_high">Highest rated</option></select></label>
     </div>
-  )
+    {status === 'loading' ? <p role="status" className="py-8">Loading community reviews…</p>
+      : status === 'error' ? <div role="alert"><p>Reviews could not be loaded.</p><button className="bloom-button-secondary mt-4" onClick={() => setRetry(value => value + 1)}>Retry reviews</button></div>
+      : !reviews.length ? <p role="status" className="border-t border-bloom-line py-8 text-bloom-muted">{filter ? 'No reviews for this reported use. Choose all reviews to broaden the results.' : 'No reviews yet. Share your experience when you’re ready.'}</p>
+      : <div className="divide-y divide-bloom-line">{reviews.map(review => <ReviewCard key={review.id} review={review} onUpvote={() => setRetry(value => value + 1)} />)}</div>}
+  </div>
 }
-
-interface ReviewCardProps {
-  review: Review
-  onUpvote: () => void
-}
-
-function ReviewCard({ review, onUpvote }: ReviewCardProps) {
-  const [upvoting, setUpvoting] = useState(false)
-
-  const handleUpvote = async () => {
-    try {
-      setUpvoting(true)
-      await api.reviews.upvote(review.id)
-      onUpvote()
-    } catch (error) {
-      console.error('Failed to upvote:', error)
-    } finally {
-      setUpvoting(false)
-    }
+function ReviewCard({ review, onUpvote }: { review: Review; onUpvote: () => void }) {
+  const { user, loading } = useAuth()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const upvote = async () => {
+    if (!user) { setError('Sign in to mark this review as helpful.'); return }
+    setBusy(true); setError('')
+    try { await api.reviews.upvote(review.id); onUpvote() }
+    catch { setError('Your vote could not be saved. Please try again.') }
+    finally { setBusy(false) }
   }
-
-  const getIntentionIcon = (type: string | null) => {
-    if (type === 'medical') return '🏥'
-    if (type === 'mood') return '😊'
-    return '📝'
-  }
-
-  const getIntentionLabel = (tag: string | null) => {
-    if (!tag) return ''
-    return tag.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-  }
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-  }
-
-  return (
-    <div className="border border-gray-200 rounded-lg p-4 bg-white hover:shadow-md transition-shadow">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-cannabis-100 rounded-full flex items-center justify-center text-cannabis-700 font-bold">
-            {review.username.charAt(0).toUpperCase()}
-          </div>
-          <div>
-            <p className="font-semibold text-gray-900">{review.username}</p>
-            <p className="text-sm text-gray-500">{formatDate(review.created_at)}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
-          {[...Array(5)].map((_, i) => (
-            <svg
-              key={i}
-              className={`w-5 h-5 ${i < review.rating ? 'text-yellow-400' : 'text-gray-300'}`}
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-            </svg>
-          ))}
-          <span className="ml-1 text-sm font-semibold text-gray-700">{review.rating}/5</span>
-        </div>
-      </div>
-
-      {/* Rating Breakdown */}
-      <div className="flex gap-4 mb-3 text-sm">
-        {review.effects_rating && (
-          <div className="flex items-center gap-1">
-            <span className="text-gray-600">Effects:</span>
-            <span className="font-semibold text-cannabis-700">{review.effects_rating}★</span>
-          </div>
-        )}
-        {review.taste_rating && (
-          <div className="flex items-center gap-1">
-            <span className="text-gray-600">Taste:</span>
-            <span className="font-semibold text-cannabis-700">{review.taste_rating}★</span>
-          </div>
-        )}
-        {review.value_rating && (
-          <div className="flex items-center gap-1">
-            <span className="text-gray-600">Value:</span>
-            <span className="font-semibold text-cannabis-700">{review.value_rating}★</span>
-          </div>
-        )}
-      </div>
-
-      {/* Intention Tag */}
-      {review.intention_tag && (
-        <div className="mb-3">
-          <span className="inline-flex items-center gap-1 px-3 py-1 bg-cannabis-100 text-cannabis-800 rounded-full text-sm font-medium">
-            <span>{getIntentionIcon(review.intention_type)}</span>
-            <span>{getIntentionLabel(review.intention_tag)}</span>
-          </span>
-        </div>
-      )}
-
-      {/* Comment */}
-      {review.comment && (
-        <p className="text-gray-700 mb-4 leading-relaxed">{review.comment}</p>
-      )}
-
-      {/* Footer */}
-      <div className="flex items-center justify-between text-sm border-t pt-3">
-        <button
-          onClick={handleUpvote}
-          disabled={upvoting}
-          className="flex items-center gap-2 text-cannabis-600 hover:text-cannabis-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
-          </svg>
-          <span>{upvoting ? 'Upvoting...' : `Helpful (${review.upvotes})`}</span>
-        </button>
-      </div>
-    </div>
-  )
+  return <article className="py-6">
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-bold">{review.username || 'Community member'}</h3><p className="text-xs text-bloom-muted">{new Date(review.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}</p></div><p className="font-bold">{review.rating} / 5</p></div>
+    <dl className="mt-4 flex flex-wrap gap-4 text-sm">{[['Effects', review.effects_rating], ['Taste', review.taste_rating], ['Value', review.value_rating]].map(([label,value]) => value != null && <div key={label as string} className="flex gap-1"><dt>{label}:</dt><dd className="font-bold">{value} / 5</dd></div>)}</dl>
+    {review.intention_tag && <p className="mt-3 text-sm text-bloom-muted">Reported use: {review.intention_tag.replace(/_/g, ' ')}</p>}
+    {review.comment && <p className="mt-3 whitespace-pre-wrap leading-relaxed">{review.comment}</p>}
+    <button onClick={upvote} disabled={busy || loading} className="mt-3 min-h-[44px] rounded-lg px-3 text-sm font-bold underline disabled:opacity-60">{busy ? 'Saving vote…' : `Helpful (${review.upvotes})`}</button>
+    {error && <p role="alert" className="text-sm text-bloom-error">{error}</p>}
+  </article>
 }

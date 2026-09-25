@@ -1,156 +1,53 @@
-import React, { useState, useEffect, useRef } from 'react'
+'use client'
+
+import { useEffect, useId, useState } from 'react'
 import { api } from '@/lib/api'
 
-interface SearchBarProps {
-  onSearch: (query: string) => Promise<void> | void
-}
+interface Suggestion { id: string; name: string; brand: string | null; type: string }
 
-interface Suggestion {
-  id: string
-  name: string
-  brand: string | null
-  type: string
-}
-
-const PLACEHOLDER_SUGGESTIONS = [
-  "Search strains, brands, or effects...",
-  "Try 'Gorilla Glue'...",
-  "Search 'Blue Dream'...",
-  "Find 'OG Kush'...",
-  "Look up 'Girl Scout Cookies'...",
-  "Search 'Sour Diesel'...",
-]
-
-export default function SearchBar({ onSearch }: SearchBarProps) {
-  const [query, setQuery] = useState('')
+export default function SearchBar({ onSearch, initialQuery = '' }: { onSearch: (query: string) => Promise<void> | void; initialQuery?: string }) {
+  const [query, setQuery] = useState(initialQuery)
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
-  const [showSuggestions, setShowSuggestions] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [placeholderIndex, setPlaceholderIndex] = useState(0)
-  const wrapperRef = useRef<HTMLDivElement>(null)
+  const [show, setShow] = useState(false)
+  const [active, setActive] = useState(-1)
+  const [error, setError] = useState('')
+  const id = useId()
 
+  useEffect(() => { setQuery(initialQuery); setShow(false); setError('') }, [initialQuery])
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
-        setShowSuggestions(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  useEffect(() => {
-    if (query) return
-    const interval = setInterval(() => {
-      setPlaceholderIndex((prev) => (prev + 1) % PLACEHOLDER_SUGGESTIONS.length)
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [query])
-
-  useEffect(() => {
-    if (query.length < 2) {
-      setSuggestions([])
-      setShowSuggestions(false)
-      return
-    }
-    const timeoutId = setTimeout(async () => {
-      setLoading(true)
+    let current = true
+    setSuggestions([]); setActive(-1)
+    if (query.trim().length < 2) return
+    const timer = setTimeout(async () => {
       try {
-        const res = await api.get('/api/products/autocomplete', { params: { q: query } })
-        setSuggestions(res.data)
-        setShowSuggestions(true)
-      } catch {
-        setSuggestions([])
-      } finally {
-        setLoading(false)
-      }
-    }, 300)
-    return () => clearTimeout(timeoutId)
+        const response = await api.products.autocomplete(query.trim())
+        if (current) setSuggestions(response.data)
+      } catch { if (current) setSuggestions([]) }
+    }, 250)
+    return () => { clearTimeout(timer); current = false }
   }, [query])
 
-  const handleSubmit = async (e: React.FormEvent, value?: string) => {
-    e.preventDefault()
-    const searchTerm = value || query
-    if (searchTerm.length < 2) return
-    setShowSuggestions(false)
-    await onSearch(searchTerm)
+  const submit = (value: string) => {
+    const trimmed = value.trim()
+    if (trimmed.length < 2) { setError('Enter at least 2 characters to search.'); return }
+    setQuery(trimmed); setShow(false); setError(''); void onSearch(trimmed)
   }
 
-  const handleSuggestionClick = async (e: React.MouseEvent, suggestion: Suggestion) => {
-    e.preventDefault()
-    setQuery(suggestion.name)
-    setShowSuggestions(false)
-    await onSearch(suggestion.name)
-  }
-
-  return (
-    <div ref={wrapperRef} className="relative">
-      <form onSubmit={handleSubmit} className="mb-4">
-        <div className="flex gap-3">
-          <div className="flex-1 relative">
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={PLACEHOLDER_SUGGESTIONS[placeholderIndex]}
-              className="input-groovy pl-12 placeholder-transition"
-              aria-label="Search products"
-            />
-            <svg
-              className={`absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 transition-colors duration-300 ${
-                query ? 'text-groovy-amber' : 'text-stone-400'
-              }`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </div>
-          <button
-            type="submit"
-            disabled={query.length < 2}
-            className="btn-groovy-teal disabled:opacity-40 disabled:cursor-not-allowed disabled:translate-y-0 disabled:shadow-sticker"
-          >
-            Search
-          </button>
-        </div>
-      </form>
-
-      {/* Autocomplete dropdown */}
-      {showSuggestions && suggestions.length > 0 && (
-        <div className="absolute z-10 w-full bg-groovy-cream border-2 border-groovy-ink rounded-2xl shadow-sticker mt-1 max-h-80 overflow-y-auto">
-          {suggestions.map((suggestion) => (
-            <button
-              key={suggestion.id}
-              onClick={(e) => handleSuggestionClick(e, suggestion)}
-              className="w-full text-left px-4 py-3 hover:bg-amber-50 border-b-2 border-stone-200 last:border-b-0 transition-colors font-body"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="font-semibold text-groovy-ink">{suggestion.name}</span>
-                  {suggestion.brand && (
-                    <span className="text-sm text-stone-500 ml-2">by {suggestion.brand}</span>
-                  )}
-                </div>
-                <span className="text-xs font-display font-semibold text-groovy-teal uppercase px-2 py-0.5 bg-teal-50 rounded-full border border-groovy-teal">
-                  {suggestion.type}
-                </span>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Loading */}
-      {loading && showSuggestions && (
-        <div className="absolute z-10 w-full bg-groovy-cream border-2 border-groovy-ink rounded-2xl shadow-sticker mt-1 px-4 py-3">
-          <div className="flex items-center text-stone-500 font-body">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-groovy-teal mr-2"></div>
-            Finding matches…
-          </div>
-        </div>
-      )}
+  return <form role="search" aria-label="Product search" className="relative rounded-[2rem] bg-bloom-navy p-4 text-bloom-cream shadow-[4px_4px_0_#102A32] sm:p-5" onSubmit={event => { event.preventDefault(); submit(query) }}>
+    <label htmlFor={id} className="mb-2 block text-sm font-bold">Search products or brands</label>
+    <div className="flex flex-col gap-3 sm:flex-row">
+      <div className="relative min-w-0 flex-1">
+        <input id={id} type="search" role="combobox" autoComplete="off" aria-autocomplete="list" aria-expanded={show && suggestions.length > 0} aria-controls={`${id}-suggestions`} aria-activedescendant={show && active >= 0 ? `${id}-option-${active}` : undefined} aria-describedby={`${id}-hint`} aria-invalid={Boolean(error)} value={query} onChange={event => { setQuery(event.target.value); setShow(true); setError('') }} onFocus={() => setShow(true)} onBlur={() => setShow(false)} placeholder="Try a product name or brand" className="bloom-input h-14" onKeyDown={event => {
+          if (event.key === 'Escape') { setShow(false); setActive(-1) }
+          if (suggestions.length && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) { event.preventDefault(); setShow(true); setActive(index => event.key === 'ArrowDown' ? (index + 1) % suggestions.length : (index - 1 + suggestions.length) % suggestions.length) }
+          if (event.key === 'Enter' && show && active >= 0 && suggestions[active]) { event.preventDefault(); submit(suggestions[active].name) }
+        }} />
+        <ul id={`${id}-suggestions`} role="listbox" aria-label="Product suggestions" hidden={!show || !suggestions.length} className="absolute top-full z-20 mt-2 max-h-72 w-full overflow-y-auto rounded-2xl border border-bloom-cream/40 bg-bloom-cream text-bloom-ink shadow-[4px_4px_0_#102A32]">
+          {suggestions.map((suggestion, index) => <li id={`${id}-option-${index}`} key={suggestion.id} role="option" aria-selected={active === index} onMouseDown={event => event.preventDefault()} onClick={() => submit(suggestion.name)} className={`cursor-pointer px-4 py-3 ${active === index ? 'bg-bloom-mustard' : 'hover:bg-bloom-parchment'}`}><span className="block font-bold">{suggestion.name}</span><span className="text-sm text-bloom-navy/75">{suggestion.brand ?? 'Brand not reported'} · {suggestion.type}</span></li>)}
+        </ul>
+      </div>
+      <button className="bloom-button min-h-14 sm:px-8" type="submit">Search</button>
     </div>
-  )
+    <p id={`${id}-hint`} className={`mt-2 text-sm ${error ? 'text-bloom-error' : 'text-bloom-cream/75'}`} role={error ? 'alert' : undefined}>{error || 'Start with 2 or more characters. Tune your results below.'}</p>
+  </form>
 }

@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/AuthContext'
 import CannabisLeaf from '@/components/CannabisLeaf'
+import PublicNavigation from '@/components/bloom/PublicNavigation'
 
 export default function Navigation() {
   const pathname = usePathname()
@@ -32,7 +33,7 @@ export default function Navigation() {
     }
   }
 
-  if (pathname === '/') return null
+  if (!pathname.startsWith('/admin')) return <PublicNavigation pathname={pathname} signedIn={isLoggedIn} loading={authLoading} savedCount={watchlistCount} />
 
   const linkClass = (active: boolean) =>
     `font-display font-semibold text-base transition-all duration-150 py-1 border-b-2 ${

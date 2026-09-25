@@ -41,16 +41,6 @@ export default function DispensariesPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Compliance Banner */}
-      <div className="bg-yellow-50 border-b border-yellow-200 py-2 px-4">
-        <div className="max-w-7xl mx-auto">
-          <p className="text-sm text-yellow-800 text-center">
-            ⚠️ For informational purposes only. Not affiliated with any dispensary.
-            This site does not sell controlled substances.
-          </p>
-        </div>
-      </div>
-
       {/* Breadcrumb */}
       <div className="bg-white border-b">
         <div className="max-w-6xl mx-auto px-4 py-3">

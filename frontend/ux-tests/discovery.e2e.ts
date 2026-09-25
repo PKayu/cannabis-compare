@@ -26,6 +26,35 @@ async function readyForScreenshot(page: Page) {
 }
 
 for (const width of [390, 768, 1280, 1440]) {
+  test(`homepage search and layout at ${width}px`, async ({ page }, info) => {
+    const errors: string[] = []
+    page.on('pageerror', error => errors.push(error.message))
+    page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/')
+    await expect(page.getByRole('heading', { name: 'Find your next stop.' })).toBeVisible()
+    await expect(page.getByRole('link', { name: /Browse dispensaries/ })).toHaveAttribute('href', '/dispensaries')
+    await expect(page.getByRole('main')).toHaveCount(1)
+    await expect(page.getByRole('complementary', { name: 'Important site information' })).toBeVisible()
+    await expect(page.getByRole('link', { name: /Guidance/ })).toHaveCount(0)
+    const search = page.getByRole('combobox', { name: 'Search products or brands' })
+    await search.fill('b')
+    await page.getByRole('button', { name: 'Search', exact: true }).click()
+    await expect(page.getByText('Enter at least 2 characters to search.', { exact: true })).toBeVisible()
+    await search.fill('blue')
+    await expect(page.getByRole('option', { name: /Blue Dream/ })).toBeVisible()
+    await search.press('ArrowDown')
+    await search.press('Enter')
+    await expect(page).toHaveURL('/products/search?q=Blue%20Dream')
+    await page.goBack()
+    await readyForScreenshot(page)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.screenshot({ path: info.outputPath(`home-${width}.png`), fullPage: true })
+    expect(errors).toEqual([])
+  })
+}
+
+for (const width of [390, 768, 1280, 1440]) {
   test(`discovery and comparison at ${width}px`, async ({ page }, info) => {
     const errors: string[] = []
     page.on('pageerror', error => errors.push(error.message))

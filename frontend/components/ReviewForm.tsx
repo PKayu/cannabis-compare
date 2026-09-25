@@ -49,13 +49,14 @@ export default function ReviewForm({ productId, onSubmit, onCancel }: ReviewForm
   const intentionOptions = formData.intention_type === 'medical' ? medicalIntentions : moodIntentions
 
   // Show sign-in prompt if not authenticated
+  if (authLoading) return <p role="status">Checking your account…</p>
   if (!authLoading && !user) {
     return (
       <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
         <h3 className="text-xl font-bold mb-4 text-cannabis-800">Share Your Review</h3>
         <p className="text-gray-600 mb-4">Please sign in to leave a review.</p>
         <a
-          href={`/auth/login?returnUrl=${encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '')}`}
+          href={`/auth/login?returnUrl=${encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname + window.location.search : '')}`}
           className="inline-block px-4 py-2 bg-cannabis-600 text-white rounded hover:bg-cannabis-700 transition-colors font-semibold"
         >
           Sign In
@@ -70,7 +71,7 @@ export default function ReviewForm({ productId, onSubmit, onCancel }: ReviewForm
     setLoading(true)
 
     try {
-      await api.post('/api/reviews', {
+      await api.reviews.create({
         product_id: productId,
         effects_rating: formData.effects_rating,
         taste_rating: formData.taste_rating,
@@ -133,7 +134,7 @@ export default function ReviewForm({ productId, onSubmit, onCancel }: ReviewForm
       <h3 className="text-2xl font-bold mb-6 text-cannabis-800">Share Your Review</h3>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded">
+        <div role="alert" className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded">
           {error}
         </div>
       )}
@@ -164,8 +165,9 @@ export default function ReviewForm({ productId, onSubmit, onCancel }: ReviewForm
         <p className="font-bold mb-4 text-cannabis-800">Why did you use this product?</p>
 
         <div className="mb-4">
-          <label className="block font-semibold mb-2 text-gray-700">Use Type</label>
+          <label htmlFor="review-use-type" className="block font-semibold mb-2 text-gray-700">Use Type</label>
           <select
+            id="review-use-type"
             value={formData.intention_type}
             onChange={(e) => handleIntentionTypeChange(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-cannabis-500"
@@ -176,8 +178,9 @@ export default function ReviewForm({ productId, onSubmit, onCancel }: ReviewForm
         </div>
 
         <div>
-          <label className="block font-semibold mb-2 text-gray-700">Specific Use</label>
+          <label htmlFor="review-use" className="block font-semibold mb-2 text-gray-700">Specific Use</label>
           <select
+            id="review-use"
             value={formData.intention_tag}
             onChange={(e) => setFormData({ ...formData, intention_tag: e.target.value })}
             className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-cannabis-500"
@@ -196,8 +199,9 @@ export default function ReviewForm({ productId, onSubmit, onCancel }: ReviewForm
         <p className="font-bold mb-4 text-cannabis-800">Product Details <span className="text-sm text-gray-500 font-normal">(Optional)</span></p>
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium mb-1 text-gray-700">Batch Number</label>
+            <label htmlFor="review-batch" className="block text-sm font-medium mb-1 text-gray-700">Batch Number</label>
             <input
+              id="review-batch"
               type="text"
               placeholder="e.g., BATCH-2024-001"
               value={formData.batch_number}
@@ -206,8 +210,9 @@ export default function ReviewForm({ productId, onSubmit, onCancel }: ReviewForm
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1 text-gray-700">Cultivation Date</label>
+            <label htmlFor="review-date" className="block text-sm font-medium mb-1 text-gray-700">Cultivation Date</label>
             <input
+              id="review-date"
               type="date"
               value={formData.cultivation_date}
               onChange={(e) => setFormData({ ...formData, cultivation_date: e.target.value })}
@@ -219,8 +224,9 @@ export default function ReviewForm({ productId, onSubmit, onCancel }: ReviewForm
 
       {/* Comment */}
       <div className="mb-6">
-        <label className="block font-bold mb-2 text-cannabis-800">Your Thoughts</label>
+        <label htmlFor="review-comment" className="block font-bold mb-2 text-cannabis-800">Your Thoughts</label>
         <textarea
+          id="review-comment"
           value={formData.comment}
           onChange={(e) => setFormData({ ...formData, comment: e.target.value })}
           placeholder="Share your experience with this product..."
@@ -274,11 +280,13 @@ function RatingInput({ label, value, onChange }: RatingInputProps) {
   return (
     <div className="mb-4">
       <label className="block font-semibold mb-2 text-gray-700">{label}</label>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2" role="group" aria-label={label}>
         {[1, 2, 3, 4, 5].map((rating) => (
           <button
             key={rating}
             type="button"
+            aria-label={`${label}: ${rating} out of 5`}
+            aria-pressed={value === rating}
             onClick={() => handleRatingClick(rating)}
             className={`w-12 h-12 rounded border-2 transition-all animate-star-wiggle ${
               value >= rating

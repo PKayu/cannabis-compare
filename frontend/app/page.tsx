@@ -3,7 +3,7 @@ import CannabisLeaf from '@/components/CannabisLeaf'
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-groovy-cream">
+    <div className="min-h-screen bg-groovy-cream">
 
       {/* ── Hero ────────────────────────────────────────────── */}
       <section
@@ -227,6 +227,6 @@ export default function Home() {
         </div>
       </section>
 
-    </main>
+    </div>
   )
 }

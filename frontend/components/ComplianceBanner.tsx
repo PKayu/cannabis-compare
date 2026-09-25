@@ -1,4 +1,5 @@
 import CannabisLeaf from '@/components/CannabisLeaf'
+import { BRAND_NAME } from '@/lib/brand'
 
 export default function ComplianceBanner() {
   return (
@@ -8,7 +9,7 @@ export default function ComplianceBanner() {
           <CannabisLeaf size={18} color="#1C1917" />
         </span>
         <p className="min-w-0 text-pretty">
-          Informational purposes only. Utah Cannabis Compare does not sell controlled substances.
+          Informational purposes only. {BRAND_NAME} does not sell controlled substances.
           Purchases take place on licensed dispensary websites. Utah medical cannabis cardholders 21+ only.
         </p>
       </div>

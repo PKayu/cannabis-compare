@@ -1,212 +1,61 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { api } from '@/lib/api'
+import { money, type PriceHistoryPoint } from '@/lib/product-contracts'
 
-interface PriceHistory {
-  date: string
-  min: number
-  max: number
-  avg: number
-}
-
-interface PricingChartProps {
-  productId: string
-}
-
-export default function PricingChart({ productId }: PricingChartProps) {
-  const [history, setHistory] = useState<PriceHistory[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+export default function PricingChart({ productId }: { productId: string }) {
+  const [history, setHistory] = useState<PriceHistoryPoint[]>([])
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [days, setDays] = useState(30)
-
+  const [retry, setRetry] = useState(0)
+  const id = useId()
   useEffect(() => {
-    loadHistory()
-  }, [productId, days])
+    let current = true
+    setStatus('loading')
+    api.products.getPricingHistory(productId, days).then(response => {
+      if (current) { setHistory(response.data); setStatus('ready') }
+    }).catch(() => { if (current) setStatus('error') })
+    return () => { current = false }
+  }, [productId, days, retry])
 
-  const loadHistory = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const res = await api.products.getPricingHistory(productId, days)
-      setHistory(res.data)
-    } catch (err) {
-      console.error('Failed to load pricing history:', err)
-      setError('Unable to load price history')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
-          <div className="h-48 bg-gray-200 rounded"></div>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="bg-white rounded-lg shadow p-6 text-center text-gray-600">
-        {error}
-      </div>
-    )
-  }
-
-  if (history.length === 0) {
-    return (
-      <div className="bg-white rounded-lg shadow p-6 text-center text-gray-600">
-        No price history available yet. Check back after prices have been tracked for a few days.
-      </div>
-    )
-  }
-
-  // Calculate chart dimensions
-  const minPrice = Math.min(...history.map(h => h.min)) * 0.95
-  const maxPrice = Math.max(...history.map(h => h.max)) * 1.05
-  const priceRange = maxPrice - minPrice
-
-  // Helper to calculate Y position (percentage from bottom)
-  const getYPosition = (price: number) => {
-    return ((price - minPrice) / priceRange) * 100
-  }
-
-  // Format date for display
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr)
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  }
-
-  return (
-    <div className="bg-white rounded-lg shadow p-6">
-      {/* Controls */}
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">Show:</span>
-          <select
-            value={days}
-            onChange={(e) => setDays(Number(e.target.value))}
-            className="px-2 py-1 border border-gray-300 rounded text-sm"
-          >
-            <option value={7}>7 days</option>
-            <option value={30}>30 days</option>
-            <option value={90}>90 days</option>
-          </select>
-        </div>
-        <div className="flex items-center gap-4 text-sm">
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 bg-green-500 rounded-full"></span>
-            Min
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 bg-cannabis-500 rounded-full"></span>
-            Avg
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 bg-red-500 rounded-full"></span>
-            Max
-          </span>
-        </div>
-      </div>
-
-      {/* Chart Area */}
-      <div className="relative h-48 border-l border-b border-gray-200">
-        {/* Y-axis labels */}
-        <div className="absolute -left-12 top-0 h-full flex flex-col justify-between text-xs text-gray-500">
-          <span>${maxPrice.toFixed(0)}</span>
-          <span>${((maxPrice + minPrice) / 2).toFixed(0)}</span>
-          <span>${minPrice.toFixed(0)}</span>
-        </div>
-
-        {/* Chart bars */}
-        <div className="flex items-end h-full gap-1 px-2">
-          {history.map((point, index) => (
-            <div
-              key={point.date}
-              className="flex-1 relative group"
-              style={{ minWidth: '20px' }}
-            >
-              {/* Price range bar (min to max) */}
-              <div
-                className="absolute w-full bg-gray-200 rounded"
-                style={{
-                  bottom: `${getYPosition(point.min)}%`,
-                  height: `${getYPosition(point.max) - getYPosition(point.min)}%`,
-                  minHeight: '4px'
-                }}
-              />
-
-              {/* Average line marker */}
-              <div
-                className="absolute w-full h-1 bg-cannabis-500 rounded"
-                style={{
-                  bottom: `${getYPosition(point.avg)}%`
-                }}
-              />
-
-              {/* Min dot */}
-              <div
-                className="absolute w-2 h-2 bg-green-500 rounded-full -translate-x-1/2 left-1/2"
-                style={{
-                  bottom: `${getYPosition(point.min)}%`
-                }}
-              />
-
-              {/* Max dot */}
-              <div
-                className="absolute w-2 h-2 bg-red-500 rounded-full -translate-x-1/2 left-1/2"
-                style={{
-                  bottom: `${getYPosition(point.max)}%`
-                }}
-              />
-
-              {/* Tooltip */}
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
-                <div className="bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
-                  <p className="font-semibold">{formatDate(point.date)}</p>
-                  <p className="text-green-400">Min: ${point.min.toFixed(2)}</p>
-                  <p>Avg: ${point.avg.toFixed(2)}</p>
-                  <p className="text-red-400">Max: ${point.max.toFixed(2)}</p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* X-axis labels */}
-        <div className="absolute -bottom-6 left-0 w-full flex justify-between text-xs text-gray-500 px-2">
-          <span>{formatDate(history[0]?.date)}</span>
-          {history.length > 1 && (
-            <span>{formatDate(history[history.length - 1]?.date)}</span>
-          )}
-        </div>
-      </div>
-
-      {/* Summary Stats */}
-      <div className="mt-8 grid grid-cols-3 gap-4 text-center">
-        <div>
-          <p className="text-sm text-gray-600">Lowest</p>
-          <p className="text-lg font-bold text-green-600">
-            ${Math.min(...history.map(h => h.min)).toFixed(2)}
-          </p>
-        </div>
-        <div>
-          <p className="text-sm text-gray-600">Average</p>
-          <p className="text-lg font-bold text-gray-700">
-            ${(history.reduce((sum, h) => sum + h.avg, 0) / history.length).toFixed(2)}
-          </p>
-        </div>
-        <div>
-          <p className="text-sm text-gray-600">Highest</p>
-          <p className="text-lg font-bold text-red-600">
-            ${Math.max(...history.map(h => h.max)).toFixed(2)}
-          </p>
-        </div>
-      </div>
+  const low = history.length ? Math.min(...history.map(point => point.min)) : 0
+  const high = history.length ? Math.max(...history.map(point => point.max)) : 0
+  const range = high - low || 1
+  const x = (index: number) => 65 + index * 610 / Math.max(history.length - 1, 1)
+  const y = (price: number) => 170 - (price - low) * 135 / range
+  const date = (value: string) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+  return <div className="bloom-panel p-5 sm:p-7">
+    <div className="flex flex-wrap items-center justify-between gap-4">
+      <h2 className="text-2xl font-bold">Price observations</h2>
+      <label className="flex items-center gap-3 text-sm font-bold">Period
+        <select className="bloom-input w-auto" value={days} onChange={event => setDays(Number(event.target.value))}><option value={7}>7 days</option><option value={30}>30 days</option><option value={90}>90 days</option></select>
+      </label>
     </div>
-  )
+    <p className="mt-3 max-w-2xl text-sm text-bloom-muted">Listed prices across all package sizes, grouped by last update date. These are observations, not a complete price-change history or a like-for-like trend. Promotions are not included.</p>
+    {status === 'loading' ? <p role="status" className="py-10">Loading price observations…</p>
+      : status === 'error' ? <div role="alert" className="py-6"><p>Price observations could not be loaded. Current offers are still available above.</p><button className="bloom-button-secondary mt-4" onClick={() => setRetry(value => value + 1)}>Retry price observations</button></div>
+      : history.length === 0 ? <p role="status" className="py-8 text-bloom-muted">No price observations in this period. Try a longer period or compare current offers.</p>
+      : <>
+        <p className="mt-5 text-sm tabular-nums sm:hidden">Observed range: <strong>{money(low)}–{money(high)}</strong>. Open the price data below for each date.</p>
+        {history.length > 1 ? <svg viewBox="0 0 720 215" role="img" aria-labelledby={`${id}-title ${id}-desc`} className="mt-6 hidden w-full sm:block">
+          <title id={`${id}-title`}>Daily listed price ranges</title>
+          <desc id={`${id}-desc`}>Vertical bars show each day&apos;s low and high. The solid line shows daily averages. Exact values follow in the data table.</desc>
+          <text x="0" y="40" fontSize="14" fill="currentColor">{money(high)}</text><text x="0" y="174" fontSize="14" fill="currentColor">{money(low)}</text>
+          <line x1="65" x2="690" y1="170" y2="170" stroke="#CBD2C7" />
+          {history.map((point, index) => <line key={point.date} x1={x(index)} x2={x(index)} y1={y(point.min)} y2={y(point.max)} stroke="#49616A" strokeWidth="4" />)}
+          <polyline fill="none" stroke="#103D50" strokeWidth="3" points={history.map((point, index) => `${x(index)},${y(point.avg)}`).join(' ')} />
+          {history.map((point, index) => <circle key={point.date} cx={x(index)} cy={y(point.avg)} r="4" fill="#103D50" />)}
+          <text x="65" y="205" fontSize="14" fill="currentColor">{date(history[0].date)}</text><text x="675" y="205" textAnchor="end" fontSize="14" fill="currentColor">{date(history[history.length - 1].date)}</text>
+        </svg> : <p className="mt-6">Only one observation date is available; not enough to show change over time.</p>}
+        <details className="mt-5">
+          <summary className="min-h-[44px] cursor-pointer py-3 font-bold underline underline-offset-4">View price data ({history.length} dates)</summary>
+          <div className="overflow-x-auto" role="region" aria-label="Price observation data" tabIndex={0}>
+            <table className="w-full text-left text-sm tabular-nums"><caption className="sr-only">Listed prices by update date, all package sizes</caption><thead><tr>{['Date', 'Low', 'Average', 'High'].map(label => <th key={label} scope="col" className="py-3 pr-3">{label}</th>)}</tr></thead><tbody>
+              {history.map(point => <tr key={point.date} className="border-t border-bloom-line"><th scope="row" className="py-3 pr-3 font-normal">{date(point.date)}</th><td className="pr-3">{money(point.min)}</td><td className="pr-3">{money(point.avg)}</td><td>{money(point.max)}</td></tr>)}
+            </tbody></table>
+          </div>
+        </details>
+      </>}
+  </div>
 }

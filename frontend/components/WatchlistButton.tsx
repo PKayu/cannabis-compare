@@ -12,7 +12,7 @@ interface WatchlistButtonProps {
 }
 
 export default function WatchlistButton({ productId, initialWatched = false }: WatchlistButtonProps) {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const { showToast } = useToast()
   const [watched, setWatched] = useState(initialWatched)
@@ -44,6 +44,11 @@ export default function WatchlistButton({ productId, initialWatched = false }: W
   }
 
   const handleToggle = async () => {
+    if (!user) {
+      const returnUrl = encodeURIComponent(window.location.pathname + window.location.search)
+      router.push(`/auth/login?returnUrl=${returnUrl}`)
+      return
+    }
     setLoading(true)
 
     // Trigger bounce animation
@@ -107,22 +112,22 @@ export default function WatchlistButton({ productId, initialWatched = false }: W
     <div className="inline-block">
       <button
         onClick={handleToggle}
-        disabled={loading}
-        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+        disabled={loading || authLoading}
+        className={`flex min-h-[44px] items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
           watched
             ? 'bg-cannabis-100 text-cannabis-700 border-2 border-cannabis-300 hover:bg-cannabis-200'
             : 'bg-white text-gray-700 border-2 border-gray-300 hover:bg-gray-50'
         } ${loading ? 'opacity-50 cursor-not-allowed' : ''} ${isBouncing ? 'animate-star-bounce' : ''}`}
       >
         <span className="text-xl">{watched ? '★' : '☆'}</span>
-        <span className="font-medium">{watched ? 'Watching' : 'Watch'}</span>
+        <span className="font-medium">{authLoading ? 'Checking account…' : loading ? 'Updating…' : watched ? 'Saved' : 'Save product'}</span>
       </button>
 
       {watched && (
         <div className="mt-2">
           <button
             onClick={() => setShowConfig(!showConfig)}
-            className="text-sm text-cannabis-600 hover:text-cannabis-700 underline"
+            className="min-h-[44px] text-sm text-cannabis-600 hover:text-cannabis-700 underline"
           >
             {showConfig ? 'Hide' : 'Configure'} alerts
           </button>

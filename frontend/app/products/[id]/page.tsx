@@ -1,334 +1,109 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
+import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { api } from '@/lib/api'
+import { comparisonGroups, money, potency, type ProductDetail, type RelatedProduct, type WeightGroup } from '@/lib/product-contracts'
 import PriceComparisonTable from '@/components/PriceComparisonTable'
 import PricingChart from '@/components/PricingChart'
 import ReviewsSection from '@/components/ReviewsSection'
 import WatchlistButton from '@/components/WatchlistButton'
-import CannabisLeaf from '@/components/CannabisLeaf'
+import ProductArtwork from '@/components/bloom/ProductArtwork'
+import JourneyState from '@/components/bloom/JourneyState'
 
-interface Variant {
-  id: string
-  weight: string | null
-  weight_grams: number | null
-}
+function ProductExperience() {
+  const productId = useParams().id as string
+  const search = useSearchParams()
+  const returnTo = search.get('returnTo')
+  const back = returnTo === '/products/search' || returnTo?.startsWith('/products/search?') ? returnTo : '/products/search'
+  const [product, setProduct] = useState<ProductDetail | null>(null)
+  const [groups, setGroups] = useState<WeightGroup[]>([])
+  const [related, setRelated] = useState<RelatedProduct[]>([])
+  const [status, setStatus] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading')
+  const [priceStatus, setPriceStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [relatedError, setRelatedError] = useState(false)
+  const [selectedId, setSelectedId] = useState('')
+  const [retry, setRetry] = useState(0)
+  const [priceRetry, setPriceRetry] = useState(0)
 
-interface Product {
-  id: string
-  name: string
-  brand: string | null
-  brand_id: string | null
-  product_type: string
-  thc_percentage: number | null
-  cbd_percentage: number | null
-  is_master: boolean
-  normalization_confidence: number | null
-  variants: Variant[]
-  created_at: string | null
-  updated_at: string | null
-}
+  useEffect(() => {
+    let current = true
+    setStatus('loading'); setProduct(null); setSelectedId(productId)
+    api.products.get(productId).then(response => {
+      if (current) { setProduct(response.data); setStatus('ready') }
+    }).catch(error => { if (current) setStatus(error.response?.status === 404 ? 'missing' : 'error') })
+    return () => { current = false }
+  }, [productId, retry])
+  useEffect(() => {
+    let current = true
+    setPriceStatus('loading'); setGroups([])
+    api.products.getPrices(productId).then(response => {
+      if (current) { setGroups(response.data); setPriceStatus('ready') }
+    }).catch(() => { if (current) setPriceStatus('error') })
+    return () => { current = false }
+  }, [productId, retry, priceRetry])
+  useEffect(() => {
+    let current = true
+    setRelated([]); setRelatedError(false)
+    api.products.getRelated(productId, 4).then(response => {
+      if (current) setRelated(response.data)
+    }).catch(() => { if (current) setRelatedError(true) })
+    return () => { current = false }
+  }, [productId, retry])
 
-interface RelatedProduct {
-  id: string
-  name: string
-  brand: string | null
-  product_type: string
-  thc_percentage: number | null
-  cbd_percentage: number | null
-  min_price: number | null
-  max_price: number | null
-  similarity_score?: number
-}
+  if (status === 'loading') return <div className="bloom-page"><div className="bloom-container py-12"><JourneyState busy title="Loading product details…" /></div></div>
+  if (!product) return <div className="bloom-page"><div className="bloom-container py-12"><JourneyState error title={status === 'missing' ? 'This product could not be found' : 'Product details could not be loaded'}>
+    <p>{status === 'missing' ? 'The listing may have changed. Search for the product or its brand.' : 'Your place is saved. Try loading this product again.'}</p>
+    <div className="mt-5 flex flex-wrap gap-3">{status !== 'missing' && <button className="bloom-button" onClick={() => setRetry(value => value + 1)}>Retry product</button>}<Link href={back} className="bloom-button-secondary">Back to discovery</Link></div>
+  </JourneyState></div></div>
 
-interface PriceData {
-  dispensary_id: string
-  dispensary_name: string
-  dispensary_location: string
-  dispensary_hours: string | null
-  dispensary_website: string | null
-  msrp: number
-  deal_price: number | null
-  savings: number | null
-  savings_percentage: number | null
-  in_stock: boolean
-  promotion: {
-    id: string
-    title: string
-    description: string | null
-    discount_percentage: number | null
-    discount_amount: number | null
-  } | null
-  last_updated: string | null
-  product_url: string | null
-}
-
-interface WeightGroup {
-  variant_id: string
-  weight: string | null
-  weight_grams: number | null
-  prices: PriceData[]
+  const variants = comparisonGroups(product, groups)
+  const selected = variants.find(group => group.variant_id === selectedId) || variants[0]
+  const label = (group: WeightGroup) => group.weight || (group.weight_grams != null ? `${group.weight_grams} g` : 'Size not reported')
+  return <div className="bloom-page">
+    <div className="bloom-container py-5"><Link className="inline-flex min-h-[44px] items-center text-sm font-bold underline underline-offset-4" href={back}>← Back to discovery</Link></div>
+    <section className="bloom-container grid items-stretch gap-6 pb-10 md:grid-cols-[0.8fr_1.2fr]">
+      <div className="overflow-hidden rounded-[2rem] border border-bloom-line self-start"><ProductArtwork type={product.product_type} priority /></div>
+      <div className="min-w-0 rounded-[2rem] bg-bloom-avocado p-6 sm:p-8">
+        <p className="text-xs font-bold uppercase tracking-[0.15em]">{product.brand || 'Brand not reported'} · {product.product_type}</p>
+        <h1 className="mt-4 text-3xl font-bold leading-tight tracking-tight sm:text-4xl lg:text-5xl">{product.name}</h1>
+        <p className="mt-4 max-w-lg text-sm">A little clarity before you choose. Compare the same package size, then confirm availability with the dispensary.</p>
+        <dl className="mt-7 grid grid-cols-2 gap-4 border-y border-bloom-ink/25 py-5">
+          <div><dt className="text-xs font-bold uppercase tracking-wider">THC</dt><dd className="mt-1 text-xl font-bold">{potency(product.thc_percentage)}</dd></div>
+          <div><dt className="text-xs font-bold uppercase tracking-wider">CBD</dt><dd className="mt-1 text-xl font-bold">{potency(product.cbd_percentage)}</dd></div>
+        </dl>
+        <div className="mt-5 flex flex-wrap items-center gap-3"><a href="#compare-offers" className="bloom-button-secondary">Compare offers ↓</a><WatchlistButton productId={product.id} /></div>
+        <p className="mt-3 text-xs">Potency can vary by batch. Confirm the product label; this is not medical advice.</p>
+      </div>
+    </section>
+    <div className="bloom-container space-y-12 pb-16">
+      <section id="compare-offers" className="scroll-mt-6" aria-labelledby="compare-title">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-widest text-bloom-muted">Find your offering</p><h2 id="compare-title" className="bloom-title mt-2 text-4xl">Same size. Clearer choice.</h2></div><p className="max-w-sm text-sm text-bloom-muted">Listings can change. Confirm stock, taxes, promotions, and final price with the dispensary.</p></div>
+        {priceStatus === 'loading' ? <JourneyState busy title="Loading dispensary offers…" />
+          : priceStatus === 'error' ? <JourneyState error title="Offers could not be loaded"><p>Product details are still available. Try the prices again.</p><button className="bloom-button mt-4" onClick={() => setPriceRetry(value => value + 1)}>Retry offers</button></JourneyState>
+          : <>
+            {variants.length > 0 && <fieldset className="mb-6"><legend className="mb-3 font-bold">Choose a package size</legend><div className="flex flex-wrap gap-3">
+              {variants.map((group, index) => <label key={group.variant_id} className={`flex min-h-[48px] cursor-pointer items-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold ${selected?.variant_id === group.variant_id ? 'border-bloom-navy bg-bloom-navy text-bloom-cream' : 'border-bloom-line bg-white'}`}>
+                <input className="h-4 w-4 accent-bloom-orange" type="radio" name="package" checked={selected?.variant_id === group.variant_id} onChange={() => setSelectedId(group.variant_id)} value={group.variant_id} />
+                {label(group)}{variants.filter(item => label(item) === label(group)).length > 1 && ` · option ${index + 1}`}
+              </label>)}
+            </div></fieldset>}
+            <div aria-live="polite" className="mb-4 text-sm text-bloom-muted">{selected && <p>{label(selected)} · {selected.prices.length} {selected.prices.length === 1 ? 'offering' : 'offerings'}{!selected.weight && selected.weight_grams == null ? '. Confirm package size before comparing value.' : ''}</p>}</div>
+            {selected?.prices.length ? <PriceComparisonTable prices={selected.prices} weightGrams={selected.weight_grams} /> : <JourneyState title="No current prices for this package"><p>Try another package size or return to discovery. Missing prices do not mean the product is out of stock everywhere.</p><Link href={back} className="bloom-button-secondary mt-4">Back to discovery</Link></JourneyState>}
+          </>}
+      </section>
+      <PricingChart productId={product.id} />
+      <section aria-label="Community reviews"><ReviewsSection productId={product.id} /></section>
+      {(related.length > 0 || relatedError) && <section aria-labelledby="related-title"><h2 id="related-title" className="bloom-title text-4xl">Keep exploring</h2><p className="mt-3 text-sm text-bloom-muted">Similar catalog entries, not personalized or medical recommendations.</p>
+        {relatedError ? <p className="mt-4 text-sm">Similar products are unavailable right now. <Link href={back} className="underline">Continue discovery</Link>.</p> : <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {related.map(item => <Link key={item.id} href={`/products/${item.id}?returnTo=${encodeURIComponent(back)}`} className="bloom-panel block p-5 transition-colors hover:bg-bloom-parchment"><p className="text-xs text-bloom-muted">{item.brand || 'Brand not reported'} · {item.product_type}</p><h3 className="mt-2 text-lg font-bold">{item.name}</h3><p className="mt-3 text-sm">THC {potency(item.thc_percentage)} · CBD {potency(item.cbd_percentage)}</p><p className="mt-4 font-bold">{item.min_price == null ? 'Price not reported' : item.max_price != null && item.max_price !== item.min_price ? `${money(item.min_price)}–${money(item.max_price)}` : money(item.min_price)}</p><p className="mt-3 text-sm underline">Compare product →</p></Link>)}
+        </div>}
+      </section>}
+    </div>
+  </div>
 }
 
 export default function ProductDetailPage() {
-  const params = useParams()
-  const productId = params.id as string
-  const [product, setProduct] = useState<Product | null>(null)
-  const [weightGroups, setWeightGroups] = useState<WeightGroup[]>([])
-  const [relatedProducts, setRelatedProducts] = useState<RelatedProduct[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (productId) loadProductData()
-  }, [productId])
-
-  const loadProductData = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const [productRes, pricesRes, relatedRes] = await Promise.all([
-        api.products.get(productId),
-        api.products.getPrices(productId),
-        api.products.getRelated(productId, 8).catch(() => ({ data: [] }))
-      ])
-      setProduct(productRes.data)
-      setWeightGroups(pricesRes.data)
-      setRelatedProducts(relatedRes.data)
-    } catch (err: any) {
-      setError(err.response?.status === 404 ? 'Product not found' : 'Failed to load product data')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-groovy-cream flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-groovy-teal border-t-transparent"></div>
-          <p className="mt-4 font-display font-semibold text-groovy-ink">Loading product…</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (error || !product) {
-    return (
-      <div className="min-h-screen bg-groovy-cream flex items-center justify-center">
-        <div className="text-center card-sticker p-10 max-w-sm">
-          <CannabisLeaf size={56} color="#9CA3AF" className="mx-auto mb-4" />
-          <h2 className="font-display font-bold text-xl text-groovy-ink mb-2">{error || 'Product not found'}</h2>
-          <Link href="/products/search" className="btn-groovy-teal mt-4">
-            ← Back to Search
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
-  const allPrices = weightGroups.flatMap(g => g.prices)
-  const bestPrice = allPrices.length > 0
-    ? allPrices.reduce((best, p) => {
-        const bestVal = best.deal_price ?? best.msrp
-        const pVal = p.deal_price ?? p.msrp
-        return pVal < bestVal ? p : best
-      })
-    : null
-  const inStockCount = allPrices.filter(p => p.in_stock).length
-  const nonNullWeights = [...new Set(weightGroups.map(g => g.weight).filter((w): w is string => w !== null))]
-  const hasMultipleWeights = nonNullWeights.length > 1
-  const displayGroups = hasMultipleWeights
-    ? nonNullWeights.map(w => ({
-        weight: w,
-        prices: weightGroups.filter(g => g.weight === w || g.weight === null).flatMap(g => g.prices),
-      }))
-    : [{ weight: nonNullWeights[0] ?? null, prices: allPrices }]
-
-  return (
-    <div className="min-h-screen bg-groovy-cream">
-      {/* Breadcrumb */}
-      <div className="bg-white border-b-2 border-stone-200">
-        <div className="max-w-4xl mx-auto px-4 py-3">
-          <nav className="text-sm font-body text-stone-500 flex items-center gap-2">
-            <Link href="/" className="hover:text-groovy-teal transition-colors">Home</Link>
-            <span>/</span>
-            <Link href="/products/search" className="hover:text-groovy-teal transition-colors">Search</Link>
-            <span>/</span>
-            <span className="text-groovy-ink font-semibold truncate">{product.name}</span>
-          </nav>
-        </div>
-      </div>
-
-      {/* Product Hero Header — retro gradient band */}
-      <div
-        className="border-b-4 border-groovy-ink relative overflow-hidden"
-        style={{
-          background: 'linear-gradient(135deg, #F59E0B 0%, #F97316 40%, #0D9488 100%)',
-          filter: 'saturate(115%) contrast(105%)',
-        }}
-      >
-        {/* Decorative leaves */}
-        <div className="absolute right-6 top-4 opacity-20 hidden md:block">
-          <CannabisLeaf size={72} color="#FFF8EE" rotate={20} />
-        </div>
-        <div className="absolute right-20 bottom-0 opacity-15 hidden md:block">
-          <CannabisLeaf size={48} color="#FFF8EE" rotate={-15} variant="sprig" />
-        </div>
-
-        <div className="relative max-w-4xl mx-auto px-4 py-10">
-          <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-6">
-            <div>
-              <h1
-                className="font-display font-bold text-white leading-tight"
-                style={{
-                  fontSize: 'clamp(2rem, 5vw, 3.5rem)',
-                  WebkitTextStroke: '1.5px rgba(28,25,23,0.3)',
-                }}
-              >
-                {product.name}
-              </h1>
-              {product.brand && (
-                <p className="font-body text-white/80 text-lg mt-1">by {product.brand}</p>
-              )}
-              <div className="flex items-center gap-3 mt-3">
-                <span className="font-display font-bold text-sm px-3 py-1 bg-groovy-sun text-groovy-ink rounded-full border-2 border-groovy-ink shadow-[2px_2px_0px_#1C1917]">
-                  {product.product_type}
-                </span>
-                <div className="mt-0 [&>button]:border-white [&>button]:text-white">
-                  <WatchlistButton productId={productId} />
-                </div>
-              </div>
-            </div>
-
-            {bestPrice && (
-              <div className="bg-white/20 backdrop-blur-sm border-2 border-white/40 rounded-2xl px-6 py-4 text-right flex-shrink-0">
-                <p className="font-body text-white/70 text-sm">Best Price</p>
-                <p className="font-display font-bold text-3xl text-groovy-sun">
-                  ${(bestPrice.deal_price || bestPrice.msrp).toFixed(2)}
-                </p>
-                {bestPrice.deal_price && bestPrice.savings_percentage && (
-                  <span className="inline-block font-display font-bold text-xs px-2 py-0.5 bg-groovy-sun text-groovy-ink rounded-full border-2 border-groovy-ink mt-1">
-                    Save {bestPrice.savings_percentage}%
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Stats row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-8">
-            {product.thc_percentage !== null && (
-              <div className="bg-white/20 backdrop-blur-sm border-2 border-white/30 rounded-2xl p-4">
-                <p className="font-body text-white/70 text-xs">THC</p>
-                <p className="font-display font-bold text-2xl text-groovy-sun">{product.thc_percentage}%</p>
-              </div>
-            )}
-            {product.cbd_percentage !== null && (
-              <div className="bg-white/20 backdrop-blur-sm border-2 border-white/30 rounded-2xl p-4">
-                <p className="font-body text-white/70 text-xs">CBD</p>
-                <p className="font-display font-bold text-2xl text-white">{product.cbd_percentage}%</p>
-              </div>
-            )}
-            <div className="bg-white/20 backdrop-blur-sm border-2 border-white/30 rounded-2xl p-4">
-              <p className="font-body text-white/70 text-xs">Dispensaries</p>
-              <p className="font-display font-bold text-2xl text-white">{new Set(allPrices.map(p => p.dispensary_id)).size}</p>
-            </div>
-            <div className="bg-white/20 backdrop-blur-sm border-2 border-white/30 rounded-2xl p-4">
-              <p className="font-body text-white/70 text-xs">In Stock</p>
-              <p className="font-display font-bold text-2xl text-white">{inStockCount}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="max-w-4xl mx-auto px-4 py-10">
-
-        {/* Price Comparison */}
-        <section className="mb-12">
-          <div className="flex items-center gap-3 mb-5">
-            <CannabisLeaf size={24} color="#0D9488" rotate={-10} />
-            <h2 className="font-display font-bold text-2xl text-groovy-ink">Prices Across Dispensaries</h2>
-          </div>
-          {displayGroups.length > 0 && allPrices.length > 0 ? (
-            <div className="space-y-6">
-              {displayGroups.map((group, i) => (
-                <div key={group.weight ?? i}>
-                  {hasMultipleWeights && group.weight && (
-                    <h3 className="font-display font-semibold text-lg text-groovy-ink mb-2 px-1">{group.weight}</h3>
-                  )}
-                  <PriceComparisonTable prices={group.prices} productId={productId} productName={product.name} />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="card-sticker p-8 text-center text-stone-500 font-body">
-              No pricing data available for this product.
-            </div>
-          )}
-        </section>
-
-        {/* Price History */}
-        <section className="mb-12">
-          <div className="flex items-center gap-3 mb-5">
-            <CannabisLeaf size={24} color="#F97316" rotate={15} />
-            <h2 className="font-display font-bold text-2xl text-groovy-ink">Price History</h2>
-          </div>
-          <div className="card-sticker overflow-hidden">
-            <PricingChart productId={productId} />
-          </div>
-        </section>
-
-        {/* Reviews */}
-        <section className="mb-12">
-          <div className="flex items-center gap-3 mb-5">
-            <CannabisLeaf size={24} color="#0D9488" rotate={-5} variant="sprig" />
-            <h2 className="font-display font-bold text-2xl text-groovy-ink">Community Reviews</h2>
-          </div>
-          <ReviewsSection productId={productId} />
-        </section>
-
-        {/* Similar Products */}
-        {relatedProducts.length > 0 && (
-          <section>
-            <div className="flex items-center gap-3 mb-5">
-              <CannabisLeaf size={24} color="#F97316" rotate={10} />
-              <h2 className="font-display font-bold text-2xl text-groovy-ink">Similar Products</h2>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {relatedProducts.map((rp) => (
-                <Link
-                  key={rp.id}
-                  href={`/products/${rp.id}`}
-                  className="card-sticker p-4 hover:-translate-y-0.5 transition-all duration-150 block"
-                >
-                  <h3 className="font-display font-bold text-sm text-groovy-ink leading-tight line-clamp-2">{rp.name}</h3>
-                  {rp.brand && (
-                    <p className="font-body text-xs text-stone-500 mt-1 truncate">{rp.brand}</p>
-                  )}
-                  <span className="inline-block mt-2 px-2 py-0.5 bg-groovy-sun text-groovy-ink text-xs font-display font-bold rounded-full border-2 border-groovy-ink">
-                    {rp.product_type}
-                  </span>
-                  <div className="mt-2 flex items-center gap-2 text-xs font-body text-stone-600">
-                    {rp.thc_percentage != null && <span>THC {rp.thc_percentage}%</span>}
-                    {rp.cbd_percentage != null && <span>CBD {rp.cbd_percentage}%</span>}
-                  </div>
-                  {rp.min_price != null && (
-                    <p className="mt-2 font-display font-bold text-sm text-groovy-teal">
-                      {rp.min_price === rp.max_price
-                        ? `$${rp.min_price.toFixed(2)}`
-                        : `$${rp.min_price.toFixed(2)}–$${rp.max_price!.toFixed(2)}`}
-                    </p>
-                  )}
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
-      </div>
-    </div>
-  )
+  return <Suspense fallback={<div className="bloom-container py-12"><JourneyState busy title="Loading product details…" /></div>}><ProductExperience /></Suspense>
 }

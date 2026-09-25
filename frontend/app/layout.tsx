@@ -1,11 +1,15 @@
 import type { Metadata } from 'next'
-import { Fredoka, Nunito } from 'next/font/google'
+import { Fredoka, Nunito, DM_Sans, Lobster } from 'next/font/google'
 import './globals.css'
 import AgeGateWrapper from './age-gate-wrapper'
 import Navigation from '@/components/Navigation'
 import Footer from '@/components/Footer'
 import ComplianceBanner from '@/components/ComplianceBanner'
 import { Providers } from './providers'
+import { BRAND_NAME, BRAND_DESCRIPTION } from '@/lib/brand'
+
+const dmSans = DM_Sans({ subsets: ['latin'], variable: '--font-dm-sans', display: 'swap' })
+const lobster = Lobster({ subsets: ['latin'], weight: '400', variable: '--font-lobster', display: 'swap' })
 
 const fredoka = Fredoka({
   subsets: ['latin'],
@@ -22,8 +26,8 @@ const nunito = Nunito({
 })
 
 export const metadata: Metadata = {
-  title: 'Utah Cannabis Compare',
-  description: 'Compare prices and read reviews for cannabis products across Utah dispensaries',
+  title: { default: BRAND_NAME, template: `%s | ${BRAND_NAME}` },
+  description: BRAND_DESCRIPTION,
 }
 
 export default function RootLayout({
@@ -32,13 +36,14 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${fredoka.variable} ${nunito.variable}`}>
+    <html lang="en" className={`${fredoka.variable} ${nunito.variable} ${dmSans.variable} ${lobster.variable}`}>
       <body className="flex flex-col min-h-screen font-body bg-groovy-cream">
         <Providers>
           <AgeGateWrapper>
+            <a className="bloom-skip" href="#main-content">Skip to content</a>
             <Navigation />
             <ComplianceBanner />
-            <main className="flex-1">
+            <main id="main-content" tabIndex={-1} className="min-w-0 flex-1">
               {children}
             </main>
             <Footer />

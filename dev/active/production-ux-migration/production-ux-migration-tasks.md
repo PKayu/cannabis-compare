@@ -17,13 +17,19 @@
 
 ## Journey 1: discovery and product evaluation
 
-- [ ] Inventory the existing search and product-detail components against capability IDs.
-- [ ] Establish shared public-page primitives without disrupting the homepage.
-- [ ] Restyle search while preserving the production search contract and URL parameters.
-- [ ] Cover loading, initial, no-results, incomplete-data, and API-error states.
-- [ ] Restyle product detail, variant comparison, price history, reviews, and related products.
-- [ ] Validate external dispensary handoff behavior.
+- [x] Inventory the existing search and product-detail components against capability IDs.
+- [x] Create focused local checkpoint commits without including unrelated changes.
+- [x] Confirm public name: Mountain Bloom. Correct the visual reference to the prototype.
+- [x] Establish shared public-page primitives; preserve homepage content.
+- [x] Restyle search while preserving the production search contract and URL parameters.
+- [x] Cover loading, initial, no-results, incomplete-data, and API-error states.
+- [x] Restyle product detail, variant comparison, price observations, reviews, and related products.
+- [x] Validate external dispensary URL selection and unavailable-offer behavior with focused tests.
 - [ ] Pass desktop, 768px, and 390px acceptance gates.
+- [x] Review loaded-image/font screenshots at all four widths and pass 10 production-browser scenarios.
+- [x] Record capability mapping, validation limitations, and next-owner instructions in docs/ux/PILOT-HANDOFF.md.
+- [ ] Resolve or disposition 11 pre-existing full-suite test failures before approval.
+- [ ] Complete assistive-technology and authenticated live integration verification before pilot approval.
 
 ## Later journeys
 

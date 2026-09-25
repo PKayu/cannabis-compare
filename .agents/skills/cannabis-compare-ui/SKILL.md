@@ -29,11 +29,11 @@ For a full journey or prototype migration, also read `docs/ux/EXECUTION-AND-HAND
 
 ## Theme invariants
 
-- Use Fredoka for display hierarchy and Nunito for body/UI copy.
-- Use the existing groovy cream, ink, teal, amber, sun, and dark-green tokens.
-- Favor tactile 2px outlines and hard offset shadows on important interactive surfaces.
+- Use the Mountain Bloom prototype as the visual anchor, with Lobster for short display headings and DM Sans for readable UI.
+- Use centralized bloom cream, navy, avocado, orange, mustard, and blue tokens for migrated routes. Legacy groovy tokens remain for unmigrated routes.
+- Use restrained borders and offset shadows; prioritize contrast and task clarity.
 - Use varying radii and asymmetric composition; do not default to equal card grids.
-- Keep botanical graphics sparse. Never place repeating leaf wallpaper behind task content.
+- The approved public name is Mountain Bloom. Prefer sparse abstract botanical and landscape accents. Never place repeating leaf wallpaper behind task content.
 - Protect the clarity of prices, potency, stock, timestamps, and dispensary comparisons.
 
 ## Product invariants
@@ -48,4 +48,3 @@ For a full journey or prototype migration, also read `docs/ux/EXECUTION-AND-HAND
 ## Completion rule
 
 Do not call a journey complete because it looks finished. It is complete only when its production mapping, reachable states, responsive evidence, accessibility walkthrough, focused tests, lint, typecheck, and build satisfy `docs/ux/ACCEPTANCE-GATES.md`.
-

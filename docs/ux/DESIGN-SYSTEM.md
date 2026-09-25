@@ -1,7 +1,9 @@
 # Public product design system
 
 - Status: Active
-- Visual source of truth: current production homepage
+- Visual reference: Mountain Bloom prototype (`mountain-bloom-sanctuary`, reviewed at `cdf0a26`)
+- Approved name: Mountain Bloom (user decision, 2026-09-25)
+- Production owns behavior and data; the prototype anchors the visual direction.
 - Applies to: public and signed-in patient-facing routes
 - Does not apply to: admin tooling unless explicitly requested
 
@@ -13,28 +15,29 @@ The interface should feel warm, candid, optimistic, and distinctly local while r
 
 ### Typography
 
-- Display: Fredoka, using 600–700 for primary headings and high-value labels.
-- Body: Nunito, using 400–700 for readable UI and supporting copy.
+- Display: Lobster for short page titles and the wordmark. Use a readable sans-serif for long product names and numeric comparisons.
+- Body: DM Sans for redesigned routes and the shared public shell.
+- Existing Fredoka/Nunito utilities remain available to unmigrated routes until their own journey is reviewed.
 - Use tabular numerals for prices, potency, counts, and dates.
 - Use sentence case by default. Reserve uppercase tracking for short metadata labels.
 - Keep explanatory text near 65 characters per line and use balanced wrapping on headings.
 
 ### Color
 
-Use the tokens already defined in `frontend/tailwind.config.ts`:
+Use the centralized `bloom` tokens in `frontend/tailwind.config.ts` for migrated routes:
 
-- Cream `groovy-cream` for the primary canvas.
-- Ink `groovy-ink` for text and hard outlines.
-- Teal/dark green for navigation, major bands, and primary product structure.
-- Amber/orange for action and emphasis.
-- Sun yellow for price highlights and selective calls to action.
-- Cobalt only when a distinct informational role requires it; it is not a general-purpose accent.
+- Cream/parchment for readable task surfaces.
+- Navy for the shell and strong text contrast.
+- Avocado for product identity panels and selected states.
+- Orange for primary actions, with dark text to preserve contrast.
+- Mustard for restrained graphic accents; blue for section color fields.
+- The older `groovy` palette is compatibility styling, not the new visual authority.
 
 Do not introduce page-specific palettes. Status colors must remain distinguishable without relying on color alone.
 
 ### Shape and depth
 
-- Use 2px ink outlines and hard offset shadows on important interactive surfaces.
+- Use subtle navy borders and restrained offset shadows for actions; avoid heavy borders on every surface.
 - Use large radii for outer panels, medium radii for controls, and tighter radii for nested elements.
 - Do not turn every content group into an equal rounded card.
 - Prefer asymmetric editorial composition for marketing content and structured grids/tables for comparison work.
@@ -42,7 +45,7 @@ Do not introduce page-specific palettes. Status colors must remain distinguishab
 
 ### Botanical motifs
 
-- Use the existing `CannabisLeaf` artwork as an occasional brand accent.
+- Prefer abstract sun, mountain, and flower motifs. Existing leaf artwork may remain on unmigrated routes.
 - Never use repeating leaf wallpaper behind forms, tables, result grids, compliance text, or other task-heavy content.
 - Decorative artwork must be hidden from assistive technology and must not create horizontal overflow.
 

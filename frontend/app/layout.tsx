@@ -4,6 +4,7 @@ import './globals.css'
 import AgeGateWrapper from './age-gate-wrapper'
 import Navigation from '@/components/Navigation'
 import Footer from '@/components/Footer'
+import ComplianceBanner from '@/components/ComplianceBanner'
 import { Providers } from './providers'
 
 const fredoka = Fredoka({
@@ -36,6 +37,7 @@ export default function RootLayout({
         <Providers>
           <AgeGateWrapper>
             <Navigation />
+            <ComplianceBanner />
             <main className="flex-1">
               {children}
             </main>

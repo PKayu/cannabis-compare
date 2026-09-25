@@ -5,17 +5,6 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-groovy-cream">
 
-      {/* ── Compliance Banner ───────────────────────────────── */}
-      <div className="compliance-banner">
-        <div className="max-w-7xl mx-auto flex items-center gap-2">
-          <CannabisLeaf size={18} color="#1C1917" />
-          <p>
-            ⚠️ Informational purposes only. Does not sell, advertise, or promote controlled substances.
-            All data is educational and provided in compliance with Utah law.
-          </p>
-        </div>
-      </div>
-
       {/* ── Hero ────────────────────────────────────────────── */}
       <section
         className="relative overflow-hidden"

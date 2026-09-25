@@ -93,11 +93,11 @@ code {
 
 /* Compliance banner — groovy style */
 .compliance-banner {
-  @apply bg-groovy-sun border-b-4 border-groovy-ink px-4 py-3;
+  @apply w-full bg-groovy-sun border-b-4 border-groovy-ink px-4 py-3;
 }
 
 .compliance-banner p {
-  @apply text-groovy-ink font-semibold text-sm;
+  @apply text-groovy-ink font-semibold text-xs leading-relaxed sm:text-sm;
 }
 
 /* Wavy section divider */

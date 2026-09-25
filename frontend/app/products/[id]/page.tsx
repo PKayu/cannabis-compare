@@ -149,14 +149,6 @@ export default function ProductDetailPage() {
 
   return (
     <div className="min-h-screen bg-groovy-cream">
-      {/* Compliance */}
-      <div className="compliance-banner">
-        <div className="max-w-4xl mx-auto flex items-center gap-2">
-          <CannabisLeaf size={16} color="#1C1917" />
-          <p className="text-sm">⚠️ For informational purposes only. Not affiliated with any dispensary. Does not sell controlled substances.</p>
-        </div>
-      </div>
-
       {/* Breadcrumb */}
       <div className="bg-white border-b-2 border-stone-200">
         <div className="max-w-4xl mx-auto px-4 py-3">

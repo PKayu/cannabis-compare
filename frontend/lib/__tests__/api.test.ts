@@ -109,16 +109,19 @@ describe('API Client', () => {
       expect(response.data).toEqual({ data: 'success' })
     })
 
-    it('should sign out on 401 Unauthorized but NOT redirect', async () => {
+    it('should emit an auth failure on 401 without destroying the session', async () => {
+      const authFailureListener = jest.fn()
+      window.addEventListener('auth:failed', authFailureListener)
       mock.onGet('/test').reply(401, { detail: 'Unauthorized' })
 
-      await expect(apiClient.get('/test')).rejects.toThrow()
+      try {
+        await expect(apiClient.get('/test')).rejects.toThrow()
 
-      // Should have called sign out
-      expect(mockSignOut).toHaveBeenCalled()
-
-      // NOTE: The interceptor does NOT redirect - components handle redirects
-      // This prevents infinite loops when Navigation checks auth
+        expect(authFailureListener).toHaveBeenCalledTimes(1)
+        expect(mockSignOut).not.toHaveBeenCalled()
+      } finally {
+        window.removeEventListener('auth:failed', authFailureListener)
+      }
     })
 
     it('should reject other error codes without redirect', async () => {

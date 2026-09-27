@@ -26,7 +26,7 @@ const customJestConfig = {
     '**/__tests__/**/*.[jt]s?(x)',
     '**/?(*.)+(spec|test).[jt]s?(x)',
   ],
-  testPathIgnorePatterns: ['/node_modules/', '/.next/'],
+  testPathIgnorePatterns: ['/node_modules/', '/.next/', '/e2e/', '/ux-tests/'],
   transform: {
     '^.+\\.(js|jsx|ts|tsx)$': ['next/dist/build/swc/jest-transformer', { sourceMaps: true }],
   },

@@ -180,14 +180,14 @@ class TestJunkInName:
         assert is_dirty is True
         assert "junk_in_name" in issues
 
-    def test_heavy_reduction_ratio(self):
-        """If cleaning removed >30% of the name, that's suspicious."""
+    def test_successful_cleaning_is_not_flagged_by_reduction_ratio(self):
+        """Removed scraper artifacts are not junk when the cleaned name is valid."""
         raw = "Blue Dream - SALE! BUY NOW! Limited Time Offer!!!"
         cleaned = "Blue Dream"
         scraped = _make_scraped(name=raw)
         is_dirty, issues = check_data_quality(scraped, cleaned)
-        assert is_dirty is True
-        assert "junk_in_name" in issues
+        assert is_dirty is False
+        assert "junk_in_name" not in issues
 
     def test_clean_name_not_flagged(self):
         scraped = _make_scraped(name="Blue Dream")

@@ -168,7 +168,7 @@ class TestProductEndpoints:
         """Test GET /api/products/{id}/related returns similar products"""
         # Create related products
         related1 = Product(
-            name="Blue Dream",
+            name="Gorilla Glue #4 Reserve",
             product_type="Flower",
             thc_percentage=21.0,
             cbd_percentage=0.5,
@@ -206,7 +206,7 @@ class TestProductEndpoints:
         assert response.status_code == status.HTTP_200_OK
         related = response.json()
 
-        assert len(related) > 0
+        assert [item["id"] for item in related] == [str(related1.id)]
         assert all("id" in r for r in related)
         assert all("name" in r for r in related)
         assert all("brand" in r for r in related)

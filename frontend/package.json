@@ -11,11 +11,13 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
-    "test:e2e:headed": "playwright test --headed",
-    "test:e2e:debug": "playwright test --debug",
-    "test:e2e:report": "playwright show-report playwright-report"
+    "test:e2e": "playwright test --config=playwright.config.ts",
+    "test:e2e:ux": "playwright test --config=playwright.ux.config.ts",
+    "test:e2e:ui": "playwright test --config=playwright.config.ts --ui",
+    "test:e2e:headed": "playwright test --config=playwright.config.ts --headed",
+    "test:e2e:debug": "playwright test --config=playwright.config.ts --debug",
+    "test:e2e:report": "playwright show-report playwright-report/journey",
+    "test:e2e:ux:report": "playwright show-report playwright-report/ux"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.15.0",

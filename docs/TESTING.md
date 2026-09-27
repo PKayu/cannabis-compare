@@ -29,8 +29,12 @@ npm run test:e2e:ui
 # Run all tests headless
 npm run test:e2e
 
-# View results
+# Run responsive UX acceptance tests
+npm run test:e2e:ux
+
+# View journey or UX results
 npm run test:e2e:report
+npm run test:e2e:ux:report
 ```
 
 ---
@@ -54,15 +58,16 @@ The project uses a comprehensive testing strategy covering:
 
 - **Backend**: pytest for API endpoints, business logic, and database operations
 - **Frontend**: Jest + React Testing Library for components and client-side logic
+- **E2E**: Playwright journey and responsive UX acceptance suites
 - **CI/CD**: GitHub Actions for automated testing on every commit
 
 ### Test Coverage Summary
 
 | Test Type | Framework | # Tests | What's Tested |
 |-----------|-----------|---------|---------------|
-| Backend | pytest | 111 | Auth, users, APIs, JWT tokens, products, search, scrapers |
-| Frontend | Jest | 20 | Components, API client, forms, age gate |
-| E2E | Playwright | 21+ | Full user journeys |
+| Backend | pytest | 213 | Auth, users, APIs, JWT tokens, products, search, scrapers |
+| Frontend | Jest | 39 | Components, API client, contracts, age gate |
+| E2E | Playwright | 28 | Deterministic journeys and responsive UX gates |
 
 ### Testing Philosophy
 
@@ -352,8 +357,11 @@ cd frontend
 # Interactive UI mode (BEST for beginners)
 npm run test:e2e:ui
 
-# Run all tests headless
+# Run deterministic user journeys headless
 npm run test:e2e
+
+# Run the responsive UX acceptance suite
+npm run test:e2e:ux
 
 # Watch browser while tests run
 npm run test:e2e:headed
@@ -361,11 +369,12 @@ npm run test:e2e:headed
 # Debug mode (pause at each step)
 npm run test:e2e:debug
 
-# View HTML report
+# View HTML reports
 npm run test:e2e:report
+npm run test:e2e:ux:report
 
-# Run specific test file
-npx playwright test e2e/01-age-gate.spec.ts
+# Run a specific journey test file
+npx playwright test --config=playwright.config.ts e2e/age-gate.spec.ts
 
 # Run in specific browser
 npx playwright test --project=chromium
@@ -373,26 +382,26 @@ npx playwright test --project=chromium
 
 ### Test Suite Overview
 
-| Test File | What It Tests | # Tests |
-|-----------|---------------|---------|
-| `01-age-gate.spec.ts` | Age verification flow | 4 |
-| `02-authentication.spec.ts` | Login, sign-out, protected routes | 6 |
-| `03-product-search.spec.ts` | Product search and filtering | 5 |
-| `04-navigation.spec.ts` | Navigation, responsive design | 6 |
+| Suite | Location | What It Tests | # Tests |
+|-------|----------|---------------|---------|
+| Journey | `frontend/e2e/` | Age gate, auth entry, search states, public shell | 14 |
+| UX acceptance | `frontend/ux-tests/` | Discovery and comparison at 390/768/1280/1440px plus error and keyboard states | 14 |
 
-**Total**: 21+ E2E tests covering critical user journeys
+**Total**: 28 browser tests. API responses and the Supabase magic-link boundary are intercepted in the browser so CI does not depend on live third-party services or seeded production data.
 
 ### E2E Test Structure
 
 ```
 frontend/
 ├── e2e/
-│   ├── 01-age-gate.spec.ts       # Age verification tests
-│   ├── 02-authentication.spec.ts # Login/auth tests
-│   ├── 03-product-search.spec.ts # Product tests
-│   ├── 04-navigation.spec.ts     # Navigation tests
+│   ├── age-gate.spec.ts          # Age confirmation tests
+│   ├── authentication.spec.ts    # Login/auth boundary tests
+│   ├── product-search.spec.ts    # Product discovery states
+│   ├── navigation.spec.ts        # Shared shell and responsive navigation
 │   └── helpers.ts                # Reusable test helpers
-└── playwright.config.ts          # Playwright configuration
+├── ux-tests/                     # Responsive acceptance suite
+├── playwright.config.ts          # Journey configuration
+└── playwright.ux.config.ts       # UX acceptance configuration
 ```
 
 ### Writing E2E Tests
@@ -465,18 +474,19 @@ start coverage/lcov-report/index.html
 
 ## Continuous Integration
 
-### GitHub Actions Workflow
+### GitHub Actions Workflows
 
-Located at `.github/workflows/ci.yml`, runs on:
+Located at `.github/workflows/ci.yml` and `.github/workflows/e2e-tests.yml`, and runs on:
 - Push to `master`, `main`, or `develop` branches
 - Pull requests to these branches
 
 ### Jobs
 
 1. **backend-tests**: Runs pytest on Python 3.11
-2. **frontend-tests**: Runs Jest and type-check on Node 18
+2. **frontend-tests**: Runs Jest and type-check on Node 20
 3. **lint**: Runs ESLint on frontend code
 4. **test-summary**: Aggregates results and fails if any job fails
+5. **Playwright E2E Tests**: Builds the application, starts isolated backend/frontend servers, and runs both browser suites using the version pinned in `frontend/package-lock.json`
 
 ### Viewing CI Results
 
@@ -718,15 +728,10 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 ### E2E Tests Failing
 
 **Issue**: "All tests skipped"
-Servers not running. Start backend and frontend first:
-```bash
-scripts\start-backend.bat  # Terminal 1
-scripts\start-frontend.bat  # Terminal 2
-npm run test:e2e  # Terminal 3
-```
+The Playwright configuration starts the frontend automatically for local runs. Run the command from `frontend/`. To test an already-running deployment, set `E2E_EXTERNAL_SERVER=1` and `PLAYWRIGHT_BASE_URL` before running either suite.
 
 **Issue**: "Timeout waiting for page"
-Check `playwright.config.ts` has correct `baseURL: 'http://localhost:3000'`
+Check that the configured local port is available, or that `PLAYWRIGHT_BASE_URL` points at the external server.
 
 **Issue**: "Element not found"
 Run in headed mode to see what's on page:
@@ -735,7 +740,7 @@ npm run test:e2e:headed
 ```
 
 **Issue**: "Tests pass locally but fail in CI"
-Add `await page.waitForLoadState('networkidle')` for timing issues
+Download the pinned Chromium build with `npx playwright install chromium`, then inspect the uploaded Playwright report and failure evidence. Avoid live service calls in tests; use route fixtures for API and authentication boundaries.
 
 ---
 
@@ -763,25 +768,25 @@ See `test-report.yml` for webhook setup instructions.
 
 ---
 
-**Last Updated**: January 31, 2026
-**Status**: ✅ All Tests Passing (111 backend, 20 frontend)
+**Last Updated**: September 26, 2026
+**Status**: All CI test paths passing locally
 
 ---
 
-## Recent Fixes (January 2026)
+## Recent Fixes (September 2026)
 
-The following issues were identified and fixed:
+The E2E CI repair:
 
-1. **pytest-cov Missing**: Added `pytest-cov>=2.12.0` to requirements.txt
-2. **WholesomeCoScraper Tests**: Rewrote 7 tests to match actual implementation (`_map_category`, `_extract_percentage`, `SHOP_URL`)
-3. **Supabase Mock**: Added proper mock in jest.setup.js to prevent import errors
-4. **AgeGate Text**: Updated test expectations to match "Welcome! Let's verify your age"
-5. **datetime.utcnow()**: Replaced with `datetime.now(timezone.utc)` across all backend files
+1. Uses Node 20, Python 3.11, a valid test-only JWT secret, and the repository-pinned Playwright dependency.
+2. Initializes an isolated SQLite database and waits for both servers before running tests.
+3. Moves journey tests under `frontend/e2e/` and aligns them with current product behavior.
+4. Runs both journey and UX acceptance suites with deterministic API/auth route fixtures.
+5. Publishes accurate job summaries and separate reports instead of creating duplicate PR comments.
+6. Keeps Jest from treating Playwright files as unit tests and aligns stale AgeGate/auth expectations with current contracts.
 
-**Test Results**:
-- Backend: 111 passed, 0 failed
-- Frontend: 20 passed, 0 failed
-- Coverage: ~53% backend (with pytest-cov working)
-
-
-**Status**: ✅ Production Ready
+**Validated locally**:
+- Backend pytest: 213 passed
+- Frontend Jest: 39 passed
+- Journey E2E: 14 passed
+- UX acceptance E2E: 14 passed
+- TypeScript, ESLint, and production build: passed (existing hook warnings remain)

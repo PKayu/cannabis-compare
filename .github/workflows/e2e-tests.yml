@@ -2,14 +2,13 @@ name: E2E Tests
 
 on:
   push:
-    branches: [ master, main, develop ]
+    branches: [master, main, develop]
   pull_request:
-    branches: [ master, main, develop ]
-  # Allow manual trigger
+    branches: [master, main, develop]
   workflow_dispatch:
 
 permissions:
-  pull-requests: write
+  contents: read
 
 jobs:
   e2e-tests:
@@ -18,170 +17,179 @@ jobs:
     timeout-minutes: 30
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-        cache-dependency-path: frontend/package-lock.json
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
-    - name: Install frontend dependencies
-      working-directory: ./frontend
-      run: npm ci
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
 
-    - name: Install Playwright browsers
-      run: npx playwright install --with-deps
+      - name: Install pinned Playwright browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
 
-    - name: Set up Python (for backend)
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-        cache: 'pip'
-        cache-dependency-path: backend/requirements.txt
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
 
-    - name: Install backend dependencies
-      working-directory: ./backend
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Install backend dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-    - name: Start backend server
-      working-directory: ./backend
-      run: |
-        uvicorn main:app --host 0.0.0.0 --port 8000 > /tmp/uvicorn.log 2>&1 &
-        echo $! > backend.pid
-      env:
-        DATABASE_URL: sqlite:///./test.db
-        SECRET_KEY: test-secret-key-for-e2e
-        SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://test.supabase.co' }}
-        SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY || 'test-key' }}
+      - name: Initialize E2E database
+        working-directory: backend
+        run: python -c "from database import Base, engine; import models; Base.metadata.create_all(bind=engine)"
+        env:
+          DATABASE_URL: sqlite:///./test.db
+          SECRET_KEY: ci-only-e2e-secret-not-for-production-2026
+          SUPABASE_URL: https://test.supabase.co
+          SUPABASE_SERVICE_KEY: test-service-key
 
-    - name: Wait for backend to be ready
-      run: |
-        for i in $(seq 1 60); do
-          if curl -sf http://localhost:8000/health; then
-            echo "Backend ready after ${i}s"
-            exit 0
-          fi
-          if ! kill -0 $(cat backend/backend.pid) 2>/dev/null; then
-            echo "Backend process died. Logs:"
-            cat /tmp/uvicorn.log
+      - name: Start backend server
+        working-directory: backend
+        run: |
+          uvicorn main:app --host 0.0.0.0 --port 8000 > /tmp/uvicorn.log 2>&1 &
+          echo $! > backend.pid
+        env:
+          DATABASE_URL: sqlite:///./test.db
+          SECRET_KEY: ci-only-e2e-secret-not-for-production-2026
+          SUPABASE_URL: https://test.supabase.co
+          SUPABASE_SERVICE_KEY: test-service-key
+          ALLOWED_ORIGINS: http://localhost:3000
+
+      - name: Wait for backend
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8000/health; then
+              echo "Backend ready after ${i}s"
+              exit 0
+            fi
+            if ! kill -0 $(cat backend/backend.pid) 2>/dev/null; then
+              echo "Backend process died. Logs:"
+              cat /tmp/uvicorn.log
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "Backend did not start within 60s. Logs:"
+          cat /tmp/uvicorn.log
+          exit 1
+
+      - name: Build and start frontend server
+        working-directory: frontend
+        run: |
+          npm run build
+          PORT=3000 npm run start > /tmp/next.log 2>&1 &
+          echo $! > frontend.pid
+        env:
+          VERCEL: '1'
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+          NEXT_PUBLIC_SUPABASE_URL: https://test.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
+
+      - name: Wait for frontend
+        run: |
+          for i in $(seq 1 90); do
+            if curl -sf http://localhost:3000; then
+              echo "Frontend ready after ${i}s"
+              exit 0
+            fi
+            if ! kill -0 $(cat frontend/frontend.pid) 2>/dev/null; then
+              echo "Frontend process died. Logs:"
+              cat /tmp/next.log
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "Frontend did not start within 90s. Logs:"
+          cat /tmp/next.log
+          exit 1
+
+      - name: Run browser suites
+        id: browser-tests
+        working-directory: frontend
+        shell: bash
+        run: |
+          set +e
+          npx playwright test --config=playwright.config.ts
+          journey_status=$?
+          npx playwright test --config=playwright.ux.config.ts
+          ux_status=$?
+          set -e
+
+          echo "Journey suite exit code: ${journey_status}"
+          echo "UX suite exit code: ${ux_status}"
+          if [ "${journey_status}" -ne 0 ] || [ "${ux_status}" -ne 0 ]; then
             exit 1
           fi
-          sleep 1
-        done
-        echo "Backend did not start within 60s. Logs:"
-        cat /tmp/uvicorn.log
-        exit 1
+        env:
+          E2E_EXTERNAL_SERVER: '1'
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+          NEXT_PUBLIC_SUPABASE_URL: https://test.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
 
-    - name: Start frontend server
-      working-directory: ./frontend
-      run: |
-        npm run build
-        PORT=3000 npm run start > /tmp/next.log 2>&1 &
-        echo $! > frontend.pid
-      env:
-        NEXT_PUBLIC_API_URL: http://localhost:8000
-        NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://test.supabase.co' }}
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'test-anon-key' }}
+      - name: Upload Playwright reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-reports
+          path: frontend/playwright-report/
+          if-no-files-found: warn
+          retention-days: 30
 
-    - name: Wait for frontend to be ready
-      run: |
-        for i in $(seq 1 90); do
-          if curl -sf http://localhost:3000; then
-            echo "Frontend ready after ${i}s"
-            exit 0
+      - name: Upload failure traces and videos
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure-evidence
+          path: frontend/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload server logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-logs
+          path: |
+            /tmp/uvicorn.log
+            /tmp/next.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Generate test summary
+        if: always()
+        shell: bash
+        run: |
+          echo "## E2E test results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Browser suites: **${{ steps.browser-tests.outcome }}**" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f frontend/playwright-report/journey-results.json ]; then
+            echo "- Journey report generated" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- Journey report unavailable because the test stage was not reached" >> "$GITHUB_STEP_SUMMARY"
           fi
-          if ! kill -0 $(cat frontend/frontend.pid) 2>/dev/null; then
-            echo "Frontend process died. Logs:"
-            cat /tmp/next.log
-            exit 1
+          if [ -f frontend/playwright-report/ux-results.json ]; then
+            echo "- UX acceptance report generated" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- UX acceptance report unavailable because the test stage was not reached" >> "$GITHUB_STEP_SUMMARY"
           fi
-          sleep 1
-        done
-        echo "Frontend did not start within 90s. Logs:"
-        cat /tmp/next.log
-        exit 1
 
-    - name: Run Playwright tests
-      run: npx playwright test
-      env:
-        PLAYWRIGHT_BASE_URL: http://localhost:3000
-
-    - name: Upload Playwright Report
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: playwright-report
-        path: playwright-report/
-        retention-days: 30
-
-    - name: Upload test videos
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: playwright-videos
-        path: test-results/
-        retention-days: 7
-
-    - name: Upload server logs
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: server-logs
-        path: |
-          /tmp/uvicorn.log
-          /tmp/next.log
-        retention-days: 7
-
-    - name: Generate test summary
-      if: always()
-      run: |
-        echo "## E2E Test Results 🎭" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-
-        if [ -f playwright-report/results.json ]; then
-          # Parse results (simplified - you can enhance this)
-          echo "Test report generated. View artifacts for full details." >> $GITHUB_STEP_SUMMARY
-        else
-          echo "No test results found." >> $GITHUB_STEP_SUMMARY
-        fi
-
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Test Artifacts:**" >> $GITHUB_STEP_SUMMARY
-        echo "- HTML Report: Available in artifacts" >> $GITHUB_STEP_SUMMARY
-        echo "- Screenshots: Included in report" >> $GITHUB_STEP_SUMMARY
-        echo "- Videos: Available if tests failed" >> $GITHUB_STEP_SUMMARY
-
-    - name: Comment PR with test results
-      if: github.event_name == 'pull_request' && always()
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const fs = require('fs');
-          let message = '## 🎭 E2E Test Results\n\n';
-
-          if (context.payload.workflow_run?.conclusion === 'success') {
-            message += '✅ All E2E tests passed!\n\n';
-          } else {
-            message += '❌ Some E2E tests failed.\n\n';
-            message += '📹 **Videos and screenshots are available in the workflow artifacts.**\n\n';
-          }
-
-          message += `[View full test report](${context.payload.repository.html_url}/actions/runs/${context.runId})`;
-
-          github.rest.issues.createComment({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            issue_number: context.issue.number,
-            body: message
-          });
-
-    - name: Stop servers
-      if: always()
-      run: |
-        if [ -f frontend/frontend.pid ]; then kill $(cat frontend/frontend.pid) 2>/dev/null || true; fi
-        if [ -f backend/backend.pid ]; then kill $(cat backend/backend.pid) 2>/dev/null || true; fi
+      - name: Stop servers
+        if: always()
+        run: |
+          if [ -f frontend/frontend.pid ]; then kill $(cat frontend/frontend.pid) 2>/dev/null || true; fi
+          if [ -f backend/backend.pid ]; then kill $(cat backend/backend.pid) 2>/dev/null || true; fi
